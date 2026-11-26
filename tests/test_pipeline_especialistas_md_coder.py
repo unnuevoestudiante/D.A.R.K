@@ -1,0 +1,307 @@
+"""Pruebas del pipeline entre Especialista Tareas (planificador de proyectos: la
+especificación en MD) y Especialista Código (planificación y ejecución por fases)."""
+
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+ROOT = Path(__file__).resolve().parents[1]
+DARK_PYTHON = ROOT / "dark_python"
+if str(DARK_PYTHON) not in sys.path:
+    sys.path.insert(0, str(DARK_PYTHON))
+
+from especialistas.especialista_tareas import EspecialistaTareas
+from especialistas.especialista_codigo import EspecialistaCodigo
+
+
+SPEC_COMPLETA = """# Especificación: App de gastos
+
+## 1. Visión
+Anotar gastos del hogar y ver en qué se va el dinero.
+
+## 2. Usuarios y escenarios
+Una pareja que anota cada compra al salir de la tienda.
+
+## 3. Pantallas y flujo
+- Inicio: total del mes y últimos gastos.
+- Nuevo gasto: importe, categoría y nota.
+- Categorías: reparto del mes.
+
+## 4. Datos
+Gasto: importe, categoría, fecha y nota; en localStorage.
+
+## 5. Funcionalidades
+- MVP: anotar y listar gastos.
+- Después: gráficas.
+
+## 6. Dirección visual
+Sobria y densa.
+- Tema oscuro. [supuesto]
+
+## 7. Stack
+React con Vite: hay varias vistas.
+
+## 8. Criterios de aceptación
+- Un gasto anotado sigue ahí al recargar.
+
+## 9. Fuera de alcance
+Cuentas de usuario.
+"""
+
+SPEC_PARCIAL = """# Especificación: App de recetas
+
+## 1. Visión
+Guardar recetas familiares.
+"""
+
+
+class PruebaPlanificadorDeProyectos(unittest.TestCase):
+    """Tareas como planificador: escribe la especificación y la pasa al coder."""
+
+    def setUp(self):
+        self.temporal = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporal.cleanup)
+        parche = patch.object(EspecialistaTareas, "_carpeta_planes",
+                              staticmethod(lambda: self.temporal.name))
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def tareas(self, *respuestas):
+        """Modelo simulado: una respuesta por llamada, y la última se repite.
+
+        El planificador escribe por lotes (varias llamadas por turno) y solo
+        acepta de cada respuesta las secciones que pidió, así que devolver la
+        especificación entera en cada lote es lo mismo que escribirla por partes.
+        """
+        tareas = EspecialistaTareas(chat_provider=Mock(), cliente_manager=Mock(), helpers={})
+        cola = list(respuestas)
+        tareas._pensar = Mock(side_effect=lambda *a, **k: cola.pop(0) if len(cola) > 1 else cola[0])
+        return tareas
+
+    def test_modo_rapido_escribe_todo_y_pide_aprobacion_con_los_supuestos(self):
+        tareas = self.tareas(SPEC_COMPLETA)
+        r = tareas.iniciar_planificacion("hazme una app para controlar mis gastos", "rapido")
+        self.assertIn("3 pantallas: Inicio, Nuevo gasto y Categorías", r["decir"])
+        self.assertIn("React", r["decir"])
+        self.assertIn("Decidí sin preguntarte: tema oscuro.", r["decir"])
+        self.assertTrue(r["decir"].endswith("¿Lo construyo, o cambiamos algo?"))
+        self.assertTrue(tareas.planificacion_activa())
+        ruta = Path(tareas._plan["ruta"])
+        self.assertIn("## 3. Pantallas y flujo", ruta.read_text(encoding="utf-8"))
+        prompt = tareas._pensar.call_args.args[0]
+        self.assertIn("[supuesto]", prompt, "el modo rápido pide marcar lo supuesto")
+
+    def test_el_resumen_entiende_el_formato_que_escribe_el_modelo(self):
+        """Negritas y «[supuesto: motivo]», como salió de Groq el 25-11-2026."""
+        real = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- **Pantalla Inicio / Dashboard:** Muestra el resumen del mes actual.").replace(
+            "Gasto: importe, categoría, fecha y nota; en localStorage.",
+            "En localStorage. [supuesto: ambos usan el mismo dispositivo; así no hace "
+            "falta autenticación ni servidor]")
+        r = self.tareas(real).iniciar_planificacion("hazme una app de gastos", "rapido")
+        self.assertIn("3 pantallas: Inicio, Nuevo gasto y Categorías.", r["decir"])
+        self.assertIn("Decidí sin preguntarte: ambos usan el mismo dispositivo y tema oscuro.",
+                      r["decir"])
+        self.assertNotIn("**", r["decir"])
+
+    def test_el_resumen_ignora_subpuntos_parentesis_y_etiquetas(self):
+        """Como salió de Groq el 25-11-2026 en el segundo recorrido real."""
+        real = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- **Principal (Listado)**: lo primero que se ve.\n"
+            "  - *Propósito*: ver el mes.\n  - *Contenido*: totales.").replace(
+            "- Tema oscuro. [supuesto]",
+            "- [supuesto: supuesto de uso compartido: los dos usan el mismo móvil]")
+        r = self.tareas(real).iniciar_planificacion("hazme una app de gastos", "rapido")
+        self.assertIn("3 pantallas: Principal, Nuevo gasto y Categorías.", r["decir"])
+        self.assertIn("Decidí sin preguntarte: los dos usan el mismo móvil.", r["decir"])
+
+    def test_una_web_inmersiva_se_resume_por_estaciones(self):
+        inmersiva = SPEC_COMPLETA.replace("React con Vite: hay varias vistas.",
+                                          "Inmersivo: un mundo 3D que se recorre.")
+        r = self.tareas(inmersiva).iniciar_planificacion("hazme una landing de gastos", "rapido")
+        self.assertIn("3 estaciones:", r["decir"])
+        self.assertIn("una web en 3D que se recorre con el scroll", r["decir"])
+
+    def test_el_nombre_de_la_estacion_sin_numero_ni_descripcion(self):
+        nombre = EspecialistaTareas._nombre_pantalla
+        self.assertEqual(nombre("Estación 1: Portada con el nombre"), "Portada con el nombre")
+        self.assertEqual(nombre("**El Horizonte**. Pantalla de entrada"), "El Horizonte")
+        self.assertEqual(nombre("Pantalla 2 - Logística y equipo"), "Logística y equipo")
+
+    def test_en_la_primera_redaccion_vale_el_nombre_que_propone_el_modelo(self):
+        con_nombre = SPEC_COMPLETA.replace("# Especificación: App de gastos",
+                                           "# Especificación: Cuentas Claras")
+        tareas = self.tareas(con_nombre)
+        tareas.iniciar_planificacion("hazme una app para controlar los gastos de la casa", "rapido")
+        self.assertEqual(tareas._plan["especificacion"].titulo, "Cuentas Claras")
+        self.assertIn("nombre propio y corto", tareas._pensar.call_args_list[0].args[0])
+
+    def test_un_si_corto_traspasa_al_coder_y_cierra_la_sesion(self):
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas.iniciar_planificacion("hazme una app de gastos", "rapido")
+        r = tareas.atender_planificacion("sí, constrúyelo")
+        traspaso = r["traspaso"]
+        self.assertEqual(traspaso["stack"], "react")
+        self.assertIn("Construye «App de gastos»", traspaso["tarea"])
+        self.assertIn("Inicio: total del mes", traspaso["tarea"])
+        self.assertNotIn("[supuesto]", traspaso["tarea"])
+        self.assertTrue(Path(traspaso["especificacion"]).is_file())
+        self.assertFalse(tareas.planificacion_activa())
+
+    def test_si_con_cambio_no_es_aprobacion_sino_un_cambio(self):
+        tareas = self.tareas(SPEC_COMPLETA, SPEC_COMPLETA, SPEC_COMPLETA,
+                             SPEC_COMPLETA.replace("React con Vite", "Vanilla"))
+        tareas.iniciar_planificacion("hazme una app de gastos", "rapido")
+        r = tareas.atender_planificacion("sí, pero que se abra con doble clic")
+        self.assertNotIn("traspaso", r)
+        self.assertTrue(r["decir"].startswith("Así queda."))
+        self.assertIn("doble clic", r["decir"])
+        self.assertIn("que se abra con doble clic", tareas._pensar.call_args.args[0])
+
+    def test_modo_guiado_pregunta_solo_por_lo_que_falta(self):
+        tareas = self.tareas(SPEC_PARCIAL)
+        r = tareas.iniciar_planificacion("planifiquemos una app de recetas", "guiado")
+        self.assertEqual(r["decir"], "¿Quién la va a usar y en qué momento del día o situación la abriría?")
+        self.assertEqual(tareas._plan["hueco"], "usuarios")
+        self.assertIn("No inventes", tareas._pensar.call_args.args[0])
+
+    def test_la_respuesta_se_integra_con_su_pregunta_y_se_sigue_preguntando(self):
+        con_usuarios = SPEC_PARCIAL + "\n## 2. Usuarios y escenarios\nMi familia, al cocinar.\n"
+        tareas = self.tareas(SPEC_PARCIAL, con_usuarios)
+        tareas.iniciar_planificacion("planifiquemos una app de recetas", "guiado")
+        r = tareas.atender_planificacion("mi familia, cuando cocinamos")
+        prompt = tareas._pensar.call_args.args[0]
+        self.assertIn("Pregunta: ¿Quién la va a usar", prompt)
+        self.assertIn("Respuesta de la persona: mi familia, cuando cocinamos", prompt)
+        self.assertEqual(r["decir"], "¿Qué pantallas imaginas y qué se hace en cada una?")
+        self.assertEqual(tareas._plan["especificacion"].seccion("vision"), "Guardar recetas familiares.",
+                         "lo ya escrito no se pierde aunque el modelo lo omita")
+
+    def test_decide_tu_cierra_las_preguntas_y_pasa_a_aprobacion(self):
+        tareas = self.tareas(SPEC_PARCIAL, SPEC_COMPLETA)
+        tareas.iniciar_planificacion("planifiquemos una app", "guiado")
+        r = tareas.atender_planificacion("lo demás decídelo tú")
+        self.assertIn("¿Lo construyo, o cambiamos algo?", r["decir"])
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertIn("[supuesto]", tareas._pensar.call_args.args[0])
+
+    def test_el_rapido_escribe_por_lotes_que_caben_en_la_cuota(self):
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas.iniciar_planificacion("hazme una app de gastos", "rapido")
+        self.assertEqual(tareas._pensar.call_count, 3, "9 secciones en lotes de 3")
+        for llamada in tareas._pensar.call_args_list:
+            self.assertEqual(llamada.kwargs["max_tokens"], EspecialistaTareas.MAX_TOKENS_POR_LOTE)
+        self.assertIn("## 7. Stack", tareas._pensar.call_args_list[2].args[0])
+
+    def test_en_el_guiado_el_modelo_no_puede_escribir_lo_que_no_se_pregunto(self):
+        """Medido el 25-11-2026: con la especificación entera, el modelo lo inventaba todo
+        y el modo guiado pasaba directo a proponer sin preguntar nada."""
+        tareas = self.tareas(SPEC_COMPLETA)
+        r = tareas.iniciar_planificacion("planifiquemos una app de gastos", "guiado")
+        self.assertEqual(r["decir"], "¿Quién la va a usar y en qué momento del día o situación la abriría?")
+        esp = tareas._plan["especificacion"]
+        self.assertEqual(esp.seccion("vision"), "Anotar gastos del hogar y ver en qué se va el dinero.")
+        self.assertEqual(esp.seccion("pantallas"), "", "no se preguntó: no se acepta")
+
+    def test_el_guiado_pregunta_solo_lo_de_la_persona_y_supone_lo_tecnico(self):
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas.iniciar_planificacion("planifiquemos una app de gastos", "guiado")
+        preguntas = []
+        for respuesta in ("una pareja", "inicio y nuevo gasto", "anotar gastos", "sobria"):
+            preguntas.append(tareas._plan["hueco"])
+            r = tareas.atender_planificacion(respuesta)
+        self.assertEqual(preguntas, ["usuarios", "pantallas", "funcionalidades", "visual"])
+        self.assertTrue(r["decir"].endswith("¿Lo construyo, o cambiamos algo?"))
+        self.assertEqual(tareas._plan["especificacion"].stack(), "react",
+                         "el stack no se pregunta: lo propone D.A.R.K.")
+
+    def test_cancelar_cierra_y_deja_el_plan_guardado(self):
+        tareas = self.tareas(SPEC_PARCIAL)
+        tareas.iniciar_planificacion("planifiquemos una app de recetas", "guiado")
+        ruta = tareas._plan["ruta"]
+        r = tareas.atender_planificacion("cancela el plan")
+        self.assertIn(ruta, r["decir"])
+        self.assertFalse(tareas.planificacion_activa())
+        self.assertTrue(Path(ruta).is_file())
+
+    def test_la_sesion_caduca_sola(self):
+        tareas = self.tareas(SPEC_PARCIAL)
+        tareas.iniciar_planificacion("planifiquemos una app", "guiado")
+        tareas._plan["ts"] -= EspecialistaTareas.PLAN_TTL_SEGUNDOS + 1
+        self.assertFalse(tareas.planificacion_activa())
+
+    def test_sin_modelo_el_rapido_no_finge_un_plan_y_lo_arma_preguntando(self):
+        tareas = self.tareas("", "")
+        r = tareas.iniciar_planificacion("hazme una app para controlar mis gastos", "rapido")
+        self.assertTrue(r["decir"].startswith("Ahora no tengo un modelo libre"))
+        self.assertTrue(r["decir"].endswith(
+            "¿Quién la va a usar y en qué momento del día o situación la abriría?"))
+        self.assertNotIn("Te propongo", r["decir"])
+        self.assertEqual(tareas._plan["especificacion"].seccion("vision"),
+                         "hazme una app para controlar mis gastos")
+        # La respuesta, sin modelo que la ordene, se guarda tal cual en su sección.
+        r = tareas.atender_planificacion("mi pareja y yo, cada noche")
+        self.assertEqual(tareas._plan["especificacion"].seccion("usuarios"),
+                         "mi pareja y yo, cada noche")
+        self.assertEqual(r["decir"], "¿Qué pantallas imaginas y qué se hace en cada una?")
+
+    def test_sin_modelo_las_pantallas_quedan_como_lista(self):
+        tareas = self.tareas("", "", "")
+        tareas.iniciar_planificacion("planifiquemos una app", "guiado")
+        tareas._plan["hueco"] = "pantallas"
+        tareas.atender_planificacion("inicio y ajustes")
+        self.assertEqual(tareas._plan["especificacion"].seccion("pantallas"), "- inicio y ajustes")
+
+    def test_el_titulo_se_corta_por_palabra_y_sin_conectores_colgando(self):
+        titulo = EspecialistaTareas._titulo_de(
+            "hazme una app para controlar los gastos de la casa entre mi pareja y yo")
+        self.assertEqual(titulo, "App para controlar los gastos de la casa")
+        self.assertEqual(EspecialistaTareas._titulo_de("planifiquemos una app de recetas"),
+                         "App de recetas")
+
+    def test_deteccion_de_pedidos(self):
+        for frase in ("planifiquemos una app de recetas", "vamos a planear un proyecto web",
+                      "diseñemos una aplicación para el gimnasio"):
+            self.assertTrue(EspecialistaTareas.pide_planificar(frase), frase)
+        for frase in ("planifica mi día", "qué hora es", "hazme una app de gastos"):
+            self.assertFalse(EspecialistaTareas.pide_planificar(frase), frase)
+        self.assertTrue(EspecialistaTareas.pide_app("hazme una app para controlar mis gastos"))
+        self.assertFalse(EspecialistaTareas.pide_app("hazme un script en python que renombre fotos"))
+        self.assertFalse(EspecialistaTareas.pide_app("crea una página web sobre gatos"))
+
+    def test_que_cuenta_como_aprobacion(self):
+        for frase in ("sí", "dale", "Perfecto, constrúyelo", "pásaselo al coder", "ok"):
+            self.assertTrue(EspecialistaTareas._es_aprobacion(frase), frase)
+        for frase in ("sí, pero cambia el color", "no", "quiero que tenga modo oscuro y gráficas"):
+            self.assertFalse(EspecialistaTareas._es_aprobacion(frase), frase)
+
+
+class PruebaEspecialistaCodigoFases(unittest.TestCase):
+    def test_sanear_plan_admite_hasta_8_archivos_y_fases(self):
+        """Verifica que el sanador de Coder acepte hasta 8 archivos multipágina con fases."""
+        plan_bruto = {
+            "nombre_proyecto": "tienda_completa",
+            "archivos": [
+                {"path": "index.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec1"}]},
+                {"path": "tienda.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec2"}]},
+                {"path": "producto.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec3"}]},
+                {"path": "carrito.html", "lenguaje": "html", "fase": 2, "secciones": [{"id": "sec4"}]},
+                {"path": "js/app.js", "lenguaje": "js", "fase": 2, "secciones": [{"id": "sec5"}]},
+                {"path": "css/styles.css", "lenguaje": "css", "fase": 3, "secciones": [{"id": "sec6"}]},
+            ]
+        }
+        saneado = EspecialistaCodigo._sanear_plan(plan_bruto)
+        self.assertIsNotNone(saneado)
+        self.assertEqual(len(saneado["archivos"]), 6)
+        self.assertEqual(saneado["archivos"][0]["fase"], 1)
+        self.assertEqual(saneado["archivos"][3]["fase"], 2)
+        self.assertEqual(saneado["archivos"][5]["fase"], 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

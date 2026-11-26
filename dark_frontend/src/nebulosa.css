@@ -1,0 +1,725 @@
+/* ============================================================
+ *  Variante Nebulosa — piel completa sobre el lenguaje base
+ * ============================================================
+ * Todo vive bajo `[data-interfaz="nebulosa"]`: la interfaz base no lleva el
+ * atributo y esta hoja no la toca. El campo de gas lo pinta el shader
+ * (`nebulosa-gl.ts`) sobre el fondo profundo de aquí; los paneles dejan ver
+ * ese gas a través de su suelo translúcido, y las imágenes se difuminan en
+ * sus bordes para parecer parte de la nebulosa en vez de fotos pegadas.
+ *
+ * Los acentos (`--neb-acento`, `--neb-acento2`) los escribe el estado en
+ * `.dark-screen` y en las superficies que se pintan fuera de él; los valores
+ * de aquí son el reposo, que es lo que ven antes del primer estado.
+ */
+
+/* ---------------------------------------------------------------------------
+   Tokens de la variante
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] {
+  --neb-acento: #c86bff;
+  --neb-acento2: #57c8ff;
+  --neb-tinta: #f2ecff;
+  --neb-tinta-tenue: #b9aed6;
+  /* El suelo de un panel donde se lee: translúcido a propósito —la nebulosa
+     tiene que verse a través— y con el desenfoque que mantiene el texto por
+     encima del gas. */
+  --neb-suelo: rgba(10, 6, 24, 0.66);
+  --neb-halo: rgba(139, 61, 255, 0.14);
+
+  /* La lengua de estado de la variante: los mismos nombres que lee la hoja
+     base, apuntando a la paleta que escribe el estado. */
+  --dark-cyan: var(--neb-acento);
+  --dark-amber: var(--neb-acento2);
+  --tecla-reposo: rgba(200, 140, 255, 0.14);
+  --tecla-activa: rgba(200, 140, 255, 0.32);
+  --velo-modal: rgba(6, 3, 16, 0.72);
+  --panel-relleno: rgba(10, 6, 24, 0.72);
+
+  /* `@theme inline` resuelve las utilidades contra `--color-*` en :root, así
+     que el re-teñido de las utilidades (text-foreground, border-border…) se
+     hace sobre esas variables, no sobre las de arriba. */
+  --color-foreground: #f2ecff;
+  --color-muted-foreground: #b9aed6;
+  --color-background: #070413;
+  --color-border: transparent;
+  --color-card: rgba(16, 10, 34, 0.55);
+  --color-primary: var(--neb-acento);
+  --color-ring: var(--neb-acento);
+}
+
+/* ---------------------------------------------------------------------------
+   El cielo: fondo profundo, sin marco, y el campo de gas encima
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"].dark-screen {
+  background:
+    radial-gradient(
+      120% 80% at 70% 18%,
+      rgba(46, 24, 92, 0.55),
+      transparent 60%
+    ),
+    radial-gradient(90% 70% at 18% 82%, rgba(12, 32, 64, 0.5), transparent 65%),
+    linear-gradient(180deg, #08051a 0%, #050310 55%, #030711 100%);
+}
+
+/* El suelo de la base sigue estando, pero la nebulosa ya no es un negro plano:
+   la franja oscura de abajo se queda a media luz para que las cards respiren. */
+[data-interfaz="nebulosa"].dark-screen::before {
+  opacity: 0.55;
+}
+
+/* La nebulosa no lleva marco: el filete de 1 px y el halo interior de la tele
+   base eran el borde de un cuadro que aquí no existe. */
+[data-interfaz="nebulosa"].dark-screen-active::after {
+  border: 0;
+  box-shadow: none;
+}
+
+/* El velo bajado es la misma orden del usuario que en la base: el escritorio
+   se mira entero, y el campo de gas se retira con él. */
+[data-interfaz="nebulosa"].dark-screen-velo-bajado {
+  background: var(--overlay-velo-bajado);
+}
+
+[data-interfaz="nebulosa"].dark-screen-velo-bajado .dark-nebulosa-campo {
+  opacity: 0.22;
+}
+
+/* La puerta mantiene su negro progresivo por encima del gas rojo del bloqueo. */
+[data-interfaz="nebulosa"].dark-screen-lock {
+  background: rgb(0 0 0 / var(--lock-velo, 1));
+}
+
+[data-interfaz="nebulosa"] .dark-nebulosa-campo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease;
+}
+
+[data-interfaz="nebulosa"] .dark-nebulosa-lienzo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* El núcleo del escenario: el lienzo ocupa la caja de la entidad. El giro y la
+   escala del gesto los lleva la caja entera (`.dark-core-transform`), no este
+   lienzo: así el gas no se recorta contra el borde del canvas al expandirse, y
+   el campo de fondo puede seguirlo en el shader como una sola pieza. */
+[data-interfaz="nebulosa"] .dark-nebulosa-giro {
+  position: absolute;
+  inset: 0;
+}
+
+/* La confirmación del agarre, en la lengua del gas. El anillo de la base es un
+   filete de 1 px con halo —una arista— y aquí no las hay: es una mancha de luz
+   cuyo alfa llega a cero dentro de su propia caja (72 % del semieje), así que se
+   ve que la pieza está sujeta sin que se dibuje un círculo. */
+[data-interfaz="nebulosa"] .dark-core-transform[data-agarrado]::after {
+  border: 0;
+  box-shadow: none;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(200, 140, 255, 0.22),
+    rgba(87, 200, 255, 0.1) 46%,
+    transparent 72%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   El input: la línea que atraviesa la pantalla, sin bordes
+   ---------------------------------------------------------------------------
+   La figura chaflanada se apaga y el campo se queda solo sobre el gas: lo que
+   lo sostiene es un carril de polvo (sombra radial difusa) que oscurece la
+   franja central lo justo para leer, mientras la línea sigue brillando por
+   los lados y por detrás. */
+
+[data-interfaz="nebulosa"] .dark-core-shell.is-input {
+  width: min(94vw, 900px);
+  height: 118px;
+}
+
+[data-interfaz="nebulosa"] .dark-core-shell.is-input.is-lock {
+  height: 92px;
+}
+
+[data-interfaz="nebulosa"] .dark-core-input > .dark-marco-lleno {
+  opacity: 0;
+}
+
+/* El carril oscurece solo la fila donde se escribe: el brillo de la línea
+   tiene que sobrevivir por encima y por debajo del texto, que es lo que la
+   hace leerse como nebulosa y no como un panel apagado. */
+[data-interfaz="nebulosa"] .dark-core-input::before {
+  content: "";
+  position: absolute;
+  inset: -14px -60px;
+  z-index: -1;
+  background: radial-gradient(
+    58% 92% at 50% 50%,
+    rgba(5, 2, 14, 0.66),
+    rgba(5, 2, 14, 0.3) 55%,
+    transparent 78%
+  );
+  filter: blur(9px);
+  pointer-events: none;
+}
+
+[data-interfaz="nebulosa"] .dark-text-input-field {
+  color: #f5efff;
+  caret-color: var(--neb-acento);
+  text-shadow:
+    0 0 14px rgba(4, 2, 12, 0.95),
+    0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+[data-interfaz="nebulosa"] .dark-text-input-field::placeholder {
+  color: rgba(216, 200, 240, 0.5);
+}
+
+[data-interfaz="nebulosa"] .dark-text-input-prompt {
+  color: var(--neb-acento);
+  opacity: 1;
+  text-shadow: 0 0 12px var(--neb-halo);
+}
+
+/* La tecla de adjuntar es una estrella, no un recorte: círculo de luz tenue,
+   sin clip y sin filete. */
+[data-interfaz="nebulosa"] .dark-core-input .dark-text-input-attach {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 38%,
+    rgba(255, 255, 255, 0.16),
+    rgba(200, 140, 255, 0.12) 58%,
+    rgba(200, 140, 255, 0.05)
+  );
+  color: var(--neb-acento2);
+}
+
+[data-interfaz="nebulosa"] .dark-core-input .dark-text-input-attach:hover,
+[data-interfaz="nebulosa"]
+  .dark-core-input
+  .dark-text-input-attach:focus-visible {
+  background: rgba(200, 140, 255, 0.28);
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+   La silueta de la variante: nada se chaflana
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-recorte {
+  clip-path: none;
+  border-radius: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Paneles: suelo de nube que se disuelve en el gas
+   ---------------------------------------------------------------------------
+   Sin filete, sin radio, sin vidrio: la superficie no es una caja. */
+
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-panel,
+    .dark-files-content,
+    .dark-sitios-card,
+    .dark-result-card,
+    .dark-carrusel-card,
+    .dark-lightbox-panel
+  ) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+/* Tres de ellos no traen position del base; la capa de suelo necesita caja. */
+[data-interfaz="nebulosa"]
+  :is(.dark-menu-panel, .dark-sitios-card, .dark-lightbox-panel) {
+  position: relative;
+}
+
+/* El suelo se apaga antes del borde del panel; donde ya es tenue, el texto
+   gana su propio halo para no competir con el gas. */
+[data-interfaz="nebulosa"]
+  :is(.dark-menu-panel, .dark-files-content, .dark-sitios-card) {
+  text-shadow: 0 1px 8px rgba(3, 2, 10, 0.8);
+}
+
+/* El suelo vive detrás del contenido en una capa propia MÁS GRANDE que el
+   panel, enmascarada hasta alfa cero antes de su borde: un desvanecido ligero
+   no sirve —si el alfa no llega a cero, el ojo encuentra la arista igual—. La
+   losa se disuelve en el gas y el texto queda encima, nítido. Sin
+   `backdrop-filter`: el vidrio dibujaba un rectángulo aunque el fondo se
+   apagara, y ese rectángulo era el borde que no debía existir. */
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-panel,
+    .dark-files-content,
+    .dark-sitios-card,
+    .dark-carrusel-card,
+    .dark-lightbox-panel
+  )::before {
+  content: "";
+  position: absolute;
+  inset: -30px;
+  z-index: -1;
+  background:
+    radial-gradient(
+      130% 90% at 12% 0%,
+      rgba(139, 61, 255, 0.14),
+      transparent 55%
+    ),
+    radial-gradient(
+      120% 90% at 92% 100%,
+      rgba(46, 123, 255, 0.1),
+      transparent 55%
+    ),
+    var(--neb-suelo);
+  /* El semieje es la mitad de la caja (50%): el borde de la propia capa queda a
+     distancia normalizada 1.0, así el cero (98%) cae justo dentro del borde y la
+     losa se disuelve. Con 100% el borde quedaba a 0.5, dentro de la zona opaca,
+     y el suelo se veía como un rectángulo con arista. */
+  mask-image: radial-gradient(50% 50% at 50% 50%, #000 55%, transparent 98%);
+  -webkit-mask-image: radial-gradient(
+    50% 50% at 50% 50%,
+    #000 55%,
+    transparent 98%
+  );
+  pointer-events: none;
+  transition: filter 240ms ease;
+}
+
+/* Las figuras chaflanadas de la base se apagan: el borde de esta variante es
+   el filete suave del panel, no el octógono. */
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-panel,
+    .dark-files-content,
+    .dark-files-dropzone,
+    .dark-result-card,
+    .dark-carrusel-card,
+    .dark-core-input
+  )
+  > .dark-marco-lleno {
+  opacity: 0;
+}
+
+[data-interfaz="nebulosa"] .dark-sitios .dark-envoltura-svg {
+  opacity: 0;
+}
+
+/* El scroll de los paneles, en la lengua de la variante. En sitios el scroll
+   vive en la lista (la card no rueda: su capa de suelo no puede rodar con el
+   contenido, mismo trato que el menú base con su .dark-menu-scroll). */
+[data-interfaz="nebulosa"] .dark-sitios-card {
+  overflow: visible;
+}
+
+[data-interfaz="nebulosa"] .dark-sitios-lista {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+[data-interfaz="nebulosa"]
+  :is(.dark-menu-scroll, .dark-files-list, .dark-sitios-lista) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200, 140, 255, 0.35) transparent;
+}
+
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-scroll,
+    .dark-files-list,
+    .dark-sitios-lista
+  )::-webkit-scrollbar {
+  width: 8px;
+}
+
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-scroll,
+    .dark-files-list,
+    .dark-sitios-lista
+  )::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(200, 140, 255, 0.35);
+}
+
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-scroll,
+    .dark-files-list,
+    .dark-sitios-lista
+  )::-webkit-scrollbar-thumb:hover {
+  background: rgba(200, 140, 255, 0.6);
+}
+
+[data-interfaz="nebulosa"]
+  :is(
+    .dark-menu-scroll,
+    .dark-files-list,
+    .dark-sitios-lista
+  )::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Las barras de recursos: el gas también mide. */
+[data-interfaz="nebulosa"] .dark-meter > span {
+  background: linear-gradient(90deg, var(--neb-acento), var(--neb-acento2));
+  box-shadow: 0 0 10px var(--neb-halo);
+}
+
+/* ---------------------------------------------------------------------------
+   Archivos: la zona de caída es un claro de la nebulosa
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-files-dropzone {
+  border: 0;
+  background: radial-gradient(
+    70% 70% at 50% 50%,
+    rgba(255, 255, 255, 0.05),
+    transparent 78%
+  );
+}
+
+[data-interfaz="nebulosa"]
+  .dark-files-content[data-estado="arrastrando"]
+  .dark-files-dropzone {
+  background: radial-gradient(
+    70% 70% at 50% 50%,
+    rgba(200, 140, 255, 0.16),
+    transparent 80%
+  );
+}
+
+[data-interfaz="nebulosa"] .dark-files-send {
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--neb-acento), var(--neb-acento2));
+  color: #12081f;
+  font-weight: 600;
+}
+
+[data-interfaz="nebulosa"] .dark-files-send:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--neb-acento), var(--neb-acento2));
+  filter: brightness(1.12);
+}
+
+[data-interfaz="nebulosa"] .dark-files-send:disabled {
+  border: 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(185, 174, 214, 0.45);
+}
+
+[data-interfaz="nebulosa"] .dark-files-instruction textarea {
+  border: 0;
+  border-radius: 10px;
+  background: radial-gradient(
+    80% 90% at 50% 50%,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02) 70%,
+    transparent
+  );
+}
+
+[data-interfaz="nebulosa"] .dark-files-instruction textarea:focus {
+  background: radial-gradient(
+    80% 90% at 50% 50%,
+    rgba(200, 140, 255, 0.12),
+    rgba(200, 140, 255, 0.04) 70%,
+    transparent
+  );
+  box-shadow: 0 0 18px var(--neb-halo);
+}
+
+/* ---------------------------------------------------------------------------
+   Sitios: el formulario sobre el mismo suelo
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-sitios-campo input {
+  border-bottom-color: rgba(200, 160, 255, 0.24);
+}
+
+[data-interfaz="nebulosa"] .dark-sitios-cerrar:hover,
+[data-interfaz="nebulosa"] .dark-sitios-guardar:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+[data-interfaz="nebulosa"] .dark-sitios-guardar {
+  border-bottom-color: rgba(200, 140, 255, 0.4);
+}
+
+/* ---------------------------------------------------------------------------
+   Resultados: las imágenes se difuminan hacia la nebulosa
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-result-card {
+  padding: 14px;
+}
+
+/* La miniatura no es un rectángulo: dos elipses centradas y solapadas —la
+   máscara suma por defecto— forman una mancha de gas cuyo alfa llega a cero
+   antes de cualquier arista de la caja. Un desvanecido que no llega a cero
+   deja el borde visible; aquí el borde no existe. La máscara va solo en la
+   imagen: el índice y el velo del hover viven en la misma caja y no deben
+   morir con ella. */
+[data-interfaz="nebulosa"] .dark-result-card .h-56 {
+  background: transparent;
+}
+
+[data-interfaz="nebulosa"] .dark-result-card .h-56 img {
+  mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+  -webkit-mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+  transition: filter 240ms ease;
+}
+
+/* La tarjeta de imagen no lleva suelo: solo gas y texto. El hover enciende la
+   propia imagen, como el gas que se aviva donde se posa la mano. */
+[data-interfaz="nebulosa"] .dark-result-card:hover .h-56 img,
+[data-interfaz="nebulosa"] .dark-result-card:focus-visible .h-56 img {
+  filter: brightness(1.3) saturate(1.15);
+}
+
+[data-interfaz="nebulosa"] .dark-result-card p {
+  text-shadow:
+    0 0 14px rgba(4, 2, 12, 0.9),
+    0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* El velo del hover tampoco es un rectángulo teñido: enciende el gas en el
+   centro y muere con la misma máscara que la imagen, para que no quede una
+   arista de color donde la imagen ya se disolvió. */
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > div {
+  background: radial-gradient(
+    62% 62% at 50% 50%,
+    color-mix(in srgb, var(--neb-acento) 26%, transparent),
+    transparent 78%
+  );
+  mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+  -webkit-mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+}
+
+/* Las etiquetas sobre la imagen (el índice y «ver opciones») pierden la caja
+   negra: texto con halo sobre un suelo difuminado de la misma familia que los
+   paneles. El índice ya es absoluto; solo la etiqueta del hover necesita
+   position para su capa. */
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > span,
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > div > span {
+  isolation: isolate;
+  background: transparent;
+  color: var(--neb-tinta);
+  text-shadow: 0 0 12px var(--neb-halo);
+}
+
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > div > span {
+  position: relative;
+}
+
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > span::before,
+[data-interfaz="nebulosa"] .dark-result-card .h-56 > div > span::before {
+  content: "";
+  position: absolute;
+  inset: -3px -6px;
+  z-index: -1;
+  border-radius: 10px;
+  background: rgba(5, 2, 14, 0.72);
+  filter: blur(7px);
+}
+
+/* ---------------------------------------------------------------------------
+   Carrusel de interfaces y teclas de navegación
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-carrusel-velo {
+  background:
+    radial-gradient(
+      90% 70% at 50% 30%,
+      rgba(139, 61, 255, 0.12),
+      transparent 70%
+    ),
+    var(--velo-modal);
+}
+
+[data-interfaz="nebulosa"] .dark-carrusel-card.is-centro::before {
+  filter: brightness(1.35);
+}
+
+[data-interfaz="nebulosa"] .dark-carrusel-card.is-activa::before {
+  filter: brightness(1.65);
+}
+
+[data-interfaz="nebulosa"] .dark-nav-btn {
+  border-radius: 50%;
+  background: rgba(200, 140, 255, 0.12);
+  color: var(--neb-acento);
+}
+
+[data-interfaz="nebulosa"] .dark-nav-btn:hover:not(:disabled),
+[data-interfaz="nebulosa"] .dark-nav-btn:focus-visible:not(:disabled) {
+  background: rgba(200, 140, 255, 0.3);
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+   Lightbox: la imagen ampliada también es gas
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-lightbox-img {
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+  -webkit-mask-image:
+    radial-gradient(78% 56% at 50% 50%, #000 22%, transparent 62%),
+    radial-gradient(56% 78% at 50% 50%, #000 22%, transparent 62%);
+}
+
+[data-interfaz="nebulosa"] .dark-lightbox-title {
+  color: var(--neb-tinta);
+  text-shadow: 0 0 16px var(--neb-halo);
+}
+
+[data-interfaz="nebulosa"] .dark-lightbox-btn {
+  border: 0;
+  border-radius: 10px;
+  background: radial-gradient(
+    90% 130% at 50% 50%,
+    rgba(200, 140, 255, 0.16),
+    rgba(200, 140, 255, 0.04) 72%,
+    transparent
+  );
+  color: var(--neb-acento);
+}
+
+[data-interfaz="nebulosa"] .dark-lightbox-btn:hover {
+  background: radial-gradient(
+    90% 130% at 50% 50%,
+    rgba(200, 140, 255, 0.28),
+    rgba(200, 140, 255, 0.08) 72%,
+    transparent
+  );
+  box-shadow: 0 0 18px var(--neb-halo);
+}
+
+[data-interfaz="nebulosa"] .dark-lightbox-btn-primary {
+  border: 0;
+  background: linear-gradient(135deg, var(--neb-acento), var(--neb-acento2));
+  color: #12081f;
+}
+
+[data-interfaz="nebulosa"] .dark-lightbox-btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 26px var(--neb-halo);
+}
+
+/* ---------------------------------------------------------------------------
+   Rótulos del cielo
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-brand-header h2 {
+  color: rgba(238, 228, 255, 0.72);
+}
+
+[data-interfaz="nebulosa"] .dark-brand-header p {
+  color: rgba(196, 178, 226, 0.75);
+}
+
+[data-interfaz="nebulosa"] .dark-speech-text {
+  color: #f5efff;
+}
+
+/* ---------------------------------------------------------------------------
+   Respaldo sin WebGL: la nebulosa quieta, con la misma paleta
+   --------------------------------------------------------------------------- */
+
+[data-interfaz="nebulosa"] .dark-nebulosa-respaldo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+[data-interfaz="nebulosa"] .dark-nebulosa-respaldo-nube {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      60% 55% at 30% 35%,
+      color-mix(in srgb, var(--neb-c1) 40%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      55% 50% at 72% 60%,
+      color-mix(in srgb, var(--neb-c2) 32%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      40% 38% at 55% 25%,
+      color-mix(in srgb, var(--neb-c3) 22%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      30% 28% at 48% 52%,
+      color-mix(in srgb, var(--neb-c4) 26%, transparent),
+      transparent 70%
+    );
+}
+
+[data-interfaz="nebulosa"] .dark-nebulosa-respaldo-linea {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 700ms ease;
+  background:
+    radial-gradient(
+      50% 16% at 50% 50%,
+      color-mix(in srgb, var(--neb-c4) 45%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 38%,
+      color-mix(in srgb, var(--neb-c1) 38%, transparent) 47%,
+      color-mix(in srgb, var(--neb-c2) 42%, transparent) 53%,
+      transparent 62%
+    );
+}
+
+[data-interfaz="nebulosa"] .dark-nebulosa-respaldo.es-nucleo {
+  mask-image: radial-gradient(50% 50% at 50% 50%, #000 40%, transparent 72%);
+  -webkit-mask-image: radial-gradient(
+    50% 50% at 50% 50%,
+    #000 40%,
+    transparent 72%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Movimiento reducido: el gas ya se congela en el shader; aquí se quitan las
+   transiciones de la piel que la base no cubre.
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-interfaz="nebulosa"] .dark-nebulosa-campo,
+  [data-interfaz="nebulosa"] .dark-nebulosa-respaldo-linea,
+  [data-interfaz="nebulosa"] .dark-result-card {
+    transition: none;
+  }
+}

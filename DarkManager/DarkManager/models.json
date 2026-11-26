@@ -1,0 +1,5 @@
+{
+  "qwen3:4b-instruct-2507-q8_0": { "ramEstimadaMB": 4500, "prioridad": 1 },
+  "qwen2.5:7b-instruct": { "ramEstimadaMB": 5000, "prioridad": 2 },
+  "qwen2.5-coder:7b": { "ramEstimadaMB": 5000, "prioridad": 3 }
+}

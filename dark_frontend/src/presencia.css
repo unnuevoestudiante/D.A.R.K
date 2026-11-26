@@ -1,0 +1,577 @@
+/* ------------------------------------------------------------------------
+   Presencia: la línea de intención y la proyección de paneles.
+
+   Los paneles no «aparecen»: salen del núcleo. Se abren como una línea de luz
+   horizontal en el centro de su caja que crece hasta el panel entero, con un
+   destello que se apaga; al cerrarse se aplastan de vuelta a esa línea. Las
+   reglas llevan `.dark-screen` delante para ganar a las de styles.css, que se
+   cargan después.
+   ------------------------------------------------------------------------ */
+
+.dark-linea-titulo {
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+
+/* La telemetría: monoespaciada, separada del título por un filete. */
+.dark-linea-detalle {
+  padding-left: 9px;
+  border-left: 1px solid color-mix(in oklab, var(--dark-cyan) 40%, transparent);
+  color: color-mix(in oklab, var(--dark-cyan) 80%, transparent);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: none; /* «T+1,4 s»: la unidad va en minúscula. */
+  font-variant-numeric: tabular-nums;
+  animation: dark-linea-entra 240ms ease both;
+}
+
+@keyframes dark-linea-entra {
+  from {
+    opacity: 0;
+    translate: -4px 0;
+  }
+}
+
+/* --- Campo y archivos: viven montados, así que la proyección es transición
+   y el cierre es el mismo camino al revés. */
+.dark-screen .dark-core-input,
+.dark-screen .dark-files-content {
+  clip-path: inset(50% -30% 50% -30%);
+}
+
+.dark-screen .dark-core-input {
+  transition:
+    opacity 250ms ease 90ms,
+    scale 420ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    clip-path 380ms cubic-bezier(0.7, 0, 0.3, 1);
+}
+
+.dark-screen .dark-files-content {
+  transition:
+    opacity 200ms ease 90ms,
+    scale 320ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    clip-path 380ms cubic-bezier(0.7, 0, 0.3, 1);
+}
+
+.dark-screen .dark-core-input.is-active,
+.dark-screen .dark-files-content.is-active {
+  clip-path: inset(-30% -30% -30% -30%);
+  transition:
+    opacity 120ms ease,
+    scale 460ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    clip-path 460ms cubic-bezier(0.16, 1, 0.3, 1) 40ms;
+  animation: dark-holo-destello 620ms ease-out;
+}
+
+/* La línea de luz que barre el panel al proyectarse. */
+.dark-screen .dark-core-input.is-active::after,
+.dark-screen .dark-files-content.is-active::after {
+  content: "";
+  position: absolute;
+  inset-inline: -4%;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--neb-acento, var(--dark-cyan)) 90%, white) 20%,
+    white 50%,
+    color-mix(in oklab, var(--neb-acento, var(--dark-cyan)) 90%, white) 80%,
+    transparent
+  );
+  pointer-events: none;
+  opacity: 0;
+  animation: dark-holo-barrido 640ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- Paneles que se montan al abrir (sitios, rostro, configuración): la
+   misma proyección como animación de entrada. */
+.dark-screen .dark-sitios,
+.dark-screen .dark-centro-raiz {
+  animation: dark-holo-proyecta 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* --- Menús laterales (recursos, tareas): ya se despliegan; se les suma el
+   destello para que se lean como proyectados y no como cajones. */
+.dark-screen .dark-menu-reveal.is-open {
+  animation: dark-holo-destello 620ms ease-out;
+}
+
+@keyframes dark-holo-proyecta {
+  0% {
+    opacity: 0;
+    clip-path: inset(50% -10% 50% -10%);
+    filter: brightness(2.2);
+  }
+  25% {
+    opacity: 1;
+    clip-path: inset(49.5% -10% 49.5% -10%);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(-10% -10% -10% -10%);
+    filter: brightness(1);
+  }
+}
+
+@keyframes dark-holo-destello {
+  0% {
+    filter: brightness(2.1) saturate(1.3);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes dark-holo-barrido {
+  0% {
+    opacity: 1;
+    top: 50%;
+    transform: scaleX(0.2);
+  }
+  35% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    top: 0%;
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-screen .dark-core-input,
+  .dark-screen .dark-files-content,
+  .dark-screen .dark-core-input.is-active,
+  .dark-screen .dark-files-content.is-active {
+    transition: opacity 150ms ease;
+    animation: none;
+  }
+  .dark-screen .dark-core-input.is-active::after,
+  .dark-screen .dark-files-content.is-active::after,
+  .dark-screen .dark-menu-reveal.is-open,
+  .dark-linea-detalle {
+    animation: none;
+  }
+  .dark-screen .dark-sitios,
+  .dark-screen .dark-centro-raiz {
+    animation: dark-in 0.2s ease both;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Centinela de reposo: la entidad de la interfaz activa en pequeño, en la
+   esquina. Vive fuera de `.dark-screen` (que en reposo está oculta) y nunca
+   captura el ratón. La telemetría se abre en una ventana con el mismo marco
+   chaflanado que los paneles.
+   ------------------------------------------------------------------------ */
+
+.dark-centinela {
+  position: fixed;
+  right: 22px;
+  bottom: 56px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.6;
+  transform-origin: right center;
+  transition:
+    opacity 420ms ease,
+    scale 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark-centinela.is-visible {
+  opacity: 1;
+  scale: 1;
+  transition-delay: 160ms;
+}
+
+/* La entidad: se inclina hacia el cursor con una perspectiva corta, además de
+   su propio giro (`tumble`). */
+.dark-centinela-nucleo {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  transform: perspective(240px) rotateY(calc(var(--centinela-ojo-x, 0) * 5deg))
+    rotateX(calc(var(--centinela-ojo-y, 0) * -5deg));
+  transition: transform 220ms ease-out;
+}
+
+.dark-centinela-nucleo .dark-core-entity {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* La ventana de telemetría: el marco de los paneles (octógono y corchetes)
+   sobre su relleno, con el texto monoespaciado del HUD. */
+.dark-centinela-ventana {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  /* El chaflán de las esquinas se come el borde: el texto necesita aire
+     lateral para quedar siempre dentro del octógono. */
+  padding: 12px 26px;
+  color: rgba(210, 222, 233, 0.82);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  translate: 10px 0;
+  clip-path: inset(0 0 0 100%);
+  transition:
+    opacity 220ms ease,
+    translate 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark-centinela-ventana > span {
+  position: relative;
+  z-index: 2;
+}
+
+.dark-centinela-ventana > .dark-marco-lleno {
+  z-index: 0;
+  opacity: 1;
+}
+
+.dark-centinela-ventana .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+/* Al acercar el cursor la ventana se proyecta desde la entidad hacia fuera. */
+.dark-centinela.is-atento .dark-centinela-ventana {
+  opacity: 1;
+  translate: 0 0;
+  clip-path: inset(-4px -4px -4px -4px);
+}
+
+/* Sin enlace: la figura se apaga y se desatura. Que se vea quieta y gris dice
+   que no hay nadie detrás. */
+.dark-centinela.is-sin-enlace .dark-centinela-nucleo {
+  filter: grayscale(1) brightness(0.6);
+}
+
+/* Avisos pendientes: el centinela respira más fuerte. Un halo late detrás de
+   la entidad y la figura crece y se aviva al compás; ámbar si hay algo
+   urgente. No dice nada hasta que el cursor se acerca o se le pregunta. */
+.dark-centinela {
+  --centinela-aviso: 110, 200, 255;
+}
+
+.dark-centinela.is-urgente {
+  --centinela-aviso: 255, 176, 72;
+}
+
+.dark-centinela-nucleo::before {
+  content: "";
+  position: absolute;
+  inset: -22px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(var(--centinela-aviso), 0.34) 0%,
+    rgba(var(--centinela-aviso), 0.12) 38%,
+    transparent 68%
+  );
+  opacity: 0;
+  scale: 0.7;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+
+.dark-centinela.is-pendiente .dark-centinela-nucleo::before,
+.dark-centinela.is-hablando .dark-centinela-nucleo::before {
+  animation: dark-centinela-halo 2.6s ease-in-out infinite;
+}
+
+.dark-centinela.is-pendiente .dark-centinela-nucleo .dark-core-entity {
+  animation: dark-centinela-respira 2.6s ease-in-out infinite;
+}
+
+.dark-centinela.is-urgente.is-pendiente .dark-centinela-nucleo::before,
+.dark-centinela.is-urgente.is-pendiente .dark-centinela-nucleo .dark-core-entity {
+  animation-duration: 1.4s;
+}
+
+/* Hablando desde la esquina: el halo late rápido y bajo, como la voz. */
+.dark-centinela.is-hablando .dark-centinela-nucleo::before {
+  animation-duration: 0.9s;
+}
+
+@keyframes dark-centinela-halo {
+  0%,
+  100% {
+    opacity: 0.25;
+    scale: 0.75;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.15;
+  }
+}
+
+@keyframes dark-centinela-respira {
+  0%,
+  100% {
+    scale: 1;
+    filter: brightness(1);
+  }
+  50% {
+    scale: 1.12;
+    filter: brightness(1.35) drop-shadow(0 0 6px rgba(var(--centinela-aviso), 0.55));
+  }
+}
+
+/* La línea de avisos de la telemetría, en el color del aviso. */
+.dark-centinela-ventana > .dark-centinela-linea-aviso {
+  color: rgb(var(--centinela-aviso));
+}
+
+/* Lo que D.A.R.K. dice desde aquí: la ventana se abre sola y el texto, más
+   grande y en varias líneas, se escribe en ella. */
+.dark-centinela-ventana > .dark-centinela-dicho {
+  max-width: 320px;
+  white-space: normal;
+  text-align: right;
+  font-size: 11.5px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  color: rgba(226, 236, 245, 0.95);
+}
+
+.dark-centinela.is-diciendo .dark-centinela-ventana {
+  padding: 14px 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-centinela,
+  .dark-centinela-nucleo,
+  .dark-centinela-ventana {
+    transition: opacity 150ms ease;
+  }
+
+  .dark-centinela .dark-centinela-nucleo::before,
+  .dark-centinela .dark-centinela-nucleo .dark-core-entity {
+    animation: none !important;
+  }
+
+  .dark-centinela.is-pendiente .dark-centinela-nucleo::before {
+    opacity: 0.8;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Secuencia de arranque: «Acceso concedido», la lista de sistemas con su
+   estado real, el veredicto y el núcleo recogiéndose hacia la esquina del
+   centinela. Los tiempos salen de `lib/presencia/arranque.ts`.
+   ------------------------------------------------------------------------ */
+
+.dark-arranque {
+  width: min(420px, 82vw);
+  margin: 14px auto 0;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 300ms ease;
+}
+
+.dark-arranque-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dark-arranque-linea {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: rgba(169, 190, 206, 0.72);
+  text-transform: uppercase;
+  animation: dark-arranque-entra 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dark-arranque-guia {
+  flex: 1;
+  border-bottom: 1px dotted rgba(169, 190, 206, 0.28);
+  translate: 0 -3px;
+}
+
+.dark-arranque-estado {
+  color: var(--dark-cyan);
+}
+
+.dark-arranque-linea[data-nivel="info"] .dark-arranque-estado {
+  color: rgba(169, 190, 206, 0.6);
+}
+
+.dark-arranque-linea[data-nivel="atencion"] .dark-arranque-estado,
+.dark-arranque-veredicto[data-nivel="atencion"] {
+  color: #e0a458;
+}
+
+.dark-arranque-linea[data-nivel="error"] .dark-arranque-estado {
+  color: #e8736b;
+}
+
+.dark-arranque-veredicto {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(169, 190, 206, 0.18);
+  color: var(--dark-cyan);
+  text-align: center;
+  letter-spacing: 0.26em;
+  animation: dark-arranque-entra 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes dark-arranque-entra {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+/* Al conceder el acceso el núcleo destella una vez. */
+.dark-screen.is-arrancando .dark-core-shell {
+  animation: dark-holo-destello 700ms ease-out;
+}
+
+/* El recogido: el núcleo viaja hacia la esquina donde aparece el centinela
+   (abajo a la derecha) encogiéndose, y lo demás se apaga. */
+.dark-screen.is-colapsando .dark-core-shell {
+  animation: dark-arranque-recoge 750ms cubic-bezier(0.7, 0, 0.3, 1) forwards;
+}
+
+.dark-screen.is-colapsando .dark-arranque,
+.dark-screen.is-colapsando .dark-brand-header {
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+
+@keyframes dark-arranque-recoge {
+  to {
+    /* Hasta el centro del centinela: right 22 + 32 y bottom 56 + 32. */
+    translate: calc(50vw - 54px) calc(50vh - 88px);
+    scale: 0.1;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-arranque-linea,
+  .dark-arranque-veredicto,
+  .dark-screen.is-arrancando .dark-core-shell {
+    animation: none;
+  }
+  .dark-screen.is-colapsando .dark-core-shell {
+    animation: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Ignición del arranque (lib/presencia/ignicion.ts). Dos lienzos a pantalla
+   completa y el log de arranque. Mientras dura, el núcleo real está oculto
+   (salvo la Nebulosa, cuyo gas ES la ignición) y aparece fundido en la
+   entrega, donde estaba la figura.
+   ------------------------------------------------------------------------ */
+
+.dark-ignicion {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.dark-ignicion-lienzo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dark-ignicion-log {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.75;
+  letter-spacing: 0.1em;
+  color: rgba(210, 222, 233, 0.82);
+}
+
+.dark-ignicion-log li {
+  display: flex;
+  gap: 8px;
+  white-space: pre;
+}
+
+.dark-ignicion-guia {
+  opacity: 0.35;
+}
+
+.dark-ignicion-estado {
+  color: #8fdcf2;
+}
+
+.dark-ignicion-log li.is-cargando .dark-ignicion-estado {
+  color: #e0a458;
+}
+
+.dark-ignicion-log li.is-espera .dark-ignicion-estado,
+.dark-ignicion-log li.is-verificando .dark-ignicion-estado {
+  color: rgba(169, 190, 206, 0.55);
+}
+
+.dark-ignicion-log li.is-error .dark-ignicion-estado {
+  color: #e8736b;
+}
+
+/* Negro total mientras dura: el overlay es transparente y, sin esto, la
+   ignición se vería encima del escritorio. Gana a los fondos de la puerta. */
+.dark-screen.is-ignicion,
+[data-interfaz].dark-screen.is-ignicion {
+  background: #000;
+}
+
+/* El núcleo real espera a la entrega y aparece fundido en el sitio de la
+   figura. La Nebulosa no: su gas lo pinta el propio shader durante la
+   ignición. */
+.dark-screen .dark-core-transform {
+  transition: opacity 600ms ease;
+}
+
+.dark-screen.is-ignicion-oculta:not(.is-ignicion-gas) .dark-core-transform {
+  opacity: 0;
+}
+
+/* Hasta la marca no hay cabecera: la pantalla es la ignición. Con
+   `visibility`, porque la puerta lleva la opacidad de la marca en línea. */
+.dark-screen.is-ignicion-oscura .dark-brand-header {
+  visibility: hidden;
+}
+
+/* «EN LÍNEA» en el cian del despertar aunque la puerta esté cerrada. */
+.dark-screen.is-ignicion-oculta .dark-brand-header p {
+  color: #8fdcf2;
+}

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "issuedAtUtc": "2026-11-18T01:00:50.3656211+00:00",
+  "expiresAtUtc": "2027-11-18T01:00:50.3656211+00:00",
+  "artifacts": [],
+  "models": [
+    {
+      "id": "limited-chat",
+      "backend": "ollama",
+      "modelTag": "qwen3:0.6b-q4_K_M",
+      "digest": "sha256:7df6b6e09427a769808717c0a93cadc4ae99ed4eb8bf5ca557c90846becea435",
+      "maximumDownloadBytes": 522653767,
+      "estimatedRamBytes": 838860800,
+      "role": "chat",
+      "sourceUri": "https://ollama.com/library/qwen3:0.6b-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "limited-nucleus",
+      "backend": "ollama",
+      "modelTag": "qwen2.5:0.5b-instruct-q4_K_M",
+      "digest": "sha256:a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67",
+      "maximumDownloadBytes": 397821319,
+      "estimatedRamBytes": 681574400,
+      "role": "nucleus",
+      "sourceUri": "https://ollama.com/library/qwen2.5:0.5b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "limited-coder",
+      "backend": "ollama",
+      "modelTag": "qwen2.5-coder:0.5b-instruct-q4_K_M",
+      "digest": "sha256:4ff64a7f502a08b7616edb8ca0a79eb1853fc363d842b7df4b46915d11a3fb09",
+      "maximumDownloadBytes": 397821516,
+      "estimatedRamBytes": 681574400,
+      "role": "coder",
+      "sourceUri": "https://ollama.com/library/qwen2.5-coder:0.5b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "standard-chat",
+      "backend": "ollama",
+      "modelTag": "qwen3:4b-instruct-2507-q8_0",
+      "digest": "sha256:aa7252f68dda4d25dfffa65b3760af6d2c3231a140c0060c78d444686d98a374",
+      "maximumDownloadBytes": 4280418281,
+      "estimatedRamBytes": 4718592000,
+      "role": "chat",
+      "sourceUri": "https://ollama.com/library/qwen3:4b-instruct-2507-q8_0",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "standard-nucleus",
+      "backend": "ollama",
+      "modelTag": "qwen2.5:7b-instruct",
+      "digest": "sha256:845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+      "maximumDownloadBytes": 4683087332,
+      "estimatedRamBytes": 5242880000,
+      "role": "nucleus",
+      "sourceUri": "https://ollama.com/library/qwen2.5:7b-instruct",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "standard-coder",
+      "backend": "ollama",
+      "modelTag": "qwen2.5-coder:7b",
+      "digest": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+      "maximumDownloadBytes": 4683087561,
+      "estimatedRamBytes": 5242880000,
+      "role": "coder",
+      "sourceUri": "https://ollama.com/library/qwen2.5-coder:7b",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "high-chat",
+      "backend": "ollama",
+      "modelTag": "qwen3:14b-q4_K_M",
+      "digest": "sha256:bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+      "maximumDownloadBytes": 9276198565,
+      "estimatedRamBytes": 11010048000,
+      "role": "chat",
+      "sourceUri": "https://ollama.com/library/qwen3:14b-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "high-nucleus",
+      "backend": "ollama",
+      "modelTag": "qwen2.5:14b-instruct-q4_K_M",
+      "digest": "sha256:7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+      "maximumDownloadBytes": 8988124069,
+      "estimatedRamBytes": 10695475200,
+      "role": "nucleus",
+      "sourceUri": "https://ollama.com/library/qwen2.5:14b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "high-coder",
+      "backend": "ollama",
+      "modelTag": "qwen2.5-coder:14b-instruct-q4_K_M",
+      "digest": "sha256:9ec8897f747e246e970bc5cfdda85d22f1123dc2e3d34978a010a75968716849",
+      "maximumDownloadBytes": 8988124298,
+      "estimatedRamBytes": 10695475200,
+      "role": "coder",
+      "sourceUri": "https://ollama.com/library/qwen2.5-coder:14b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "station-chat",
+      "backend": "ollama",
+      "modelTag": "qwen3:32b-q4_K_M",
+      "digest": "sha256:030ee887880fc378860c2dd35101da424377520441ae4bfe7be6deff8ade7840",
+      "maximumDownloadBytes": 20201253829,
+      "estimatedRamBytes": 23068672000,
+      "role": "chat",
+      "sourceUri": "https://ollama.com/library/qwen3:32b-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "station-nucleus",
+      "backend": "ollama",
+      "modelTag": "qwen2.5:32b-instruct-q4_K_M",
+      "digest": "sha256:9f13ba1299afea09d9a956fc6a85becc99115a6d596fae201a5487a03bdc4368",
+      "maximumDownloadBytes": 19851349669,
+      "estimatedRamBytes": 23068672000,
+      "role": "nucleus",
+      "sourceUri": "https://ollama.com/library/qwen2.5:32b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    {
+      "id": "station-coder",
+      "backend": "ollama",
+      "modelTag": "qwen2.5-coder:32b-instruct-q4_K_M",
+      "digest": "sha256:b92d6a0bd47ee79114298de0177bf920c05a706d12633950b3936778492bef41",
+      "maximumDownloadBytes": 19851349898,
+      "estimatedRamBytes": 23068672000,
+      "role": "coder",
+      "sourceUri": "https://ollama.com/library/qwen2.5-coder:32b-instruct-q4_K_M",
+      "licenseId": "Apache-2.0",
+      "licenseUri": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}

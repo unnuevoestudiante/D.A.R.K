@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Descriptor de capacidades de Dark como asistente de voz predeterminado.
+    Referenciado por DarkVoiceService en el AndroidManifest.xml.
+    Supportsassist = true → el sistema puede llamar a Dark con el botón de asistente.
+-->
+<voice-interaction-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.dark.node.core.DarkSessionService"
+    android:recognitionService="com.dark.node.core.DarkRecognitionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="false"
+    android:supportsLocalInteraction="true" />

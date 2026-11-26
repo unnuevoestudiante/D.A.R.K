@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "pythonPackage": "sqlcipher3",
+  "pythonVersion": "0.6.5",
+  "wheelSha256": "51a0aa43147bdc8b7d429564bfdf8efaebc3a616b221f704dfd507645767490d",
+  "modulePath": "app/python/Lib/site-packages/sqlcipher3/_sqlite3.cp312-win_amd64.pyd",
+  "moduleBytes": 6082048,
+  "moduleSha256": "9849427bfd9c297aa64417f240d6ecee52ebe12e05712866a5b2f09bc44a0fd7",
+  "runtimeProbe": {
+    "pragmaCipherVersion": "4.20.0 community",
+    "sqliteVersion": "3.54.1"
+  },
+  "nativeLibrary": {
+    "name": "SQLCipher Community",
+    "version": "4.20.0",
+    "source": "https://github.com/sqlcipher/sqlcipher/tree/v4.20.0",
+    "license": "BSD-3-Clause",
+    "licenseUri": "https://github.com/sqlcipher/sqlcipher/blob/v4.20.0/LICENSE.md",
+    "licensePath": "tools/installer/third-party/sqlcipher-4.20.0/LICENSE.md",
+    "licenseBytes": 1463,
+    "licenseSha256": "2a2826f6acf46fa650730cf42cbb22a642be33a7ef119c9c4f4bf6daf3bef48e",
+    "sqliteBase": "3.54.1"
+  }
+}

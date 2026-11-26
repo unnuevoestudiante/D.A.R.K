@@ -1,0 +1,143 @@
+# Entornos y dependencias
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+
+# Binarios grandes de voces/modelos descargables
+*.bin
+piper_voices/
+
+# Artefactos de build y cachés de herramientas
+.output/
+.wrangler/
+.devin/
+dist/
+dist-ssr/
+.vinxi/
+.nitro
+
+# Logs y temporales de la capa de voz
+dark_python/_voz_logs/
+dark_python/_voz_tmp/
+
+# Caché de audio generado en cada arranque: mp3s efímeros, se vuelven a sintetizar
+dark_python/nucleo/_tts_cache/
+dark_python/nucleo/_tts_temp/
+
+# Estado de ejecución: cambia en cada arranque, no es fuente de verdad
+dark_python/*_log.jsonl
+dark_python/dark_intenciones.json
+dark_python/dark_entidades.json
+dark_python/dark_cache_patrones.json
+dark_python/dark_temas.json
+dark_python/dark_memoria.json
+dark_python/dark_neuronas.json
+dark_python/nucleo/memoria/dark_memoria.json
+dark_python/nucleo/memoria/dark_temas.json
+dark_python/nucleo/memoria/dark_temas_log.jsonl
+dark_python/nucleo/intenciones/dark_intenciones.json
+dark_python/nucleo/intenciones/dark_intenciones_log.jsonl
+dark_python/nucleo/intenciones/dark_entidades.json
+dark_python/nucleo/intenciones/dark_cache_patrones.json
+dark_python/nucleo/identidades/dark_neuronas.json
+dark_python/nucleo/identidades/dark_perfil_conductual.json
+dark_python/nucleo/identidades/dark_guardia_log.jsonl
+dark_python/herramientas/externas/_cache_apps.json
+config/modulos.json
+
+# Historial conversacional archivado: conversación íntegra en texto plano.
+# No es estado de ejecución sino dato personal, y nunca debe llegar al repo.
+dark_python/dark_historial_archivo.jsonl
+
+# Credenciales del Hive: nunca al repo
+config/modulo_token.txt
+.env
+.dev.vars
+
+# Memoria a largo plazo: la base cifrada y cualquier copia de recuperación
+# de su clave son datos personales, nunca al repo.
+dark_python/nucleo/memoria/largo_plazo/memoria.db*
+clave_recuperacion*.txt
+
+# Evaluación de memoria: conversaciones reales que Samuel redacta en local y los
+# reportes con sus propuestas crudas. Dato personal, nunca al repo (spec §8).
+tests/eval_memoria/conversaciones_reales.json
+tests/eval_memoria/holdout_samuel.json
+tests/eval_memoria/resultado*.json
+tests/eval_memoria/resultado*.log
+tests/eval_memoria/muestra_*.txt
+
+# Respaldo manual (los checkpoints son commits, no copias en el árbol)
+*.bak
+*.bak.*
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Artefactos de build .NET
+**/bin/
+**/obj/
+*.dll
+*.exe
+*.pdb
+
+# Estado de ejecucion en la raiz
+/dark_memoria.json
+/dark_neuronas.json
+prueba_diagnostico.txt
+
+# --- Reglas añadidas tras la revisión (23-oct-2026) ---
+
+# Config con claves: NUNCA al repo. Tu online_coder.json real vive solo en tu PC.
+config/online_coder.json
+
+# Respaldos manuales: los checkpoints son commits, no copias en el árbol
+_parche_backup_*/
+
+# Temporales de tests y carpetas tmp*
+.test-tmp/
+.tmp_arch_tests/
+tmp*/
+
+# Logs en cualquier nivel del proyecto
+*.log
+
+# Binarios descargables de los prototipos faciales y plantilla biométrica:
+# los modelos se re-descargan solos; faces_db.npz son datos biométricos, nunca al repo.
+Reconocimiento Facial/*.task
+Reconocimiento Facial/faces_db.npz
+
+modulos/**/.gradle/
+modulos/**/build/
+modulos/**/.cxx/
+modulos/**/local.properties
+
+# android-dark (cliente oficial): certificados del TV y modelo Vosk descargable
+# quedan solo en disco; los keystores de firma nunca al repo.
+modulos/android-dark/app/src/main/assets/vidaa/
+modulos/android-dark/app/src/main/assets/model-es/
+*.jks
+*.keystore
+
+config/sitios_web.json
+
+# Estado de usuario del Centro de configuración en desarrollo (preferencias, primer arranque)
+dark_python/.estado_usuario/
+
+# Conexiones: cliente OAuth de Google y el estado (cuenta, permisos concedidos).
+config/google_cliente.json
+config/gmail_cliente.json
+config/conexiones.json
+
+# Respaldos .bak_* y temporales de limpieza / config local
+*.bak_*
+.claude/
+aplicar_ronda2.py
+LIMPIEZA.md
+M0_INVENTORY.md

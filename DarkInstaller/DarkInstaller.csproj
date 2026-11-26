@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DarkInstaller</AssemblyName>
+    <RootNamespace>DarkInstaller</RootNamespace>
+    <Company>S2</Company>
+    <Product>D.A.R.K.</Product>
+    <InstallerTermsVersion>0.1-draft</InstallerTermsVersion>
+    <InstallerTermsFile Condition="'$(InstallerTermsFile)' == ''">$(MSBuildThisFileDirectory)..\docs\installer\CONDICIONES_DE_USO_BORRADOR.md</InstallerTermsFile>
+    <InstallerManifestFile Condition="'$(InstallerManifestFile)' == ''">$(MSBuildThisFileDirectory)release-manifest.signed.json</InstallerManifestFile>
+    <InstallerManifestPublicKeyFile Condition="'$(InstallerManifestPublicKeyFile)' == ''">$(MSBuildThisFileDirectory)release-manifest-public.pem</InstallerManifestPublicKeyFile>
+    <InstallerSourceHostsFile Condition="'$(InstallerSourceHostsFile)' == ''">$(MSBuildThisFileDirectory)release-source-hosts.txt</InstallerSourceHostsFile>
+    <InstallerDistributionChannel Condition="'$(InstallerDistributionChannel)' == '' and '$(Configuration)' == 'Release'">Release</InstallerDistributionChannel>
+    <InstallerDistributionChannel Condition="'$(InstallerDistributionChannel)' == ''">Development</InstallerDistributionChannel>
+    <InstallerPythonCommand Condition="'$(InstallerPythonCommand)' == ''">python</InstallerPythonCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DarkSetup\DarkSetup.csproj" />
+    <EmbeddedResource Include="$(InstallerManifestPublicKeyFile)" Condition="Exists('$(InstallerManifestPublicKeyFile)')" LogicalName="DarkInstaller.release-manifest-public.pem" />
+    <EmbeddedResource Include="$(InstallerThirdPartyNotices)" Condition="'$(InstallerThirdPartyNotices)' != '' and Exists('$(InstallerThirdPartyNotices)')" LogicalName="DarkInstaller.third-party-notices.md" />
+    <EmbeddedResource Include="$(InstallerTermsFile)" Condition="'$(InstallerTermsFile)' != '' and Exists('$(InstallerTermsFile)')" LogicalName="DarkInstaller.terms.md" />
+    <EmbeddedResource Include="$(InstallerManifestFile)" Condition="Exists('$(InstallerManifestFile)')" LogicalName="DarkInstaller.release-manifest.signed.json" />
+    <EmbeddedResource Include="$(InstallerSourceHostsFile)" Condition="Exists('$(InstallerSourceHostsFile)')" LogicalName="DarkInstaller.release-source-hosts.txt" />
+    <Content Include="$(InstallerManifestFile)" Condition="'$(Configuration)' != 'Release' and Exists('$(InstallerManifestFile)')" TargetPath="release-manifest.signed.json" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+    <Content Include="$(InstallerSourceHostsFile)" Condition="'$(Configuration)' != 'Release' and Exists('$(InstallerSourceHostsFile)')" TargetPath="release-source-hosts.txt" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>InstallerTermsVersion</_Parameter1>
+      <_Parameter2>$(InstallerTermsVersion)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>InstallerDistributionChannel</_Parameter1>
+      <_Parameter2>$(InstallerDistributionChannel)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <Target Name="RequireSignedReleaseMetadata" BeforeTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="!Exists('$(InstallerManifestPublicKeyFile)')" Text="Release bloqueado: falta fijar la clave pública del manifiesto." />
+    <Error Condition="!Exists('$(InstallerManifestFile)')" Text="Release bloqueado: falta el manifiesto firmado de componentes." />
+    <Error Condition="!Exists('$(InstallerSourceHostsFile)')" Text="Release bloqueado: falta la lista de hosts HTTPS aprobados." />
+    <Error Condition="'$(InstallerThirdPartyNotices)' == '' or !Exists('$(InstallerThirdPartyNotices)')" Text="Release bloqueado: falta incluir los avisos de terceros exactos del payload en el instalador." />
+    <Error Condition="'$(InstallerTermsFile)' == '' or !Exists('$(InstallerTermsFile)')" Text="Release bloqueado: falta el texto de condiciones que se mostrará y aceptará." />
+    <Error Condition="'$(InstallerPayloadArchive)' == '' or !Exists('$(InstallerPayloadArchive)')" Text="Release bloqueado: falta indicar el ZIP de payload que distribuirá el manifiesto." />
+    <Error Condition="'$(InstallerTermsVersion)' == '' or '$(InstallerTermsVersion)' == '0.1-draft'" Text="Release bloqueado: las condiciones de instalación siguen en borrador o no tienen versión." />
+  </Target>
+  <Target Name="ValidateInstallerPayloadNoticePairing" AfterTargets="RequireSignedReleaseMetadata" BeforeTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="&quot;$(InstallerPythonCommand)&quot; &quot;$(MSBuildThisFileDirectory)..\tools\installer\validate_installer_payload_notices.py&quot; --manifest &quot;$(InstallerManifestFile)&quot; --public-key &quot;$(InstallerManifestPublicKeyFile)&quot; --payload &quot;$(InstallerPayloadArchive)&quot; --notices &quot;$(InstallerThirdPartyNotices)&quot; --terms-file &quot;$(InstallerTermsFile)&quot; --terms-version &quot;$(InstallerTermsVersion)&quot;" />
+  </Target>
+</Project>

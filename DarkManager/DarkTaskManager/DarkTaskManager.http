@@ -1,0 +1,10 @@
+@DarkTaskManager_HostAddress = http://localhost:5051
+
+GET {{DarkTaskManager_HostAddress}}/tasks
+Accept: application/json
+
+###
+GET {{DarkTaskManager_HostAddress}}/tasks/interrupted
+Accept: application/json
+
+###

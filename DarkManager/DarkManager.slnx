@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="DarkManager/DarkManager.csproj" />
+  <Project Path="DarkTaskManager/DarkTaskManager.csproj" />
+  <Project Path="DarkSupervisor/DarkSupervisor.csproj" />
+  <Project Path="../DarkSetup/DarkSetup.csproj" />
+  <Project Path="../DarkInstaller/DarkInstaller.csproj" />
+  <Project Path="../tests/DarkSetup.Validation/DarkSetup.Validation.csproj" />
+</Solution>

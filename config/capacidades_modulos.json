@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "nota": "DOCUMENTACIÓN DE DISEÑO, NO CONFIGURACIÓN EN USO. Revisado el 2026-10-30: hoy NINGÚN código lee este fichero. No lo lee el Hub, no lo lee el Núcleo y no lo lee la app Android, que declara sus propias capacidades hardcodeadas en modulos/dark_movil/.../core/protocol/HiveProtocol.kt. Las capacidades efectivas por tipo están en DEFAULT_CAPABILITIES de dark_python/modulos/hive/servidor.py, que cubre solo 4 tipos: phone, tv, watch y headphone. La política real de asignación tampoco es la que esta nota describía antes: si un módulo declara 'capabilities' en su hello, ESA lista gana entera (no se suma ni se recorta contra ningún documento); si no declara ninguna, el Hub usa DEFAULT_CAPABILITIES de su tipo; y un tipo no reconocido se acepta igual tras avisar 'module_type desconocido; se acepta igual' y recibe ['ping','status']. Divergencias concretas entre este documento y el Hub: aquí tv declara 'source' y 'key', que DEFAULT_CAPABILITIES no concede; y tablet, pc y subnucleo no existen en el Hub. Migrar el Hub a leer este fichero y dejar las capacidades hardcodeadas sigue ABIERTO y está tracked en docs/specs.md (sección de módulos del Hive).",
+  "notacion_params": {
+    "string": "texto libre",
+    "integer": "número entero",
+    "boolean": "true o false",
+    "enum:a|b|c": "una de esas opciones, literal"
+  },
+  "nota_estado": "Los tipos con 'estado' marcado como diseño futuro no tienen implementación: el Hub no los reconoce, así que nada de lo declarado bajo ellos tiene efecto hoy.",
+  "tipos": {
+    "phone": {
+      "nombre_humano": "Teléfono",
+      "descripcion": "Dispositivo Android que actúa como comunicador y nodo persistente del Hive.",
+      "acciones": {
+        "say": {
+          "descripcion": "Reproduce un texto en el dispositivo por TTS.",
+          "params": {"text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 45
+        },
+        "ask": {
+          "descripcion": "Reproduce una pregunta y devuelve la respuesta del usuario.",
+          "params": {"text": "string", "speak": "boolean"},
+          "requeridos": ["text"],
+          "timeout_default": 60
+        },
+        "torch": {
+          "descripcion": "Enciende, apaga o alterna la linterna del dispositivo.",
+          "params": {"state": "enum:on|off|toggle"},
+          "requeridos": ["state"],
+          "timeout_default": 6
+        },
+        "call": {
+          "descripcion": "Inicia una llamada telefónica a un contacto.",
+          "params": {"who": "string"},
+          "requeridos": ["who"],
+          "timeout_default": 12
+        },
+        "open_app": {
+          "descripcion": "Abre una aplicación instalada en el dispositivo.",
+          "params": {"app": "string"},
+          "requeridos": ["app"],
+          "timeout_default": 12
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado del dispositivo.",
+          "params": {"what": "enum:battery|network|storage|location|time|date"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que el dispositivo responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        },
+        "disconnect": {
+          "descripcion": "Desconecta el módulo del Hub.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        },
+        "reconnect": {
+          "descripcion": "Reconecta el módulo al Hub.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "tv": {
+      "nombre_humano": "Televisor",
+      "descripcion": "Televisor inteligente controlado por el bridge VIDAA.",
+      "acciones": {
+        "power": {
+          "descripcion": "Enciende, apaga o alterna el televisor.",
+          "params": {"state": "enum:on|off|toggle"},
+          "requeridos": ["state"],
+          "timeout_default": 12
+        },
+        "volume": {
+          "descripcion": "Ajusta el volumen del televisor. Usar level o direction, no ambos.",
+          "params": {"level": "integer", "direction": "enum:up|down|mute"},
+          "requeridos": [],
+          "timeout_default": 12
+        },
+        "brightness": {
+          "descripcion": "Ajusta el brillo del panel cuando el firmware lo permite.",
+          "params": {"level": "integer"},
+          "requeridos": ["level"],
+          "timeout_default": 12
+        },
+        "channel": {
+          "descripcion": "Cambia de canal. Usar number o direction, no ambos.",
+          "params": {"number": "string", "direction": "enum:up|down"},
+          "requeridos": [],
+          "timeout_default": 12
+        },
+        "source": {
+          "descripcion": "Cambia la entrada o fuente del televisor.",
+          "params": {"source": "string"},
+          "requeridos": ["source"],
+          "timeout_default": 12
+        },
+        "open_app": {
+          "descripcion": "Abre una aplicación del televisor (netflix, youtube, prime, disney, hbo, spotify).",
+          "params": {"app": "string"},
+          "requeridos": ["app"],
+          "timeout_default": 12
+        },
+        "media_control": {
+          "descripcion": "Controla la reproducción del contenido actual.",
+          "params": {"action": "enum:play|pause|stop"},
+          "requeridos": ["action"],
+          "timeout_default": 12
+        },
+        "play": {
+          "descripcion": "Reproduce contenido buscado por título. Parcial: hoy abre YouTube y deja la búsqueda pendiente.",
+          "params": {"title": "string"},
+          "requeridos": ["title"],
+          "timeout_default": 15
+        },
+        "search": {
+          "descripcion": "Búsqueda de contenido en el televisor. Aún no implementado en el bridge.",
+          "params": {"query": "string"},
+          "requeridos": ["query"],
+          "timeout_default": 15
+        },
+        "key": {
+          "descripcion": "Envía una tecla suelta al televisor (home, back, ok, up, down...).",
+          "params": {"key": "string"},
+          "requeridos": ["key"],
+          "timeout_default": 8
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado del televisor.",
+          "params": {"what": "enum:general|volume|power|channel"},
+          "requeridos": [],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que el televisor responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "watch": {
+      "nombre_humano": "Reloj",
+      "descripcion": "Reloj inteligente conectado al Hive.",
+      "acciones": {
+        "say": {
+          "descripcion": "Reproduce un texto en el reloj por TTS o por notificación sonora.",
+          "params": {"text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 45
+        },
+        "ask": {
+          "descripcion": "Reproduce una pregunta y devuelve la respuesta del usuario.",
+          "params": {"text": "string", "speak": "boolean"},
+          "requeridos": ["text"],
+          "timeout_default": 60
+        },
+        "notify": {
+          "descripcion": "Muestra una notificación en la pantalla del reloj.",
+          "params": {"title": "string", "text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 10
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado del reloj.",
+          "params": {"what": "enum:battery|network|storage|time|date"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que el reloj responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "headphone": {
+      "nombre_humano": "Audífonos",
+      "descripcion": "Audífonos conectados al Hive.",
+      "acciones": {
+        "play": {
+          "descripcion": "Reproduce un contenido de audio en los audífonos.",
+          "params": {"query": "string"},
+          "requeridos": ["query"],
+          "timeout_default": 12
+        },
+        "media_control": {
+          "descripcion": "Controla la reproducción del contenido actual.",
+          "params": {"action": "enum:play|pause|stop|next|previous"},
+          "requeridos": ["action"],
+          "timeout_default": 10
+        },
+        "volume": {
+          "descripcion": "Ajusta el volumen de los audífonos. Usar level o direction, no ambos.",
+          "params": {"level": "integer", "direction": "enum:up|down|mute"},
+          "requeridos": [],
+          "timeout_default": 10
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado de los audífonos.",
+          "params": {"what": "enum:battery|connected|codec"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que los audífonos responden.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "tablet": {
+      "nombre_humano": "Tablet",
+      "descripcion": "Tablet conectada al Hive, con pantalla y capacidades propias.",
+      "estado": "DISEÑO FUTURO, SIN IMPLEMENTACIÓN: el Hub no reconoce este tipo (no está en TYPE_LABELS ni en DEFAULT_CAPABILITIES de servidor.py). Nada de lo declarado aquí tiene efecto hoy.",
+      "acciones": {
+        "say": {
+          "descripcion": "Reproduce un texto en la tablet por TTS.",
+          "params": {"text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 45
+        },
+        "ask": {
+          "descripcion": "Reproduce una pregunta y devuelve la respuesta del usuario.",
+          "params": {"text": "string", "speak": "boolean"},
+          "requeridos": ["text"],
+          "timeout_default": 60
+        },
+        "show": {
+          "descripcion": "Muestra una imagen, un documento o una URL en la pantalla de la tablet.",
+          "params": {"what": "string", "kind": "enum:image|document|url"},
+          "requeridos": ["what"],
+          "timeout_default": 12
+        },
+        "open_app": {
+          "descripcion": "Abre una aplicación instalada en la tablet.",
+          "params": {"app": "string"},
+          "requeridos": ["app"],
+          "timeout_default": 12
+        },
+        "notify": {
+          "descripcion": "Muestra una notificación en la tablet.",
+          "params": {"title": "string", "text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 10
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado de la tablet.",
+          "params": {"what": "enum:battery|network|storage|time|date"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que la tablet responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "pc": {
+      "nombre_humano": "PC secundario",
+      "descripcion": "PC distinto al Núcleo, conectado al Hive como nodo de cómputo o de escritorio.",
+      "estado": "DISEÑO FUTURO, SIN IMPLEMENTACIÓN: el Hub no reconoce este tipo (no está en TYPE_LABELS ni en DEFAULT_CAPABILITIES de servidor.py). Nada de lo declarado aquí tiene efecto hoy.",
+      "acciones": {
+        "say": {
+          "descripcion": "Reproduce un texto en el equipo por TTS.",
+          "params": {"text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 45
+        },
+        "ask": {
+          "descripcion": "Reproduce una pregunta y devuelve la respuesta del usuario.",
+          "params": {"text": "string", "speak": "boolean"},
+          "requeridos": ["text"],
+          "timeout_default": 60
+        },
+        "notify": {
+          "descripcion": "Muestra una notificación del sistema en ese equipo.",
+          "params": {"title": "string", "text": "string"},
+          "requeridos": ["text"],
+          "timeout_default": 10
+        },
+        "open_app": {
+          "descripcion": "Abre una aplicación en ese equipo.",
+          "params": {"app": "string"},
+          "requeridos": ["app"],
+          "timeout_default": 12
+        },
+        "run": {
+          "descripcion": "Ejecuta un comando o script en ese equipo, dentro de las rutas permitidas.",
+          "params": {"command": "string"},
+          "requeridos": ["command"],
+          "timeout_default": 30
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado de ese equipo.",
+          "params": {"what": "enum:cpu|ram|disk|network|uptime"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que ese equipo responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    },
+    "subnucleo": {
+      "nombre_humano": "Subnúcleo",
+      "descripcion": "Nodo adicional que aporta cómputo al ecosistema bajo coordinación del Núcleo.",
+      "estado": "DISEÑO FUTURO, SIN IMPLEMENTACIÓN: el Hub no reconoce este tipo (no está en TYPE_LABELS ni en DEFAULT_CAPABILITIES de servidor.py). Nada de lo declarado aquí tiene efecto hoy.",
+      "acciones": {
+        "run_task": {
+          "descripcion": "Recibe una tarea de cómputo y la ejecuta bajo las reglas del Núcleo.",
+          "params": {"task_id": "string", "payload": "string"},
+          "requeridos": ["task_id", "payload"],
+          "timeout_default": 300
+        },
+        "cancel_task": {
+          "descripcion": "Cancela una tarea que estaba ejecutando.",
+          "params": {"task_id": "string"},
+          "requeridos": ["task_id"],
+          "timeout_default": 10
+        },
+        "status": {
+          "descripcion": "Devuelve un dato de estado del Subnúcleo.",
+          "params": {"what": "enum:cpu|ram|gpu|queue|uptime"},
+          "requeridos": ["what"],
+          "timeout_default": 8
+        },
+        "ping": {
+          "descripcion": "Comprueba que el Subnúcleo responde.",
+          "params": {},
+          "requeridos": [],
+          "timeout_default": 6
+        }
+      }
+    }
+  }
+}

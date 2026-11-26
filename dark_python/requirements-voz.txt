@@ -1,0 +1,9 @@
+# Adaptadores y captura de voz. Se instala solo si se habilita la voz local.
+faster-whisper
+speechrecognition
+edge-tts
+pyttsx3
+pywin32
+pyaudio
+wyoming
+wyoming-faster-whisper

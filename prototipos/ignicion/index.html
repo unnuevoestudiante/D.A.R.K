@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ignición de D.A.R.K. — prototipo</title>
+<style>
+  :root {
+    --cian: #8fdcf2;
+    --rojo: #e8736b;
+    --texto: rgba(210, 222, 233, 0.82);
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: var(--texto);
+  }
+  canvas { position: fixed; inset: 0; display: block; }
+  /* La Nebulosa: las dos capas de D.A.R.K. — el campo a pantalla completa y el
+     núcleo de 410 px en el centro — con su shader real. */
+  #gl-campo, #gl-nucleo { display: none; }
+  body.modo-gas #gl-campo { display: block; width: 100vw; height: 100vh; }
+  body.modo-gas #gl-nucleo {
+    display: block;
+    inset: auto;
+    left: 50%; top: 50%;
+    width: 410px; height: 410px;
+    translate: -50% -50%;
+  }
+
+  /* Marca y puerta */
+  #marca {
+    position: fixed;
+    left: 0; right: 0;
+    top: 12vh;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #marca h1 {
+    margin: 0;
+    font: 400 clamp(26px, 3.4vw, 40px) system-ui, sans-serif;
+    letter-spacing: 0.32em;
+    padding-left: 0.32em;
+    color: rgba(225, 236, 245, 0.78);
+  }
+  #marca p {
+    margin: 10px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--color-ui, var(--cian));
+  }
+  #puerta {
+    position: fixed;
+    left: 50%;
+    bottom: 16vh;
+    translate: -50% 0;
+    width: min(420px, 80vw);
+    height: 46px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #puerta svg { position: absolute; inset: 0; overflow: visible; }
+  #puerta span {
+    position: absolute;
+    left: 22px; top: 50%;
+    translate: 0 -50%;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: rgba(232, 115, 107, 0.7);
+  }
+
+  /* Log de arranque */
+  #log {
+    position: fixed;
+    left: 28px;
+    bottom: 28px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    line-height: 1.75;
+    pointer-events: none;
+  }
+  #log li { display: flex; gap: 8px; white-space: pre; }
+  #log .estado { color: var(--color-ui, var(--cian)); }
+  #log .estado.cargando { color: #e0a458; }
+  #log .estado.error { color: #e8736b; }
+  #log .estado.verificando { color: rgba(169, 190, 206, 0.55); }
+
+  /* Controles del prototipo (no forman parte del diseño) */
+  #controles {
+    position: fixed;
+    top: 12px; right: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 12px;
+    background: rgba(20, 24, 30, 0.85);
+    border: 1px solid rgba(169, 190, 206, 0.18);
+    font-size: 11px;
+    z-index: 10;
+    opacity: 0.35;
+    transition: opacity 200ms;
+  }
+  #controles:hover { opacity: 1; }
+  #controles label { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  #controles button {
+    font: inherit; color: inherit; cursor: pointer;
+    background: rgba(143, 220, 242, 0.08);
+    border: 1px solid rgba(143, 220, 242, 0.3);
+    padding: 5px 8px;
+  }
+  #controles input[type=range] { width: 140px; }
+  #controles .dim { color: rgba(169, 190, 206, 0.55); }
+
+  #empezar {
+    position: fixed; inset: 0;
+    display: grid; place-items: center;
+    background: #000;
+    z-index: 20;
+    cursor: pointer;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    color: rgba(169, 190, 206, 0.6);
+  }
+</style>
+</head>
+<body>
+<canvas id="gl-campo"></canvas>
+<canvas id="gl-nucleo"></canvas>
+<canvas id="lienzo"></canvas>
+<canvas id="luz"></canvas>
+
+<div id="marca"><h1 id="titulo">D.A.R.K.</h1><p id="sub"></p></div>
+<div id="puerta">
+  <svg id="puerta-svg"></svg>
+  <span>› Contraseña</span>
+</div>
+<ul id="log"></ul>
+
+<div id="controles">
+  <button id="repetir">↻ Repetir</button>
+  <label>Interfaz
+    <select id="interfaz">
+      <option value="teseracto">Teseracto</option>
+      <option value="jarvis">Jarvis</option>
+      <option value="orbe">Orbe Cuántico</option>
+      <option value="reactor">Reactor Cibernético</option>
+      <option value="nebulosa">Nebulosa</option>
+    </select>
+  </label>
+  <label>Tiempo <input id="tiempo" type="range" min="0" max="9" step="0.01" value="0" /></label>
+  <label>Velocidad
+    <select id="velocidad">
+      <option value="1">1×</option>
+      <option value="0.5">0,5×</option>
+      <option value="0.25">0,25×</option>
+    </select>
+  </label>
+  <label>Sonido <input id="sonido" type="checkbox" checked /></label>
+  <label>Partículas <input id="particulas" type="range" min="200" max="2400" step="100" value="1200" /></label>
+  <span class="dim" id="info">—</span>
+</div>
+
+<div id="empezar">CLIC PARA ENCENDER D.A.R.K.</div>
+
+<script src="nebulosa-shader.js"></script>
+<script>
+"use strict";
+
+/* ===================================================================
+   Guion (segundos). Todo lo que se ve es una función de t: se puede
+   repetir, ralentizar y mover con la barra de tiempo.
+   =================================================================== */
+const G = {
+  latidoInicio: 0.4,      // el punto de luz aparece y late
+  ignicion: 1.2,          // destello + ondas de choque
+  ondas: [0, 0.14, 0.3],  // retraso de cada onda
+  ondaDuracion: 1.5,
+  vueloFin: 2.6,          // el polvo deja de volar libre
+  convergeRetardo: 0.05,  // entre nodo y nodo
+  convergeDur: [0.9, 1.25],
+  aristasInicio: 4.45,
+  aristaRetardo: 0.025,
+  aristaDur: 0.35,
+  destello: 5.5,
+  marca: 5.5,
+  rojoInicio: 6.2,
+  rojoFin: 6.9,
+  puerta: 6.6,
+  fin: 7.4,
+};
+
+/* La Nebulosa tiene su propia línea de tiempo: implosión, explosión, un
+   segundo de silencio y condensación del gas desde los bordes. */
+const G_BASE = { ...G };
+const G_NEBULOSA = {
+  ...G_BASE,
+  implosion: 0.3,      // las partículas empiezan a caer hacia el centro
+  compresion: 2.3,     // compresión máxima: se corta el sonido
+  ignicion: 2.4,       // la explosión (ondas y destello usan este instante)
+  silencioFin: 3.9,    // un segundo de silencio y negro tras la cola del estallido
+  condensaFin: 6.4,    // el frente del gas llega al corazón
+  destello: 6.4,       // el núcleo se enciende
+  marca: 6.6,
+  rojoInicio: 7.3,
+  rojoFin: 8.0,
+  puerta: 7.7,
+  fin: 8.6,
+  vueloFin: Infinity,
+};
+
+const CIAN = [143, 220, 242];
+const BLANCO = [235, 248, 255];
+const ROJO = [232, 115, 107];
+
+/* Dos capas: el polvo deja estela (no se borra del todo entre cuadros); la luz
+   —punto, ondas, destellos, nodos y aristas— se limpia en cada cuadro, porque
+   con estela un destello se acumula y lava la pantalla de blanco. */
+const lienzo = document.getElementById("lienzo");
+const polvo = lienzo.getContext("2d");
+const capaLuz = document.getElementById("luz");
+const ctx = capaLuz.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+function medir() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  for (const [c, g] of [[lienzo, polvo], [capaLuz, ctx]]) {
+    c.width = W * DPR; c.height = H * DPR;
+    c.style.width = W + "px"; c.style.height = H + "px";
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+}
+window.addEventListener("resize", medir);
+medir();
+
+/* ---------- utilidades ---------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const suave = (x) => { const c = clamp(x); return c * c * (3 - 2 * c); };
+const salida = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const mezcla = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function azar(semilla) {   // determinista: la misma partícula siempre igual
+  let s = semilla >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+/* El color del momento: blanco al encender, cian al despertar, rojo en la puerta. */
+function colorEn(t) {
+  if (t < G.ignicion + 0.6) return mezcla(BLANCO, CIAN, suave((t - G.ignicion) / 0.6));
+  if (t < G.rojoInicio) return CIAN;
+  return mezcla(CIAN, ROJO, suave((t - G.rojoInicio) / (G.rojoFin - G.rojoInicio)));
+}
+
+/* ===================================================================
+   Figuras: cada interfaz define a dónde va el polvo, en qué orden se
+   llenan sus puntos y qué estructura los une. La ignición es común.
+   =================================================================== */
+
+/* El giro empieza cuando llega el polvo y se acelera un poco en el destello. */
+function giroEn(t) {
+  return 0.35 + 0.28 * Math.max(0, t - G.vueloFin) + 0.22 * Math.max(0, t - G.destello);
+}
+
+/* ---------- Teseracto: 16 nodos, 32 aristas ---------- */
+const VERT = [];
+for (let i = 0; i < 16; i++) VERT.push([i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1, i & 8 ? 1 : -1]);
+const ARIST = [];
+for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (i < j) ARIST.push([i, j]); }
+
+const TESERACTO = {
+  n: 16,
+  // Los nodos se completan de arriba abajo, que se lee como «se construye».
+  orden: [...Array(16).keys()].sort((a, b) => (VERT[a][1] + VERT[a][3] * 0.5) - (VERT[b][1] + VERT[b][3] * 0.5)),
+  retardo: 0.05,
+  aristas: ARIST,
+  aristasDur: 0.8,       // tiempo total en que se reparten las aristas
+  nodo: "brillo",
+  proyectar(t) {
+    const a = giroEn(t), b = a * 0.62 + 0.4;
+    const R = Math.min(W, H) * 0.17;
+    const cx = W / 2, cy = H * 0.5;
+    return VERT.map(([x, y, z, w]) => {
+      // XW y YZ, como el teseracto de D.A.R.K.
+      const x1 = x * Math.cos(a) - w * Math.sin(a), w1 = x * Math.sin(a) + w * Math.cos(a);
+      const y1 = y * Math.cos(b) - z * Math.sin(b), z1 = y * Math.sin(b) + z * Math.cos(b);
+      const k4 = 1 / (2.6 - w1);
+      const X = x1 * k4, Y = y1 * k4, Z = z1 * k4;
+      const k3 = 1 / (3.2 - Z);
+      return { x: cx + X * k3 * R * 3.4, y: cy + Y * k3 * R * 3.4, p: clamp((w1 + 1) / 2) };
+    });
+  },
+};
+
+/* ---------- Jarvis: esfera de constelación ---------- */
+// Puntos repartidos por igual sobre la esfera (espiral de Fibonacci).
+const ESFERA = [];
+const N_ESFERA = 150;
+for (let i = 0; i < N_ESFERA; i++) {
+  const y = 1 - (i / (N_ESFERA - 1)) * 2;
+  const r = Math.sqrt(1 - y * y);
+  const th = i * Math.PI * (3 - Math.sqrt(5));
+  ESFERA.push([Math.cos(th) * r, y, Math.sin(th) * r]);
+}
+// Los filamentos: cada punto con sus 3 vecinos más cercanos.
+const FILAMENTOS = (() => {
+  const pares = new Set();
+  ESFERA.forEach((a, i) => {
+    ESFERA.map((b, j) => [j, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]])
+      .filter(([j]) => j !== i).sort((u, v) => v[1] - u[1]).slice(0, 3)
+      .forEach(([j]) => pares.add(i < j ? `${i}-${j}` : `${j}-${i}`));
+  });
+  return [...pares].map((k) => k.split("-").map(Number));
+})();
+// El polvo se posa en una ola que baja desde el polo norte.
+// (En pantalla la Y crece hacia abajo: el polo de arriba es la Y más negativa.)
+const ORDEN_ESFERA = [...Array(N_ESFERA).keys()].sort((a, b) => ESFERA[a][1] - ESFERA[b][1]);
+const POS_ESFERA = []; ORDEN_ESFERA.forEach((n, k) => (POS_ESFERA[n] = k));
+// Los filamentos se tejen siguiendo la misma ola.
+FILAMENTOS.sort((u, v) => Math.min(POS_ESFERA[u[0]], POS_ESFERA[u[1]]) - Math.min(POS_ESFERA[v[0]], POS_ESFERA[v[1]]));
+
+const JARVIS = {
+  n: N_ESFERA,
+  orden: ORDEN_ESFERA,
+  retardo: 1.0 / N_ESFERA,
+  aristas: FILAMENTOS,
+  aristasDur: 1.0,
+  nodo: "punto",
+  proyectar(t) {
+    const a = giroEn(t) * 0.55, inc = 0.38;
+    const R = Math.min(W, H) * 0.24;
+    const cx = W / 2, cy = H * 0.5;
+    return ESFERA.map(([x, y, z]) => {
+      const x1 = x * Math.cos(a) + z * Math.sin(a), z1 = -x * Math.sin(a) + z * Math.cos(a);
+      const y2 = y * Math.cos(inc) - z1 * Math.sin(inc), z2 = y * Math.sin(inc) + z1 * Math.cos(inc);
+      const k = 2.6 / (3.2 - z2);
+      return { x: cx + x1 * k * R, y: cy + y2 * k * R, p: clamp((z2 + 1) / 2) };
+    });
+  },
+};
+
+/* ---------- Orbe Cuántico: núcleo denso y tres órbitas ---------- */
+const ORBE_NUCLEO = 40, ORBE_ORBITAS = 3, ORBE_POR_ORBITA = 40;
+const ORBE_N = ORBE_NUCLEO + ORBE_ORBITAS * ORBE_POR_ORBITA;
+const ORBE_ARISTAS = [];
+for (let j = 0; j < ORBE_ORBITAS; j++) {
+  const base = ORBE_NUCLEO + j * ORBE_POR_ORBITA;
+  for (let i = 0; i < ORBE_POR_ORBITA; i++) ORBE_ARISTAS.push([base + i, base + ((i + 1) % ORBE_POR_ORBITA)]);
+}
+const ORBE = {
+  n: ORBE_N,
+  // Primero el núcleo, luego cada órbita se cierra dando la vuelta.
+  orden: [...Array(ORBE_N).keys()],
+  retardo: 1.15 / ORBE_N,
+  aristas: ORBE_ARISTAS,
+  aristasDur: 0.9,
+  nodo: "punto",
+  proyectar(t) {
+    const rot = giroEn(t);
+    const R = Math.min(W, H) * 0.25;
+    const cx = W / 2, cy = H * 0.5;
+    const out = [];
+    for (let i = 0; i < ORBE_NUCLEO; i++) {   // núcleo: esfera pequeña
+      const y = 1 - (i / (ORBE_NUCLEO - 1)) * 2, r = Math.sqrt(1 - y * y);
+      const th = i * Math.PI * (3 - Math.sqrt(5)) + rot;
+      const z = Math.sin(th) * r;
+      out.push({ x: cx + Math.cos(th) * r * R * 0.22, y: cy + y * R * 0.22, p: (z + 1) / 2 });
+    }
+    for (let j = 0; j < ORBE_ORBITAS; j++) {   // órbitas elípticas inclinadas
+      const fi = (j * Math.PI) / 3 + 0.3, sentido = j % 2 ? -1 : 1;
+      for (let i = 0; i < ORBE_POR_ORBITA; i++) {
+        const th = (i / ORBE_POR_ORBITA) * Math.PI * 2 + rot * (0.7 + 0.25 * j) * sentido;
+        const ex = Math.cos(th), ey = Math.sin(th) * 0.36;
+        out.push({
+          x: cx + R * (ex * Math.cos(fi) - ey * Math.sin(fi)),
+          y: cy + R * (ex * Math.sin(fi) + ey * Math.cos(fi)),
+          p: (Math.sin(th) + 1) / 2,
+        });
+      }
+    }
+    return out;
+  },
+  // El plasma del núcleo se enciende cuando el núcleo queda completo.
+  extra(c, t, nodos, color) {
+    const e = suave((t - nodoCompleto(ORBE_NUCLEO - 1)) / 0.5);
+    if (e <= 0) return;
+    const R = Math.min(W, H) * 0.25 * 0.3;
+    const g = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, R);
+    g.addColorStop(0, rgba(BLANCO, 0.55 * e));
+    g.addColorStop(0.4, rgba(color, 0.25 * e));
+    g.addColorStop(1, rgba(color, 0));
+    c.fillStyle = g;
+    c.beginPath(); c.arc(W / 2, H / 2, R, 0, Math.PI * 2); c.fill();
+  },
+};
+
+/* ---------- Reactor Cibernético: anillos que se cierran y hexágono ---------- */
+const REACTOR_RADIOS = [1, 0.74, 0.5], REACTOR_CUENTAS = [54, 42, 30];
+const REACTOR_ARISTAS = [];
+const REACTOR_BASE = [];
+{
+  let base = 0;
+  REACTOR_CUENTAS.forEach((n) => {
+    REACTOR_BASE.push(base);
+    for (let i = 0; i < n; i++) REACTOR_ARISTAS.push([base + i, base + ((i + 1) % n)]);
+    base += n;
+  });
+  REACTOR_BASE.push(base);   // el hexágono empieza aquí
+  for (let i = 0; i < 6; i++) {
+    REACTOR_ARISTAS.push([base + i, base + ((i + 1) % 6)]);
+    // Radios del hexágono al anillo interior.
+    REACTOR_ARISTAS.push([base + i, REACTOR_BASE[2] + Math.round((i * REACTOR_CUENTAS[2]) / 6)]);
+  }
+}
+const REACTOR_N = REACTOR_BASE[3] + 6;
+const REACTOR = {
+  n: REACTOR_N,
+  // De fuera hacia dentro: cada anillo se cierra dando la vuelta.
+  orden: [...Array(REACTOR_N).keys()],
+  retardo: 1.15 / REACTOR_N,
+  aristas: REACTOR_ARISTAS,
+  aristasDur: 0.9,
+  nodo: "punto",
+  proyectar(t) {
+    const rot = giroEn(t);
+    const R = Math.min(W, H) * 0.24;
+    const cx = W / 2, cy = H * 0.5;
+    const out = [];
+    REACTOR_CUENTAS.forEach((n, j) => {
+      const sentido = j % 2 ? -0.9 : 0.6;   // contrarrotan
+      for (let i = 0; i < n; i++) {
+        const th = (i / n) * Math.PI * 2 - Math.PI / 2 + rot * sentido;
+        out.push({ x: cx + Math.cos(th) * R * REACTOR_RADIOS[j], y: cy + Math.sin(th) * R * REACTOR_RADIOS[j], p: 0.55 + 0.45 * (1 - j / 3) });
+      }
+    });
+    for (let i = 0; i < 6; i++) {
+      const th = Math.PI / 6 + (i / 6) * Math.PI * 2 + rot * 0.3;
+      out.push({ x: cx + Math.cos(th) * R * 0.24, y: cy + Math.sin(th) * R * 0.24, p: 1 });
+    }
+    return out;
+  },
+  // El plasma del hexágono, cuando se completa.
+  extra(c, t, nodos, color) {
+    const e = suave((t - nodoCompleto(REACTOR_N - 1)) / 0.4);
+    if (e <= 0) return;
+    const hex = nodos.slice(REACTOR_BASE[3]);
+    c.fillStyle = rgba(color, 0.16 * e);
+    c.beginPath();
+    hex.forEach((v, i) => (i ? c.lineTo(v.x, v.y) : c.moveTo(v.x, v.y)));
+    c.closePath(); c.fill();
+    const g = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.min(W, H) * 0.06);
+    g.addColorStop(0, rgba(BLANCO, 0.6 * e));
+    g.addColorStop(1, rgba(color, 0));
+    c.fillStyle = g;
+    c.beginPath(); c.arc(W / 2, H / 2, Math.min(W, H) * 0.06, 0, Math.PI * 2); c.fill();
+  },
+};
+
+/* ---------- Nebulosa: se enciende dentro de su propio gas ---------- */
+// No hay figura que armar: la onda de choque revela el gas del shader real y
+// el polvo se disuelve en él (ver motorGas más abajo).
+const NEBULOSA = {
+  gas: true,
+  n: 1,
+  orden: [0],
+  retardo: 0,
+  aristas: [],
+  aristasDur: 0,
+  nodo: "ninguno",
+  proyectar: () => [{ x: W / 2, y: H / 2, p: 1 }],
+};
+
+const FIGURAS = { teseracto: TESERACTO, jarvis: JARVIS, orbe: ORBE, reactor: REACTOR, nebulosa: NEBULOSA };
+let FIG = TESERACTO;
+let POS_ORDEN = [];   // posición de cada punto en el orden de llenado
+function elegirFigura(id) {
+  FIG = FIGURAS[id] || TESERACTO;
+  Object.assign(G, FIG.gas ? G_NEBULOSA : G_BASE);
+  POS_ORDEN = []; FIG.orden.forEach((n, k) => (POS_ORDEN[n] = k));
+}
+elegirFigura("teseracto");
+
+/* ---------- La Nebulosa: el shader real de D.A.R.K. con la ignición ---------- */
+// Al empezar a condensarse: un gas profundo, que se aclara al formarse.
+const PALETA_PROFUNDA = { c: ["#1e1b4b", "#2e5fd0", "#4c3fa8", "#80b9ff"], gain: 0.9 };
+// «Despierto»: la paleta de la Nebulosa al hablar (la de tu captura).
+const PALETA_DESPIERTA = { c: ["#3a86ff", "#80b9ff", "#83b6ca", "#e0f2ff"], gain: 1.05 };
+// La puerta: la paleta de bloqueo de la Nebulosa.
+const PALETA_PUERTA = { c: ["#7f1d1d", "#ff3030", "#ff6b6b", "#ffd7d7"], gain: 0.8 };
+const hexVec = (h) => { const n = parseInt(h.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+const mezclaPaleta = (a, b, k) => ({
+  c: a.c.map((h, i) => hexVec(h).map((v, j) => v + (hexVec(b.c[i])[j] - v) * k)),
+  gain: a.gain + (b.gain - a.gain) * k,
+});
+function paletaGasEn(t) {
+  if (t < G.rojoInicio) return mezclaPaleta(PALETA_PROFUNDA, PALETA_DESPIERTA, suave((t - G.silencioFin) / (G.condensaFin - G.silencioFin + 0.4)));
+  return mezclaPaleta(PALETA_DESPIERTA, PALETA_PUERTA, suave((t - G.rojoInicio) / (G.rojoFin - G.rojoInicio)));
+}
+
+const motorGas = (() => {
+  const VERT = "attribute vec2 a_pos; void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }";
+  const UNI = ["u_res","u_time","u_morph","u_level","u_voz","u_core","u_gain","u_seed","u_linea_y",
+    "u_c1","u_c2","u_c3","u_c4","u_pivot","u_giro","u_escala","u_px","u_estela",
+    "u_ign","u_onda","u_turb","u_frente","u_flujo"];
+  const capas = [];
+  function crear(id, core, escala) {
+    const lienzo = document.getElementById(id);
+    const gl = lienzo.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false, depth: false, stencil: false });
+    if (!gl) return;
+    const sh = (tipo, src) => { const x = gl.createShader(tipo); gl.shaderSource(x, src); gl.compileShader(x);
+      if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(x)); return x; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, window.NEBULOSA_FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const u = {};
+    UNI.forEach((n) => (u[n] = gl.getUniformLocation(prog, n === "u_estela" ? "u_estela[0]" : n)));
+    capas.push({ lienzo, gl, prog, buf, u, core, escala, attr: gl.getAttribLocation(prog, "a_pos") });
+  }
+  let listo = false;
+  function iniciar() {
+    if (listo) return;
+    listo = true;
+    crear("gl-campo", 0, 0.6);
+    crear("gl-nucleo", 1, 0.85);
+  }
+  function dibujar(t) {
+    iniciar();
+    // Condensación: el frente viaja desde fuera de la pantalla hasta pasar el
+    // corazón; el gas existe fuera de él y fluye hacia dentro mientras tanto.
+    const te = t - G.silencioFin;
+    const dur = G.condensaFin - G.silencioFin;
+    const pal = paletaGasEn(t);
+    const maxR = Math.hypot(W, H) * 0.62;
+    // Rápido al principio (la periferia se llena) y frenando al llegar al centro.
+    const avance = 1 - Math.pow(1 - clamp(te / dur), 1.8);
+    const ondaPx = te < 0 ? maxR : maxR - (maxR + 0.35 * H) * avance;
+    const turb = te < 0 ? 0 : 0.45 * (1 - suave(te / (dur + 1)));
+    const flujo = te < 0 ? 1 : 1 - suave(te / (dur + 0.8));
+    const frente = te < 0 ? 0 : 0.35 * (1 - suave((te - dur + 0.2) / 0.5));
+    const tiempo = 4 + t * 0.6;
+    const gain = te < 0 ? 0 : pal.gain * suave(te / 0.6);
+    for (const c of capas) {
+      const cssW = c.lienzo.clientWidth, cssH = c.lienzo.clientHeight;
+      const w = Math.max(1, Math.round(cssW * c.escala)), h = Math.max(1, Math.round(cssH * c.escala));
+      if (c.lienzo.width !== w || c.lienzo.height !== h) { c.lienzo.width = w; c.lienzo.height = h; }
+      const { gl, u } = c;
+      gl.viewport(0, 0, w, h);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(c.prog);
+      gl.bindBuffer(gl.ARRAY_BUFFER, c.buf);
+      gl.enableVertexAttribArray(c.attr);
+      gl.vertexAttribPointer(c.attr, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform2f(u.u_res, w, h);
+      gl.uniform1f(u.u_time, tiempo);
+      gl.uniform1f(u.u_morph, 0); gl.uniform1f(u.u_level, 0); gl.uniform1f(u.u_voz, 0);
+      gl.uniform1f(u.u_core, c.core);
+      gl.uniform1f(u.u_gain, gain);
+      gl.uniform1f(u.u_seed, c.core ? 3.1 : 7.3);
+      gl.uniform1f(u.u_linea_y, 0.5);
+      pal.c.forEach((v, i) => gl.uniform3f(u["u_c" + (i + 1)], v[0], v[1], v[2]));
+      gl.uniform2f(u.u_pivot, 0, 0); gl.uniform1f(u.u_giro, 0); gl.uniform1f(u.u_escala, 1);
+      gl.uniform1f(u.u_px, 1 / cssH);
+      gl.uniform4fv(u.u_estela, new Float32Array(32));
+      gl.uniform1f(u.u_ign, te);
+      gl.uniform1f(u.u_onda, ondaPx / cssH);   // en unidades de uv de ESTE lienzo
+      gl.uniform1f(u.u_turb, turb);
+      gl.uniform1f(u.u_frente, frente);
+      gl.uniform1f(u.u_flujo, flujo);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+  }
+  return { dibujar };
+})();
+
+/* ---------- el polvo ---------- */
+let PART = [];
+function crearPolvo(n) {
+  const r = azar(7);
+  PART = [];
+  if (FIG.gas) {
+    // Nebulosa: cada partícula nace en algún punto de la pantalla, cae en
+    // espiral y acelerando hacia el centro, y en la explosión sale despedida.
+    for (let i = 0; i < n * 1.6; i++) {
+      PART.push({
+        f0: 0.25 + r() * 0.75,                 // fracción del radio de pantalla
+        a0: r() * Math.PI * 2,
+        ts: G.implosion + r() * 1.0,           // cuándo aparece y empieza a caer
+        giro: (r() < 0.5 ? -1 : 1) * (1.4 + r() * 2.2),
+        dentro: Math.sqrt(r()),                // dónde queda dentro de la bola
+        viaje: 0.55 + r() * 0.45,              // cuánto tarda en llegar a la bola
+        aDentro: r() * Math.PI * 2,
+        vExp: 450 + Math.pow(r(), 0.5) * 1500,
+        aExp: r() * Math.PI * 2,
+        arrastre: 1.2 + r() * 1.8,
+        brillo: 0.4 + r() * 0.6,
+        talla: 0.6 + r() * 1.2,
+      });
+    }
+    return;
+  }
+  for (let i = 0; i < n; i++) {
+    const ang = r() * Math.PI * 2;
+    const vel = 180 + Math.pow(r(), 0.6) * 820;   // px/s al estallar
+    const nodo = i % FIG.n;
+    const ini = FIG.gas ? Infinity : G.vueloFin + POS_ORDEN[nodo] * FIG.retardo + r() * 0.25;
+    const dur = G.convergeDur[0] + r() * (G.convergeDur[1] - G.convergeDur[0]);
+    PART.push({
+      vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel,
+      arrastre: 1.6 + r() * 1.4,
+      nodo, ini, dur,
+      giro: (r() < 0.5 ? -1 : 1) * (2.2 + r() * 2.2),   // vueltas de la espiral
+      brillo: 0.35 + r() * 0.65,
+      talla: 0.6 + r() * 1.1,
+      deriva: r() * Math.PI * 2,
+    });
+  }
+}
+
+/* La bola de la implosión: se encoge y tiembla cada vez más hasta la
+   compresión máxima; entre la compresión y la explosión, contiene el aliento. */
+const ACUMULA_FIN = 1.9;   // termina de llegar masa; empieza a comprimirse
+function radioBola(t) {
+  // Crece con la masa que cae y después se aplasta hasta un punto.
+  if (t < ACUMULA_FIN) return 30 + 45 * suave((t - 0.8) / (ACUMULA_FIN - 0.8));
+  return 75 - 71 * suave((t - ACUMULA_FIN) / (G.compresion - ACUMULA_FIN));
+}
+function temblor(t) {
+  if (t >= G.ignicion) return { x: 0, y: 0 };
+  const amp = 7 * suave((t - 1.5) / (G.compresion - 1.5));
+  return { x: amp * Math.sin(t * 97), y: amp * Math.cos(t * 83) };
+}
+function posImplosion(pt, t) {
+  const cx = W / 2, cy = H / 2, D = Math.hypot(W, H) * 0.6;
+  if (t < G.ignicion) {
+    const nace = clamp((t - pt.ts + 0.35) / 0.35);
+    if (t < pt.ts) return { x: cx + Math.cos(pt.a0) * pt.f0 * D, y: cy + Math.sin(pt.a0) * pt.f0 * D, alfa: nace * 0.6, calor: 0 };
+    const tb = temblor(t);
+    const rb = radioBola(t);
+    const llega = Math.min(ACUMULA_FIN, pt.ts + pt.viaje);
+    if (t < llega) {
+      // Cae en espiral, acelerando, hacia su sitio en la bola.
+      const k = Math.pow(clamp((t - pt.ts) / (llega - pt.ts)), 2);
+      const rad = pt.f0 * D * (1 - k) + pt.dentro * rb * k;
+      const ang = pt.a0 + pt.giro * k * 2.5;
+      return { x: cx + tb.x + Math.cos(ang) * rad, y: cy + tb.y + Math.sin(ang) * rad, alfa: 1, calor: k * 0.6 };
+    }
+    // Ya en la bola: gira dentro de ella mientras crece y se comprime.
+    const ang = pt.a0 + pt.giro * 2.5 + (t - llega) * pt.giro * 1.4;
+    const rad = pt.dentro * rb;
+    return { x: cx + tb.x + Math.cos(ang) * rad, y: cy + tb.y + Math.sin(ang) * rad, alfa: 1, calor: 0.6 + 0.4 * suave((t - ACUMULA_FIN) / 0.4) };
+  }
+  // La explosión: despedidas con arrastre, y se apagan en medio segundo.
+  const tau = t - G.ignicion;
+  const f = (1 - Math.exp(-pt.arrastre * tau)) / pt.arrastre;
+  return { x: cx + Math.cos(pt.aExp) * pt.vExp * f, y: cy + Math.sin(pt.aExp) * pt.vExp * f, alfa: 1 - suave(tau / 0.6), calor: 1 - suave(tau / 0.3) };
+}
+
+/* Vuelo libre con arrastre, en forma cerrada: p = v/k·(1−e^(−k·τ)). */
+function vuelo(pt, tau) {
+  const f = (1 - Math.exp(-pt.arrastre * tau)) / pt.arrastre;
+  const ondula = 6 * Math.sin(tau * 3 + pt.deriva) * clamp(tau);
+  return { x: W / 2 + pt.vx * f + ondula, y: H / 2 + pt.vy * f + ondula * 0.6 };
+}
+
+function posicion(pt, t, nodos) {
+  const tau = t - G.ignicion;
+  if (t < pt.ini) return { ...vuelo(pt, tau), fase: 0 };
+  // Espiral hacia su punto: el desplazamiento rota y se encoge.
+  const salidaP = vuelo(pt, pt.ini - G.ignicion);
+  const destino = nodos[pt.nodo];
+  const e = clamp((t - pt.ini) / pt.dur);
+  const k = salida(e);
+  const dx = salidaP.x - destino.x, dy = salidaP.y - destino.y;
+  const th = pt.giro * k;
+  const c = Math.cos(th), s = Math.sin(th);
+  const esc = 1 - k;
+  return {
+    x: destino.x + (dx * c - dy * s) * esc,
+    y: destino.y + (dx * s + dy * c) * esc,
+    fase: e,
+  };
+}
+
+/* Cuándo queda completo un punto: cuando llega su última partícula. */
+function nodoCompleto(i) {
+  return G.vueloFin + POS_ORDEN[i] * FIG.retardo + 0.25 + G.convergeDur[1];
+}
+
+/* ---------- dibujo ---------- */
+function dibujar(t) {
+  const color = colorEn(t);
+  // El polvo: el cuadro anterior se apaga en vez de borrarse (estela). En pausa
+  // o moviendo la barra no hay estela: se ve el instante exacto.
+  // (Se desvanece a transparente, no a negro: debajo puede haber gas.)
+  polvo.globalCompositeOperation = "source-over";
+  // (En la Nebulosa la implosión también deja estela: rayos cayendo al centro.)
+  if (!corriendo || (!FIG.gas && t < G.ignicion)) polvo.clearRect(0, 0, W, H);
+  else {
+    polvo.globalCompositeOperation = "destination-out";
+    polvo.fillStyle = "rgba(0,0,0,0.22)";
+    polvo.fillRect(0, 0, W, H);
+  }
+  polvo.globalCompositeOperation = "lighter";
+
+  if (FIG.gas) motorGas.dibujar(t);
+  // La luz: limpia en cada cuadro.
+  ctx.globalCompositeOperation = "source-over";
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalCompositeOperation = "lighter";
+
+  const cx = W / 2, cy = H / 2;
+
+  // 1) El punto que late antes de la ignición.
+  if (!FIG.gas && t >= G.latidoInicio && t < G.ignicion + 0.25) {
+    const u = t - G.latidoInicio;
+    const latido = Math.max(0, Math.sin(u * Math.PI * 2.5)) ** 3;   // dos latidos
+    const crece = suave(u / (G.ignicion - G.latidoInicio));
+    const r = 2 + crece * 4 + latido * 6;
+    const apaga = t > G.ignicion ? 1 - (t - G.ignicion) / 0.25 : 1;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 6);
+    g.addColorStop(0, rgba(BLANCO, 0.95 * apaga));
+    g.addColorStop(0.15, rgba(color, 0.5 * apaga));
+    g.addColorStop(1, rgba(color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 6, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 2) Ondas de choque.
+  const maxR = Math.hypot(W, H) * 0.6;
+  for (const d of G.ondas) {
+    const u = (t - G.ignicion - d) / G.ondaDuracion;
+    if (u <= 0 || u >= 1) continue;
+    const r = salida(u) * maxR;
+    ctx.strokeStyle = rgba(color, 0.55 * (1 - u));
+    ctx.lineWidth = 1.5 * (1 - u) + 0.4;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // 3) Destello de la ignición.
+  const fl = t - G.ignicion;
+  // (La explosión de la Nebulosa ciega un poco más.)
+  const flMax = FIG.gas ? 0.85 : 0.5, flDur = FIG.gas ? 0.5 : 0.35;
+  if (fl >= 0 && fl < flDur) {
+    ctx.fillStyle = rgba(BLANCO, flMax * (1 - fl / flDur));
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // 4) El polvo.
+  const nodos = FIG.proyectar(t);
+  if (FIG.gas) {
+    // La bola comprimida: cada vez más pequeña y más brillante.
+    if (t >= 0.9 && t < G.ignicion + 0.05) {
+      const tb = temblor(t), rb = radioBola(t);
+      const carga = suave((t - 0.9) / (G.compresion - 0.9));
+      const aguanta = t > G.compresion ? 0.6 + 0.4 * Math.sin((t - G.compresion) * 60) : 1;
+      const rg = rb * (3 + 5 * carga);
+      const g = ctx.createRadialGradient(cx + tb.x, cy + tb.y, 0, cx + tb.x, cy + tb.y, rg);
+      g.addColorStop(0, rgba(BLANCO, (0.4 + 0.6 * carga) * aguanta));
+      g.addColorStop(0.2, rgba(color, 0.35 * carga * aguanta));
+      g.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx + tb.x, cy + tb.y, rg, 0, Math.PI * 2); ctx.fill();
+    }
+    for (const pt of PART) {
+      if (t < pt.ts - 0.35) continue;
+      const p = posImplosion(pt, t);
+      if (p.alfa <= 0.003) continue;
+      polvo.fillStyle = rgba(mezcla(color, BLANCO, p.calor), pt.brillo * p.alfa * 0.9);
+      polvo.fillRect(p.x, p.y, pt.talla, pt.talla);
+    }
+  } else if (t >= G.ignicion) {
+    for (const pt of PART) {
+      const p = posicion(pt, t, nodos);
+      // Al llegar se queda como brasa tenue en su nodo.
+      let a = pt.brillo * (p.fase >= 1 ? (FIG.brasa ?? 0.25) : 0.85) * clamp((t - G.ignicion) / 0.15);
+      // En la Nebulosa el polvo se disuelve en el gas que va apareciendo.
+      if (FIG.gas) a *= 1 - suave((t - G.ignicion - 0.5) / 1.5);
+      polvo.fillStyle = rgba(p.fase > 0.85 ? BLANCO : color, a);
+      polvo.fillRect(p.x, p.y, pt.talla, pt.talla);
+    }
+  }
+
+  // 5) Puntos encendidos. La esfera de Jarvis tiene muchos y pequeños: sin
+  // halo, un punto nítido que destella al llenarse.
+  for (let i = 0; i < (FIG.gas ? 0 : FIG.n); i++) {
+    const tc = nodoCompleto(i);
+    if (t < tc - 0.2) continue;
+    const e = clamp((t - tc + 0.2) / 0.3);
+    const n = nodos[i];
+    if (FIG.nodo === "gas") {
+      const r = (10 + 10 * n.p) * e;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r);
+      g.addColorStop(0, rgba(color, (0.05 + 0.08 * n.p) * e));
+      g.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    if (FIG.nodo === "punto") {
+      const pico = Math.max(0, 1 - Math.abs(t - tc) / 0.3);
+      ctx.fillStyle = rgba(pico > 0.2 ? BLANCO : color, (0.25 + 0.7 * n.p) * e + pico * 0.5);
+      const r = (0.8 + 1.1 * n.p) * e + pico * 1.6;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    const pico = Math.max(0, 1 - Math.abs(t - tc) / 0.25);   // destello al completarse
+    const r = (1.6 + 0.9 * n.p) * e + pico * 3;
+    const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 5);
+    g.addColorStop(0, rgba(BLANCO, 0.9 * e));
+    g.addColorStop(0.25, rgba(color, 0.45 * e));
+    g.addColorStop(1, rgba(color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r * 5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 6) Aristas que se estiran de nodo a nodo.
+  const paso = FIG.aristas.length ? FIG.aristasDur / FIG.aristas.length : 0;
+  FIG.aristas.forEach(([i, j], k) => {
+    const ini = G.aristasInicio + k * paso;
+    const e = suave((t - ini) / G.aristaDur);
+    if (e <= 0) return;
+    const a = nodos[i], b = nodos[j];
+    const prof = (a.p + b.p) / 2;
+    const fino = FIG.nodo === "punto";
+    ctx.strokeStyle = rgba(color, (fino ? 0.08 + 0.4 * prof : 0.25 + 0.6 * prof) * e);
+    ctx.lineWidth = fino ? 0.5 + 0.5 * prof : 0.7 + 0.8 * prof;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e);
+    ctx.stroke();
+  });
+
+  if (FIG.extra) FIG.extra(ctx, t, nodos, color);
+
+  // 7) Destello final.
+  const df = t - G.destello;
+  if (df >= 0 && df < 0.5) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.45);
+    g.addColorStop(0, rgba(BLANCO, 0.35 * (1 - df / 0.5)));
+    g.addColorStop(1, rgba(color, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  actualizarDom(t, color);
+}
+
+/* ---------- marca, puerta y log ---------- */
+const marca = document.getElementById("marca");
+const titulo = document.getElementById("titulo");
+const sub = document.getElementById("sub");
+const puerta = document.getElementById("puerta");
+const logEl = document.getElementById("log");
+const GLIFOS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>#+";
+
+function descifrar(texto, p, semilla) {
+  const r = azar(semilla + Math.floor(p * 30));
+  const fijas = Math.floor(clamp(p) * texto.length);
+  let s = texto.slice(0, fijas);
+  for (let i = fijas; i < texto.length; i++) s += texto[i] === " " || texto[i] === "." ? texto[i] : GLIFOS[Math.floor(r() * GLIFOS.length)];
+  return s;
+}
+
+/* Datos de EJEMPLO: en D.A.R.K. vendrán del Núcleo. */
+const PIEZAS = [
+  ["Núcleo", "EN LÍNEA", ""],
+  ["Puente de interfaz", "EN LÍNEA", ""],
+  ["Gestor de recursos", "EN LÍNEA", ""],
+  ["Reconocimiento de voz", "EN LÍNEA", ""],
+  ["Voz de salida", "CARGANDO", "cargando"],
+  ["Modelo local", "EN ESPERA", "verificando"],
+  ["Visión y gestos", "EN LÍNEA", ""],
+];
+const LOG_INICIO = 1.7, LOG_PASO = 0.42, LOG_VERIFICA = 0.35;
+logEl.innerHTML = PIEZAS.map(() => "<li></li>").join("");
+const filas = [...logEl.children];
+
+function actualizarDom(t, color) {
+  document.documentElement.style.setProperty("--color-ui", rgba(color, 1));
+
+  // Marca: se descifra con el destello final.
+  const pm = (t - G.marca) / 0.5;
+  marca.style.opacity = suave((t - G.marca) / 0.35);
+  titulo.textContent = descifrar("D.A.R.K.", pm, 3);
+  if (t < G.rojoInicio + 0.3) sub.textContent = pm > 0 ? descifrar("EN LÍNEA", (t - G.marca - 0.2) / 0.4, 5) : "";
+  else sub.textContent = descifrar("ACCESO RESTRINGIDO", (t - G.rojoInicio - 0.3) / 0.5, 9);
+
+  // Puerta: el campo de contraseña al final.
+  const pp = suave((t - G.puerta) / 0.5);
+  puerta.style.opacity = pp;
+  puerta.style.translate = `-50% ${(1 - pp) * 10}px`;
+
+  // Log: cada pieza se verifica una tras otra.
+  PIEZAS.forEach(([nombre, estado, clase], i) => {
+    const ti = LOG_INICIO + i * LOG_PASO;
+    const fila = filas[i];
+    if (t < ti) { fila.innerHTML = ""; return; }
+    const puntos = ".".repeat(Math.max(2, 24 - nombre.length));
+    const resuelto = t >= ti + LOG_VERIFICA;
+    const texto = resuelto ? descifrar(estado, (t - ti - LOG_VERIFICA) / 0.25, 11 + i) : "VERIFICANDO…";
+    const cls = resuelto ? clase : "verificando";
+    fila.innerHTML = `<span>▸ ${descifrar(nombre, (t - ti) / 0.25, 20 + i)} <span style="opacity:.35">${puntos}</span></span><span class="estado ${cls}">${texto}</span>`;
+  });
+  // El log ya cumplió: se retira cuando aparece la puerta.
+  logEl.style.opacity = 1 - suave((t - G.puerta) / 0.6);
+}
+
+/* El marco chaflanado del campo, el mismo lenguaje que los paneles. */
+(function dibujarPuerta() {
+  const svg = document.getElementById("puerta-svg");
+  const w = Math.min(420, window.innerWidth * 0.8), h = 46, c = 10;
+  const pts = [[c,0],[w-c,0],[w,c],[w,h-c],[w-c,h],[c,h],[0,h-c],[0,c]].map(p => p.join(",")).join(" ");
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.innerHTML = `<polygon points="${pts}" fill="rgba(5,8,15,0.9)" stroke="rgba(232,115,107,0.45)" stroke-width="1"/>`
+    + [[0,c+8,0,c,c,0,c+8,0],[w-c-8,0,w-c,0,w,c,w,c+8],[w,h-c-8,w,h-c,w-c,h,w-c-8,h],[c+8,h,c,h,0,h-c,0,h-c-8]]
+      .map(([a,b,c2,d,e,f,g,hh]) => `<path d="M${a} ${b}L${c2} ${d}L${e} ${f}L${g} ${hh}" fill="none" stroke="rgba(232,115,107,0.95)" stroke-width="1"/>`).join("");
+})();
+
+/* ===================================================================
+   Sonido sintetizado
+   =================================================================== */
+let audio = null;
+function iniciarAudio() {
+  if (audio) return;
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const maestro = ac.createGain(); maestro.gain.value = 0.55;
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
+  maestro.connect(comp).connect(ac.destination);
+  const largo = Math.floor(ac.sampleRate * 2);
+  const ruido = ac.createBuffer(1, largo, ac.sampleRate);
+  const d = ruido.getChannelData(0); for (let i = 0; i < largo; i++) d[i] = Math.random() * 2 - 1;
+  audio = { ac, maestro, ruido };
+}
+function tono(t0, f0, f1, pico, dur, forma = "sine") {
+  const { ac, maestro } = audio;
+  const o = ac.createOscillator(); o.type = forma;
+  o.frequency.setValueAtTime(f0, t0);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.7);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(pico, t0 + Math.min(0.02, dur / 4));
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(maestro); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function soplo(t0, f0, f1, pico, dur, q = 1.2) {
+  const { ac, maestro, ruido } = audio;
+  const s = ac.createBufferSource(); s.buffer = ruido;
+  const f = ac.createBiquadFilter(); f.type = "bandpass"; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(pico, t0 + dur * 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  s.connect(f).connect(g).connect(maestro); s.start(t0); s.stop(t0 + dur + 0.05);
+}
+/* La Nebulosa: carga que sube y se corta en seco, estallido, silencio y
+   condensación. */
+function sonidoNebulosa(desde, en, si) {
+  const { ac, maestro } = audio;
+  if (desde < G.compresion) {
+    const ini = en(Math.max(desde, G.implosion)), corte = en(G.compresion);
+    const o = ac.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(70, ini); o.frequency.exponentialRampToValueAtTime(900, corte);
+    const r = ac.createOscillator(); r.type = "sawtooth";
+    r.frequency.setValueAtTime(38, ini); r.frequency.exponentialRampToValueAtTime(82, corte);
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 260;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, ini);
+    g.gain.exponentialRampToValueAtTime(0.2, corte - 0.02);
+    g.gain.setValueAtTime(0.2, corte - 0.02);
+    g.gain.linearRampToValueAtTime(0, corte);          // el corte en seco
+    o.connect(g); r.connect(lp).connect(g); g.connect(maestro);
+    o.start(ini); r.start(ini); o.stop(corte + 0.05); r.stop(corte + 0.05);
+    // La succión: aire que sube hacia el centro.
+    const s = ac.createBufferSource(); s.buffer = audio.ruido; s.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.9;
+    bp.frequency.setValueAtTime(300, ini); bp.frequency.exponentialRampToValueAtTime(3200, corte);
+    const gs = ac.createGain();
+    gs.gain.setValueAtTime(0.0001, ini);
+    gs.gain.exponentialRampToValueAtTime(0.14, corte - 0.02);
+    gs.gain.setValueAtTime(0.14, corte - 0.02);
+    gs.gain.linearRampToValueAtTime(0, corte);
+    s.connect(bp).connect(gs).connect(maestro); s.start(ini); s.stop(corte + 0.05);
+  }
+  // La explosión, con una cola corta: después, un segundo de silencio.
+  si(G.ignicion, (tt) => {
+    tono(tt, 72, 24, 1.0, 1.1);
+    tono(tt, 170, 48, 0.4, 0.5, "triangle");
+    soplo(tt, 4200, 160, 0.6, 0.8, 0.6);
+  });
+  // La condensación: aire que crece y un colchón grave que se abre.
+  si(G.silencioFin, (tt) => {
+    const dur = (G.condensaFin - G.silencioFin) * (en(1) - en(0));
+    soplo(tt, 180, 1400, 0.12, dur + 0.3, 0.7);
+    [110, 164.81].forEach((f) => tono(tt, f, f, 0.05, dur + 0.8));
+  });
+  // El núcleo se enciende: el acorde de siempre.
+  si(G.destello, (tt) => {
+    [196, 293.66, 392, 587.33].forEach((f, i) => tono(tt + i * 0.04, f, f, 0.09, 2.2));
+    tono(tt, 49, 49, 0.3, 2.4);
+  });
+  si(G.rojoInicio, (tt) => { tono(tt, 233.08, 220, 0.06, 1.4); tono(tt + 0.08, 349.23, 329.63, 0.05, 1.4); });
+}
+
+/* Agenda todo el sonido de golpe, ajustado a la velocidad. */
+function agendarSonido(desde, vel) {
+  if (!audio || !document.getElementById("sonido").checked) return;
+  const { ac } = audio;
+  const base = ac.currentTime + 0.03;
+  const en = (s) => base + (s - desde) / vel;
+  const si = (s, fn) => { if (s >= desde) fn(en(s)); };
+  if (FIG.gas) { sonidoNebulosa(desde, en, si); return; }
+
+  // Zumbido grave que crece hasta la ignición.
+  if (desde < G.ignicion) {
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator();
+    o1.type = "sawtooth"; o2.type = "sine";
+    o1.frequency.value = 41; o2.frequency.value = 55;
+    const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.setValueAtTime(120, en(desde)); f.frequency.exponentialRampToValueAtTime(900, en(G.ignicion));
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, en(desde));
+    g.gain.exponentialRampToValueAtTime(0.12, en(G.ignicion - 0.05));
+    g.gain.exponentialRampToValueAtTime(0.0001, en(G.ignicion + 0.25));
+    o1.connect(f); o2.connect(f); f.connect(g).connect(audio.maestro);
+    o1.start(en(desde)); o2.start(en(desde)); o1.stop(en(G.ignicion + 0.3)); o2.stop(en(G.ignicion + 0.3));
+    // Los dos latidos.
+    [0.6, 1.0].forEach((s) => si(s, (tt) => tono(tt, 90, 70, 0.18, 0.25)));
+  }
+  // Ignición: impacto grave + soplo.
+  si(G.ignicion, (tt) => { tono(tt, 70, 28, 0.9, 1.6); tono(tt, 140, 50, 0.3, 0.6, "triangle"); soplo(tt, 3000, 200, 0.5, 1.4, 0.6); });
+  // Siseo del polvo frenando.
+  si(G.ignicion + 0.3, (tt) => soplo(tt, 5000, 1500, 0.08, 1.3, 0.8));
+  // Un tono por nodo, subiendo por una escala.
+  const escala = [392, 440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+  for (let i = 0; i < 16; i++) {
+    const tc = nodoCompleto(FIG.orden[Math.floor((i * FIG.n) / 16)]);
+    si(tc, (tt) => tono(tt, escala[i % 8] * (i >= 8 ? 2 : 1), escala[i % 8] * (i >= 8 ? 2 : 1), 0.05, 0.35));
+  }
+  // Trazado de aristas: un barrido suave.
+  si(G.aristasInicio, (tt) => soplo(tt, 800, 4200, 0.06, 1.1, 2));
+  // Acorde final.
+  si(G.destello, (tt) => {
+    [196, 293.66, 392, 587.33].forEach((f, i) => tono(tt + i * 0.04, f, f, 0.09, 2.2));
+    tono(tt, 49, 49, 0.3, 2.4);
+  });
+  // Virar al rojo: el acorde baja medio tono, la puerta se cierra.
+  si(G.rojoInicio, (tt) => { tono(tt, 233.08, 220, 0.06, 1.4); tono(tt + 0.08, 349.23, 329.63, 0.05, 1.4); });
+}
+
+/* ===================================================================
+   Reloj del prototipo
+   =================================================================== */
+const barra = document.getElementById("tiempo");
+const velSel = document.getElementById("velocidad");
+const info = document.getElementById("info");
+const partSel = document.getElementById("particulas");
+let t = 0, corriendo = false, ultimo = 0, fpsMed = 60;
+
+function repetir() {
+  t = 0; corriendo = true; ultimo = performance.now();
+  polvo.clearRect(0, 0, W, H);
+  if (audio && audio.ac.state === "suspended") audio.ac.resume();
+  agendarSonido(0, parseFloat(velSel.value));
+}
+function cuadro(ahora) {
+  const dt = Math.min(0.1, (ahora - ultimo) / 1000); ultimo = ahora;
+  if (dt > 0) fpsMed = fpsMed * 0.92 + (1 / dt) * 0.08;
+  if (corriendo) {
+    t += dt * parseFloat(velSel.value);
+    if (t >= G.fin + 0.6) { t = G.fin + 0.6; corriendo = false; }
+    barra.value = t;
+  }
+  dibujar(t);
+  info.textContent = `t = ${t.toFixed(2)} s · ${Math.round(fpsMed)} fps · ${PART.length} partículas`;
+  requestAnimationFrame(cuadro);
+}
+
+document.getElementById("empezar").addEventListener("click", (e) => {
+  e.currentTarget.remove();
+  iniciarAudio();
+  repetir();
+});
+document.getElementById("repetir").addEventListener("click", repetir);
+barra.addEventListener("input", () => { corriendo = false; t = parseFloat(barra.value); });
+partSel.addEventListener("input", () => crearPolvo(parseInt(partSel.value, 10)));
+document.getElementById("interfaz").addEventListener("change", (e) => {
+  elegirFigura(e.target.value);
+  document.body.classList.toggle("modo-gas", Boolean(FIG.gas));
+  crearPolvo(parseInt(partSel.value, 10));
+  repetir();
+});
+
+crearPolvo(parseInt(partSel.value, 10));
+ultimo = performance.now();
+requestAnimationFrame(cuadro);
+</script>
+</body>
+</html>

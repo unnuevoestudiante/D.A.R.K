@@ -1,0 +1,39 @@
+# Resolved CPython 3.12 / Windows x64 wheel set for requirements-core.txt.
+# Each digest is SHA-256 of the wheel stored in .output/python312-wheelhouse.
+--only-binary=:all:
+certifi==2026.10.23 \
+    --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+cffi==2.1.1 \
+    --hash=sha256:f53e442b08449d42821fa4a4fba000095af9f62742a500f978a9f557ec44339a
+charset-normalizer==3.5.2 \
+    --hash=sha256:780fbe7cab297b81dad9fb8dc5eb003c0468ffb0d9e5f65068c53a34661a96bc
+cryptography==50.0.1 \
+    --hash=sha256:aed8db4f6d71c51efb89530e12d9464e7bf2923d46c3205dc794a2a93f8c0648
+fonttools==4.68.0 \
+    --hash=sha256:fedc183bdbc3fdbfbdca26e0e04566d089cbb404712509a4e824608e9304cc77
+fpdf2==2.9.0 \
+    --hash=sha256:e57f9eb183a61bbfc1a16ccb3eb68654f9ef3de0d9a78e37015a0df2eb29ab89
+idna==3.20 \
+    --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+numpy==2.5.3 \
+    --hash=sha256:0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def
+pdfminer.six==20260107 \
+    --hash=sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9
+pdfplumber==0.11.10 \
+    --hash=sha256:7741ea81bf165b474b153e6789d10d18e06b6ddcf3ec84289c3ef2fed6802580
+pillow==13.0.0 \
+    --hash=sha256:ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b
+pycparser==3.12 \
+    --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+pypdfium2==5.15.2 \
+    --hash=sha256:74d1bace34fb01c660d0b64344d5a4b7d276942b7c6623c88ab59ea21c5acfbd
+requests==2.34.2 \
+    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0
+sqlcipher3==0.6.5 \
+    --hash=sha256:51a0aa43147bdc8b7d429564bfdf8efaebc3a616b221f704dfd507645767490d
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
+websockets==17.1 \
+    --hash=sha256:617243e19a0992095956f406ee9cd3bc4ba92862d83cb1d83bb59ce574412bec
+wyoming==1.10.2 \
+    --hash=sha256:08aec17ccad4d72fc3f919ab741beacf3f23a1df24c8b9a317ebc6e02d2b227c

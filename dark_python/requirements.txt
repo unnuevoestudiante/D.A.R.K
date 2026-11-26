@@ -1,0 +1,8 @@
+# Instalación completa, conservada como opción compatible.
+# Para instalaciones por piezas usa requirements-core.txt y añade solo los
+# perfiles de los componentes que vayas a habilitar.
+-r requirements-core.txt
+-r requirements-access.txt
+-r requirements-voz.txt
+-r requirements-modulos.txt
+-r requirements-web.txt

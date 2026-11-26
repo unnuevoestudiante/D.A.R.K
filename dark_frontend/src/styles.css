@@ -1,0 +1,2714 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+/* La variante Nebulosa: piel completa bajo `[data-interfaz="nebulosa"]`. Vive
+   en su propia hoja para que la lengua base (y sus contratos medidos) no se
+   mezclen con la de la variante. */
+@import "./nebulosa.css";
+@import "./nebulosav2.css";
+/* La presencia: línea de intención y proyección de paneles desde el núcleo. */
+@import "./presencia.css";
+
+/* Filtros cromáticos de la Zona de Especialistas */
+.specialist-filter-coder svg,
+.specialist-filter-coder canvas:not(.dark-nebulosa-v2-core canvas) {
+  filter: hue-rotate(90deg) drop-shadow(0 0 10px rgba(16, 185, 129, 0.45));
+}
+
+.specialist-filter-tareas svg,
+.specialist-filter-tareas canvas:not(.dark-nebulosa-v2-core canvas) {
+  filter: hue-rotate(240deg) drop-shadow(0 0 10px rgba(245, 158, 11, 0.45));
+}
+
+.specialist-filter-conversacional svg,
+.specialist-filter-conversacional canvas:not(.dark-nebulosa-v2-core canvas) {
+  filter: hue-rotate(180deg) drop-shadow(0 0 10px rgba(168, 85, 247, 0.45));
+}
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system — Dark Galaxy / Jarvis
+ * Palette: cian espacial + ámbar + violeta residual
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-glow: var(--glow);
+  --color-glow-soft: var(--glow-soft);
+  /* Una sola voz tipográfica en el overlay (C4): monoespaciada de sistema, nunca
+     descargada. La tele y el PC sin internet pintan el mismo texto, y con una sola
+     familia el ancho de un rótulo se puede medir en letras. */
+  --font-mono:
+    ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  --radius: 1rem;
+
+  /* Paleta espacial oscura, con acentos contenidos. */
+  --dark-cyan: #83b6ca;
+  --dark-amber: #c6a77b;
+  /* El rojo es el estado del bloqueo: el de la puerta y el del campo. Estaba
+     escrito cinco veces en la hoja —rótulo de la puerta, punto de estado, filete
+     del campo, halo del campo y cursor—, con dos notaciones del mismo color. Se
+     ajusta aquí una vez. El rojo de lo que falla (`#ff5a5a`) es otro valor y
+     sigue siendo otro valor: no es el bloqueo, es un mensaje. */
+  --dark-rojo: #ff3030;
+  --dark-panel: rgba(5, 8, 15, 0.94);
+  --dark-panel-border: rgba(139, 170, 192, 0.18);
+  --dark-panel-glow: rgba(86, 128, 158, 0.08);
+
+  /* Theme oklch — más frío / espacial */
+  --background: oklch(0.12 0.04 250);
+  --foreground: oklch(0.96 0.015 230);
+  --card: oklch(0.18 0.05 250 / 60%);
+  --card-foreground: oklch(0.96 0.015 230);
+  --popover: oklch(0.16 0.05 250);
+  --popover-foreground: oklch(0.96 0.015 230);
+  --primary: oklch(0.72 0.12 230);
+  --primary-foreground: oklch(0.14 0.04 250);
+  --secondary: oklch(0.24 0.05 250);
+  --secondary-foreground: oklch(0.96 0.015 230);
+  --muted: oklch(0.22 0.04 250);
+  --muted-foreground: oklch(0.72 0.04 240);
+  --accent: oklch(0.75 0.1 220);
+  --accent-foreground: oklch(0.14 0.04 250);
+  --destructive: oklch(0.6 0.24 20);
+  --destructive-foreground: oklch(0.98 0.01 230);
+  --border: oklch(0.7 0.08 230 / 28%);
+  --input: oklch(0.7 0.08 230 / 28%);
+  --ring: oklch(0.72 0.12 230);
+  --glow: oklch(0.7 0.14 230);
+  --glow-soft: oklch(0.78 0.1 220);
+  --chart-1: oklch(0.72 0.12 230);
+  --chart-2: oklch(0.78 0.1 200);
+  --chart-3: oklch(0.65 0.12 280);
+  --chart-4: oklch(0.8 0.1 80);
+  --chart-5: oklch(0.55 0.1 250);
+  --sidebar: oklch(0.16 0.05 250);
+  --sidebar-foreground: oklch(0.96 0.015 230);
+  --sidebar-primary: oklch(0.72 0.12 230);
+  --sidebar-primary-foreground: oklch(0.14 0.04 250);
+  --sidebar-accent: oklch(0.24 0.05 250);
+  --sidebar-accent-foreground: oklch(0.96 0.015 230);
+  --sidebar-border: oklch(0.7 0.08 230 / 28%);
+  --sidebar-ring: oklch(0.72 0.12 230);
+
+  /* La oscuridad de la tele es COMPLETA: el negro es el campo sobre el que se
+     dibuja, no un velo más o menos transparente sobre lo de detrás. Es decisión
+     del diseño, no un ahorro: con el 76 % lo que asomaba de Windows competía con
+     lo que se está leyendo.
+
+     `--overlay-velo-bajado` es la única manera de que el escritorio vuelva a
+     asomar, y la pide una frase del usuario («dejame ver el escritorio»). No la
+     baja ningún estado de D.A.R.K: la opacidad la decide quien mira, no lo que
+     el asistente esté haciendo. */
+  --overlay-control: oklch(0.035 0.012 250 / 1);
+  --overlay-velo-bajado: oklch(0.035 0.012 250 / 0.3);
+
+  /* El suelo de una caja donde se está leyendo: casi opaco, para que lo escrito
+     no compita con el campo oscuro de detrás. Un solo valor para el campo de
+     entrada y para el modal de archivos —son la misma superficie—, así que se
+     ajusta una vez y se ajusta en las dos. */
+  --panel-relleno: rgba(5, 8, 15, 0.96);
+
+  /* El campo de una tecla chica —el clip del campo de entrada y la flecha del
+     carrusel— en sus dos estados. Una sola decisión para las dos, porque son la
+     misma talla: el reposo se ajusta aquí y se ajusta en las dos. No llevan
+     `border` ni halo; el recorte del markup (`dark-recorte`) es el borde. */
+  --tecla-reposo: rgba(131, 182, 202, 0.12);
+  --tecla-activa: rgba(131, 182, 202, 0.3);
+
+  /* Lo que retira la superficie de atrás cuando hay un selector o una imagen
+     abierta delante: el mismo atenuado para el carrusel de interfaces y para el
+     lightbox, que son la misma promesa. */
+  --velo-modal: rgba(2, 6, 18, 0.82);
+
+  --shadow-glow:
+    0 0 0 1px oklch(0.72 0.12 230 / 0.08), 0 0 40px oklch(0.7 0.14 230 / 0.14),
+    0 4px 24px oklch(0 0 0 / 0.45);
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.dark-transparent,
+  body.dark-transparent #app {
+    background: transparent !important;
+  }
+}
+
+/* ============================================================
+ *  Overlay principal
+ * ============================================================ */
+
+.dark-screen {
+  background: var(--overlay-control);
+  transition:
+    opacity 320ms ease,
+    visibility 320ms ease;
+  z-index: 1;
+}
+
+/* El suelo: la franja de abajo es más oscura que el resto del campo, para que
+   la tele no sea un negro plano con un cuadro flotando. No es un halo —no
+   ilumina nada, no nace de un borde— y se va con el velo bajado: si lo que el
+   usuario pidió fue mirar el escritorio, el escritorio se mira entero. */
+.dark-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 55%,
+    oklch(0.012 0.006 250 / 0.9)
+  );
+  transition: opacity 320ms ease;
+}
+
+.dark-screen-velo-bajado {
+  background: var(--overlay-velo-bajado);
+}
+
+.dark-screen-velo-bajado::before {
+  opacity: 0;
+}
+
+.dark-screen-active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dark-screen-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid oklch(0.7 0.04 230 / 0.1);
+  box-shadow: inset 0 0 70px oklch(0.25 0.025 250 / 0.12);
+}
+
+.dark-screen-inactive {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.dark-screen-lock {
+  /* El negro de la puerta no llega de golpe: --lock-velo lo pone el overlay
+     cuadro a cuadro mientras la secuencia se materializa (bloqueo.ts). El 1
+     por defecto es el bloqueo ya montado, el estado de siempre. */
+  background: rgb(0 0 0 / var(--lock-velo, 1));
+  z-index: 9999;
+  transition: none;
+}
+
+/* Con la puerta en su oscurecimiento progresivo no hay suelo que pintar: la
+   franja de abajo ya estaría oscura desde el primer cuadro y la secuencia
+   perdería su única animación. */
+.dark-screen-lock::before {
+  opacity: 0;
+}
+
+.dark-screen-lock.dark-screen-active::after {
+  border: 0;
+  box-shadow: none;
+}
+
+/* Una sola composición central para voz, texto y paneles contextuales. */
+.dark-unified-interface {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 24px;
+  transition:
+    transform 450ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 300ms ease;
+}
+
+.dark-primary-composition {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Con la zona de especialistas abierta la composición del núcleo se apaga
+   entera (figura, rótulos y texto): las dos interfaces no comparten pantalla.
+   Se oculta, no se desmonta: el campo de texto y los paneles siguen montados
+   y la zona cede ante ellos en cuanto se activan. `visibility` la saca también
+   de `elementFromPoint`, que es quien decide el click-through. */
+.dark-primary-composition.is-hub {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 240ms ease, visibility 240ms;
+}
+
+.dark-unified-interface.has-results {
+  transform: translateY(-18vh) scale(0.76);
+  opacity: 0.38;
+}
+
+.dark-brand-header {
+  text-align: center;
+  user-select: none;
+  transition: filter 260ms ease;
+}
+
+/* Con el modal de archivos delante la marca se aparta: `filter` se multiplica con
+   la opacidad que ya pone la capa gestual, así que no le pisa el contrato. */
+.dark-primary-composition:has(.dark-core-shell.is-files) .dark-brand-header {
+  filter: opacity(0.24);
+}
+
+/* El nombre es el ancla de la tele, no el titular de la pantalla: manda menos que
+   el estado que escribe debajo. Sin `text-shadow`: una sombra difusa sobre el texto
+   es C2 y encima engorda lo que ya está atenuado. La familia es la del body (C4). */
+.dark-brand-header h2 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 34px);
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  padding-left: 0.28em;
+  color: rgba(219, 231, 241, 0.6);
+}
+
+.dark-brand-header p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 9px 0 0;
+  color: rgba(169, 190, 206, 0.7);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+/* El punto del estado: la información es el color y el pulso, no el halo. Sin
+   `box-shadow` en ninguna variante (C2), así que lo que pesa menos pesa igual en
+   cualquier estado. */
+.dark-status-dot {
+  background: oklch(0.55 0.04 250 / 0.35);
+  transition: background 0.25s ease;
+}
+
+.dark-status-dot[data-connected="1"] {
+  background: var(--dark-cyan);
+}
+
+.dark-status-dot[data-state="thinking"],
+.dark-status-dot[data-state="transcribing"] {
+  background: var(--dark-amber);
+  animation: dark-pulse-dot 0.7s ease-in-out infinite;
+}
+
+.dark-status-dot[data-state="speaking"],
+.dark-status-dot[data-state="listening"] {
+  animation: dark-pulse-dot 1.2s ease-in-out infinite;
+}
+
+.dark-screen-lock .dark-brand-header p {
+  color: var(--dark-rojo);
+}
+
+.dark-screen-lock .dark-status-dot {
+  background: var(--dark-rojo);
+}
+
+@keyframes dark-pulse-dot {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Teseracto: proyección 4D de 16 vértices, con brillo contenido. La caja la pone
+   `.dark-core-entity`: lo propio del sólido es el color, la talla del estado y el
+   brillo. */
+.dark-tesseract {
+  overflow: visible;
+  color: var(--tesseract-color);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(var(--tesseract-scale));
+  transition:
+    transform 650ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    color 900ms ease-in-out,
+    filter 900ms ease-in-out;
+  filter: drop-shadow(
+    0 0 8px
+      color-mix(
+        in srgb,
+        var(--tesseract-color) var(--tesseract-glow),
+        transparent
+      )
+  );
+}
+
+/* Capa que mueve el gesto. Va ENTRE la shell y el SVG porque `.dark-tesseract`
+ya es dueño de su propio `transform` (la escala del estado, con su transición);
+apilar el gesto ahí pelearía con esa animación y la mano iría a 650 ms de
+retardo. Sin transition: la cara del usuario sigue a sus manos cuadro a cuadro. */
+.dark-core-transform {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* El contrato de toda entidad del escenario: ocupa la shell y se centra en ella.
+   Es lo que hace que la figura SEA el panel al escribir —la shell cambia de caja
+   (círculo → barra) y la entidad la sigue— en vez de traer una caja propia plantada
+   en la esquina. Las dos entidades nuevas traían un `div` de 240 x 240 en flujo
+   normal, y por eso, con el campo abierto, se quedaban pintadas detrás: descentradas
+   y desbordando un panel de 108 px de alto. */
+.dark-core-entity {
+  position: absolute;
+  inset: 0;
+  display: block;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+  /* La opacidad que pone la secuencia de acceso llega por variable, no por `style`
+     en línea: un `opacity` en línea ganaba a la regla del colapso y las dos
+     entidades nuevas seguían pintadas con el campo abierto (medido: `1`). */
+  opacity: var(--entity-opacidad, 1);
+}
+
+/* El giro que impone la mano va DENTRO de la entidad, sobre el SVG. Afuera sería
+   girar la caja del escenario, que desde el arreglo de arriba es la caja del panel:
+   con el campo abierto la barra entera se habría ladeado. */
+.dark-entidad-giro {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(var(--entity-tumble, 0rad));
+  transition: transform 100ms ease-out;
+}
+
+/* La confirmación permanente del gesto: mientras la mano sujeta el núcleo, un
+anillo dice "esto es lo que se va a mover". Sin las manos dibujadas (que son
+andamio de calibración), el agarre es invisible si no hay señal propia: el
+teseracto se desplaza poco y el fondo no da referencia de posición. */
+.dark-core-transform[data-agarrado]::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(117, 201, 220, 0.75);
+  border-radius: 50%;
+  box-shadow:
+    0 0 24px rgba(117, 201, 220, 0.28),
+    inset 0 0 18px rgba(117, 201, 220, 0.12);
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Zona de especialistas: los tres cores de la interfaz activa flotando en el
+   ambiente, cada uno con su nombre encima. Es una capa de `.dark-screen`
+   (hereda el campo y la piel `[data-interfaz]`), no un panel encima: sin
+   tarjetas, sin fondo, sin bordes. Todo click-through salvo los cores.
+   ========================================================================== */
+
+.dark-specialists-hub {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.dark-specialist-slot {
+  position: absolute;
+  width: min(26vw, 36vh, 320px);
+  height: min(26vw, 36vh, 320px);
+  translate: -50% -50%;
+  /* La ranura la escribe el carrusel (left/top en línea): el intercambio de
+     posiciones al soltar viaja con esta transición, no de un salto. */
+  transition:
+    left 260ms ease,
+    top 260ms ease,
+    opacity 240ms ease;
+}
+
+/* El desborde: el core crece hasta no caber en la pantalla y se apaga. Es la
+   misma duración que ZONA.desbordeMs en zona.ts (480 ms): el corte al menú o
+   al especialista llega justo cuando ya no se ve. */
+.dark-desborda {
+  width: 100%;
+  height: 100%;
+  animation: dark-desborda 480ms cubic-bezier(0.55, 0, 0.85, 0.36) forwards;
+}
+
+@keyframes dark-desborda {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(9);
+    opacity: 0;
+  }
+}
+
+/* El tamaño lo escribe la vista del carrusel; sujeto, sigue a la mano en vivo
+   (el componente le quita la transición), y al soltar vuelve con suavidad. */
+.dark-specialist-core {
+  transition: transform 300ms ease;
+}
+
+.dark-specialist-nombre {
+  position: absolute;
+  bottom: calc(100% + 16px);
+  left: 50%;
+  translate: -50% 0;
+  font-size: clamp(12px, 1.3vw, 16px);
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  padding-left: 0.3em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* La flotación va DENTRO de la caja que mueve el gesto: si el vaivén viviera
+   en el wrapper pelearía con el transform de `estiloAgarrable`. */
+.dark-specialist-flota {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  animation: dark-flota-especialista 7s ease-in-out infinite;
+}
+.dark-specialist-slot:nth-child(2) .dark-specialist-flota {
+  animation-duration: 8.5s;
+  animation-delay: -2.4s;
+}
+.dark-specialist-slot:nth-child(3) .dark-specialist-flota {
+  animation-duration: 9.5s;
+  animation-delay: -4.8s;
+}
+
+@keyframes dark-flota-especialista {
+  0%,
+  100% {
+    transform: translateY(-7px);
+  }
+  50% {
+    transform: translateY(7px);
+  }
+}
+
+/* El acceso a la zona es un rótulo, no una pastilla: la misma voz tipográfica
+   que el estado del núcleo, y el hover sube la luz en vez de dibujar caja. */
+.dark-enlace-zona {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(169, 190, 206, 0.7);
+  cursor: pointer;
+  transition: color 220ms ease, text-shadow 220ms ease;
+}
+.dark-enlace-zona:hover {
+  color: rgba(219, 231, 241, 0.95);
+  text-shadow: 0 0 10px rgba(117, 201, 220, 0.5);
+}
+.dark-enlace-zona-salir {
+  color: rgba(255, 90, 90, 0.75);
+}
+.dark-enlace-zona-salir:hover {
+  color: rgba(255, 120, 120, 0.95);
+  text-shadow: 0 0 10px rgba(255, 48, 48, 0.45);
+}
+
+/* Andamio de calibración (`?gestos=manos`): la capa no intercepta el ratón y
+vive por encima de todo el overlay. */
+.dark-gestos-manos {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+
+/* Fondo de calibración: el cuadro que está procesando el motor. La caja la pone
+   `geometriaVideo()`, en % relativos a `.dark-gestos-manos` (que ocupa la
+   pantalla entera), para que el círculo verde caiga ENCIMA de su mano. Si no
+   cae, el que miente es el reducer, no la foto. */
+.dark-gestos-video {
+  position: absolute;
+  opacity: 0.4;
+  object-fit: fill; /* el reducer estira x e y por separado: nada de mantener aspecto */
+  /* El preflight de Tailwind pone `img { max-width: 100% }`, y la caja de
+     `geometriaVideo()` mide 131,6 % a propósito (desborda la pantalla para que la
+     banda `[margen, 1-margen]` del cuadro cubra justo el viewport). Sin este `none`
+     el navegador recorta el ancho al viewport y el fondo queda comprimido hacia la
+     izquierda mientras los círculos van a su sitio: medido, 49,8 px de error a
+     u = 0,30 en una ventana de 531 px y 0,47 px en vertical. */
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dark-gesto-mano {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(125, 255, 179, 0.9);
+  background: rgba(125, 255, 179, 0.12);
+}
+
+.dark-gesto-mano[data-cerrada] {
+  border-color: rgba(255, 107, 107, 0.95);
+  background: rgba(255, 107, 107, 0.25);
+}
+
+.dark-gesto-cierre {
+  position: fixed;
+  stroke: #ffd27d;
+  fill: none;
+}
+
+/* Panel de lectura (`?gestos=manos`): lo que el motor lee de las manos, en texto
+   mono y arriba a la izquierda, que es donde NO estorba cuando la mano entra en la
+   caja del objeto. Es andamio: se borra con el resto del andamio. */
+.dark-gestos-lectura {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre;
+  color: rgba(232, 255, 240, 0.95);
+  background: rgba(6, 12, 10, 0.72);
+  border: 1px solid rgba(125, 255, 179, 0.35);
+  border-radius: 6px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dark-core-shell {
+  position: relative;
+  display: block;
+  isolation: isolate;
+  flex: 0 0 auto;
+  width: min(48vw, 410px);
+  height: min(48vw, 410px);
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  transition:
+    width 520ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    height 520ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    border-radius 520ms ease,
+    background 380ms ease,
+    border-color 380ms ease,
+    box-shadow 380ms ease;
+}
+
+/* El campo tampoco trae caja dibujada: la figura la pone su marco chaflanado
+   (`MarcoLleno`), que es el borde, el relleno y las cuatro esquinas. Lo que queda
+   aquí es la caja que anima el morph desde el núcleo. */
+.dark-core-shell.is-input {
+  width: min(82vw, 700px);
+  height: 108px;
+}
+
+/* En el bloqueo no hay panel: el campo rojo es el único cuadro. */
+.dark-core-shell.is-input.is-lock {
+  height: 84px;
+}
+
+.dark-screen-lock .dark-brand-header {
+  margin-bottom: 54px;
+}
+
+/* El escenario del modal de archivos tampoco pinta caja: la figura chaflanada del
+   propio panel es el borde y el relleno. Aquí queda solo la caja que anima el
+   morph, y el panel dentro se mide a sí mismo. */
+.dark-core-shell.is-files {
+  width: min(92vw, 600px);
+  height: min(80vh, 620px);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* El marco que coincide con el borde del panel que lo lleva dentro. Vive montado
+   siempre y solo cambia de opacidad: así la salida del campo se ve desvanecer con
+   el panel (520 ms de morph) en vez de cortarse de un cuadro a otro.
+   Detrás de lo escrito (`z-index: -1`) y fuera del ratón: el clic lo recibe la
+   superficie interactiva, no la línea. El -1 no se escapa del panel porque cada
+   panel aísla su contexto de apilado. */
+.dark-marco-lleno {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+
+.dark-core-input > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+/* Sobre un campo que ya es negro completo, la caja donde se escribe necesita su
+   propio suelo: el mismo relleno sólido del modal de archivos, porque son la
+   misma superficie y la misma promesa —lo escrito no compite con lo de detrás—. */
+.dark-core-input .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+/* El bloqueo se pinta sobre el cuadro que ya había: la misma figura chaflanada
+   que mide el campo, con el rojo del filete que se quita. El rectángulo
+   redondeado de 12 px dibujado en la fila interior era un SEGUNDO cuadro dentro
+   del primero, y por eso el marco tenía que apagarse: dos bordes en la misma caja
+   no pueden coexistir. El `padding: 0 14px` se va con él, que es lo que hacía que
+   la escritura saltara catorce píxeles al bloquear. */
+.dark-core-input.is-locked .dark-envoltura-svg {
+  color: var(--dark-rojo);
+}
+
+/* 0,75 es la opacidad del filete que se quita, no un número nuevo: sin él, la
+   línea de 1 px sería lo único que dice dónde termina el cuadro, y un rojo a
+   0,28 sobre negro no se ve. El corchete se queda con su 0,9 de siempre. */
+.dark-core-input.is-locked .dark-envoltura-marco {
+  opacity: 0.75;
+}
+
+/* El panel de sitios NO trae caja propia al escenario: la caja la dibuja su
+   envoltura teseracta, así que el escenario se queda transparente. */
+.dark-core-shell.is-sitios {
+  width: min(86vw, 430px);
+  height: min(74vh, 620px);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 24px;
+}
+
+.dark-core-shell > .dark-core-transform > .dark-core-entity,
+.dark-core-shell > .dark-core-transform > div > .dark-core-entity {
+  transition:
+    opacity 280ms ease,
+    transform 480ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    color 900ms ease-in-out,
+    filter 900ms ease-in-out;
+}
+
+.dark-core-shell.is-input > .dark-core-transform > .dark-core-entity,
+.dark-core-shell.is-input > .dark-core-transform > div > .dark-core-entity,
+.dark-core-shell.is-files > .dark-core-transform > .dark-core-entity,
+.dark-core-shell.is-files > .dark-core-transform > div > .dark-core-entity,
+.dark-core-shell.is-sitios > .dark-core-transform > .dark-core-entity,
+.dark-core-shell.is-sitios > .dark-core-transform > div > .dark-core-entity {
+  opacity: 0;
+  transform: scale(0.48) rotate(-12deg);
+}
+
+/* El campo es un panel que se mide a sí mismo, plantado en el centro del escenario:
+   cuando la escritura crece a más de una línea, el panel crece con ella y su marco
+   le sigue (`MarcoLleno` vive aquí dentro). `translate` centra y `scale` anima la
+   entrada; componiéndolos en `transform` se pisan. */
+.dark-core-input {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  isolation: isolate;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 22px;
+  translate: 0 -50%;
+  scale: 0.88;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 250ms ease 90ms,
+    scale 420ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.dark-core-input.is-active {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+
+.dark-core-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+}
+
+.dark-core-input.is-locked .dark-text-input-field {
+  caret-color: var(--dark-rojo);
+}
+
+.dark-core-input-error {
+  display: block;
+  margin: 12px 4px 0;
+  color: #ff5a5a;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.dark-core-input .dark-text-input-field {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  padding: 12px 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow: hidden;
+  resize: none;
+}
+
+/* El clip: la silueta chica (`dark-recorte`, en el markup) con su relleno. Sin
+   halo y sin línea: la luz se guarda para cuando el botón está activado. */
+.dark-core-input .dark-text-input-attach {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: var(--tecla-reposo);
+  color: var(--dark-cyan);
+  transition: background 160ms ease;
+}
+
+.dark-core-input .dark-text-input-attach:hover,
+.dark-core-input .dark-text-input-attach:focus-visible {
+  background: var(--tecla-activa);
+}
+
+.dark-core-input:not(.is-active) :is(input, button) {
+  visibility: hidden;
+}
+
+/* El panel mide lo que mide su contenido, centrado sobre el escenario y tope de
+   altura el propio escenario. `translate` y `scale` van por separado: uno centra
+   (fijo) y el otro anima la entrada, que si se componen en `transform` se pisan. */
+.dark-files-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  isolation: isolate;
+  width: min(100%, 600px);
+  max-height: 100%;
+  padding: 18px 20px 16px;
+  translate: -50% -50%;
+  scale: 0.96;
+  color: rgba(210, 222, 233, 0.82);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease 90ms,
+    scale 320ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.dark-files-content.is-active {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+
+/* La capa que se mide a sí misma es el borde del panel: va detrás de lo escrito. */
+.dark-files-content > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+/* Y su relleno es sólido: lo que se está leyendo no compite con lo que hay detrás. */
+.dark-files-content .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+/* La cabecera del trámite: el rótulo del panel y los tres pasos, que dicen en
+   cuál se está. */
+.dark-files-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.dark-files-title {
+  margin: 0;
+  color: rgba(219, 231, 241, 0.78);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.dark-files-pasos {
+  display: flex;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  color: rgba(157, 177, 192, 0.38);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.dark-files-pasos li + li::before {
+  content: "→";
+  margin-right: 9px;
+}
+
+.dark-files-pasos li[data-activo] {
+  color: var(--dark-cyan);
+}
+
+/* La zona de descarga ya no es un recuadro punteado dentro de otro recuadro: son
+   las cuatro esquinas de visor y nada más. Crece solo mientras se arrastra, que es
+   cuando hay que acertarle desde lejos con el archivo. */
+.dark-files-dropzone {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  isolation: isolate;
+  min-height: 164px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  transition: min-height 220ms ease;
+}
+
+.dark-files-content[data-estado="arrastrando"] .dark-files-dropzone {
+  min-height: min(46vh, 300px);
+}
+
+.dark-files-dropzone > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+/* Esquinas, no marco: la línea y el relleno del rectángulo entero son los que
+   estaban de más. El haz tampoco recorre esta caja: un tramo de luz andando por
+   una silueta que no se ve sería un brillo suelto en mitad del panel. */
+.dark-files-dropzone
+  > .dark-marco-lleno
+  :is(.dark-envoltura-marco, .dark-envoltura-relleno, .dark-envoltura-haz) {
+  display: none;
+}
+
+.dark-files-content[data-estado="arrastrando"]
+  .dark-files-dropzone
+  .dark-envoltura-corchete {
+  opacity: 1;
+}
+
+/* La marca: la silueta base de siempre, 44 px, con el trazo de la caída dentro.
+   Late solo mientras hay un archivo en el aire —fuera de ese instante no dice
+   nada— y el latido se apaga con `prefers-reduced-motion`. */
+.dark-files-marca {
+  color: var(--dark-cyan);
+}
+
+.dark-files-marca-linea {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.dark-files-marca-trazo {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.9;
+}
+
+.dark-files-content[data-estado="arrastrando"] .dark-files-marca {
+  animation: dark-files-latido 1.1s ease-in-out infinite;
+}
+
+@keyframes dark-files-latido {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.dark-files-invito {
+  margin: 0;
+  color: rgba(210, 222, 233, 0.74);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+/* Los formatos que se aceptan, en rótulos cortos: es información, no adorno. */
+.dark-files-formatos {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  color: rgba(157, 177, 192, 0.46);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  list-style: none;
+}
+
+.dark-files-explore {
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dark-cyan);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+
+.dark-files-explore:hover {
+  border-color: var(--dark-cyan);
+}
+
+/* Lo que se avisó por el fondo de la zona de descarga; ahora es una línea fija del
+   panel, porque el aviso acompaña a todo el trámite, no a la caja. */
+.dark-files-aviso {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  margin: 0;
+  translate: -50% 0;
+  color: var(--dark-cyan);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Con archivos ya delante la zona de descarga se retira y queda la lista: una
+   línea por archivo, separada por un pelo, sin caja propia dentro de la caja. */
+.dark-files-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.dark-file-entry + .dark-file-entry,
+.dark-files-list > li:last-child {
+  border-top: 1px solid rgba(139, 170, 192, 0.12);
+}
+
+.dark-files-list > li:last-child {
+  padding-top: 8px;
+}
+
+.dark-file-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  font-size: 12px;
+}
+
+.dark-file-signo {
+  color: rgba(157, 177, 192, 0.6);
+}
+
+.dark-files-nombre {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.dark-file-remove {
+  color: rgba(210, 222, 233, 0.5);
+  background: transparent;
+  border: 0;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dark-file-remove:hover {
+  color: var(--dark-cyan);
+}
+
+/* Lo que mide el archivo, bajo su nombre: es el dato que decide si merece la pena
+   mandárselo a Dark. Cuando no se pudo leer, en este hueco está el motivo. */
+.dark-file-size {
+  color: rgba(157, 177, 192, 0.6);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.dark-file-preview {
+  max-height: 88px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 2px 8px 24px;
+  color: rgba(157, 177, 192, 0.6);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* La instrucción tiene su propia caja visible y tres líneas: es lo que se le pide
+   a Dark, no un pie de formulario. */
+.dark-files-instruction {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dark-files-instruction label {
+  color: rgba(157, 177, 192, 0.65);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.dark-files-instruction textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(139, 170, 192, 0.18);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+  resize: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* El foco se marca con un aro de 1 px, no con un halo difuso: dice dónde se está
+   escribiendo y nada más. */
+.dark-files-instruction textarea:focus {
+  border-color: var(--dark-cyan);
+  box-shadow: 0 0 0 1px rgba(131, 182, 202, 0.32);
+}
+
+.dark-files-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+/* Cancelar es texto: no compite con lo que se va a pulsar. */
+.dark-files-cancel {
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: rgba(210, 222, 233, 0.55);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.dark-files-cancel:hover {
+  color: rgba(210, 222, 233, 0.85);
+}
+
+.dark-files-send {
+  padding: 8px 16px;
+  border: 1px solid var(--dark-cyan);
+  background: rgba(131, 182, 202, 0.14);
+  color: var(--dark-cyan);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.dark-files-send:hover:not(:disabled) {
+  background: rgba(131, 182, 202, 0.26);
+}
+
+/* Apagado pero legible, y con lo que falta escrito en el propio botón: un botón
+   que solo está mas claro no dice por qué. */
+.dark-files-send:disabled {
+  border-color: rgba(139, 170, 192, 0.18);
+  background: transparent;
+  color: rgba(157, 177, 192, 0.42);
+  cursor: not-allowed;
+}
+
+/* ============================================================
+ *  Panel de sitios y su envoltura teseracta
+ * ============================================================ */
+
+.dark-sitios {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  animation: dark-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dark-envoltura {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* El marco va DETRAS de la card (z-index 0) y por fuera de su caja: `overflow:
+   visible` porque el SVG mide la card más el halo, y el trazo se dibuja a caballo
+   de ese borde, así que le sobra media línea. */
+.dark-envoltura-svg {
+  position: absolute;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--dark-cyan);
+}
+
+/* El cuerpo del panel. El color es el interior medido en la referencia
+   (RGB 8, 9, 13); el alfa baja porque el overlay es transparente y detrás hay
+   lo que haya en el escritorio, no un negro fijo. */
+.dark-envoltura-relleno {
+  fill: rgba(8, 9, 13, 0.72);
+}
+
+/* La silueta base en su talla chica: un cuadro con UNA sola esquina cortada. Es
+   la forma del clip del campo, y la única manera de que una tecla, una etiqueta
+   o una flecha sean de la misma familia que el panel de 600 px. Para estas tallas
+   no hay corchete que valga: el corte ES el borde, y el relleno es lo que lo
+   dibuja —por eso ningún control de estos lleva `border` ni `box-shadow`—.
+   Definida una sola vez: si el corte se copia, dos controles se cortan distinto. */
+.dark-recorte {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+
+/* La silueta del panel: línea de 1 px y tenue. Antes eran 3 px a 0,62, que leían
+   como un marco gris-azulado sin jerarquía; la luz se va toda al corchete.
+   `reposo` no tiene regla propia: estos valores SON el reposo. */
+.dark-envoltura-marco {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: miter;
+  opacity: 0.28;
+  /* El nivel del micro llega a saltos, los del puente, y el contorno tiene que
+     seguirlo sin parpadear. 90 ms es más corto que dos latidos y más largo que
+     uno: lo justo para que el trazo se vea respirar y no titilar. */
+  transition: opacity 90ms linear;
+}
+
+/* El acento de cada esquina: un tramo sobre la arista que llega, la diagonal del
+   corte y un tramo sobre la arista que sale. Es lo único brillante del marco, y
+   las cuatro esquinas reciben el mismo tratamiento. Los nodos de antes (ocho
+   puntos, radio 4) se quitaron: se leían como asas de selección. */
+.dark-envoltura-corchete {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: miter;
+  opacity: 0.9;
+}
+
+.dark-envoltura-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   El contorno responde a lo que Dark está haciendo
+   ---------------------------------------------------------------------------
+   Cuatro lecturas, las mismas cuatro que escribe la barra (`grupoDeBarra` en
+   `lib/dark-state.ts`), y cada una atada a una señal que existe de verdad:
+   `listo` no tiene regla porque los valores de arriba YA son el reposo, el
+   nivel del micro manda en `escuchando`, el haz recorre la silueta en
+   `procesando` y el corchete se enciende en `escribiendo`.
+
+   Nadie de estos trazos añade luz alrededor —no hay `filter` ni sombra—, no se
+   pinta ninguna franja de color pegada a un borde y el grosor sigue siendo el
+   de siempre: lo que cambia es DÓNDE está el brillo de la línea que ya estaba.
+   La clase la pone `.dark-screen` desde el componente. */
+
+/* El haz: un tramo del perímetro andando. `pathLength` vale 100 en el `<polygon>`,
+   así que `14 86` es «el catorce por ciento de esta silueta, y el resto aire»,
+   sea una card de 330 px o el modal de archivos entero. Sin esa normalización el
+   haz dependería del tamaño del cuadro, que lo decide el contenido. */
+.dark-envoltura-haz {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: miter;
+  stroke-dasharray: 14 86;
+  opacity: 0;
+}
+
+@keyframes dark-haz-perimetro {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Escuchando: la silueta entera sigue al micro, de su valor tenue de reposo
+   (0,28) hasta casi el corchete. Es el único sitio donde `--nivel-voz` se lee:
+   en las otras lecturas el nivel no tiene nada que decir. */
+.dark-contorno-escuchando .dark-envoltura-marco {
+  opacity: calc(0.28 + var(--nivel-voz, 0) * 0.5);
+}
+
+/* Procesando: el haz sale y recorre. Dice «el trámite está en marcha» sin
+   inventarse un reloj ni un spinner, y sin mover nada de su sitio. */
+.dark-contorno-procesando .dark-envoltura-haz {
+  opacity: 1;
+  animation: dark-haz-perimetro 1600ms linear infinite;
+}
+
+/* Escribiendo: el corchete activo. Con una tecla pulsada lo que importa es que
+   la superficie sostiene lo escrito, así que la luz se va a las cuatro esquinas
+   —que es donde el corte dice dónde termina el cuadro— y la línea se queda como
+   está. El grosor sube a 1,5 px solo ahí: es el mismo trazo, no un marco nuevo. */
+.dark-contorno-escribiendo .dark-envoltura-corchete {
+  opacity: 1;
+  stroke-width: 1.5;
+}
+
+.dark-sitios-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(76vw, 330px);
+  max-height: min(58vh, 430px);
+  /* El borde se dibuja 26 px más afuera (el halo), así que el aire que ve el
+     usuario desde la línea hasta el texto es esto más el halo. En la referencia
+     el texto claro empieza a 43-58 px del marco. */
+  padding: 24px 22px;
+  overflow-y: auto;
+}
+
+.dark-sitios-lista {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dark-sitios-item {
+  display: grid;
+  gap: 1px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(139, 170, 192, 0.1);
+}
+
+/* La lista de sitios se lee en la misma familia que lo demás (C4): lo que separa
+   el nombre de la dirección es el tamaño y el color, no otra tipografía. La
+   familia no se declara aquí: la trae el `body`. */
+.dark-sitios-nombre {
+  color: var(--color-foreground);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.dark-sitios-direccion {
+  color: var(--dark-cyan);
+  opacity: 0.7;
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-sitios-vacio {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.dark-sitios-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.dark-sitios-campo {
+  display: grid;
+  gap: 2px;
+  color: rgba(157, 177, 192, 0.65);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dark-sitios-campo input {
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(139, 170, 192, 0.18);
+  background: transparent;
+  color: var(--color-foreground);
+  padding: 8px 2px;
+  outline: none;
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 13px;
+}
+
+.dark-sitios-campo input:focus {
+  border-color: var(--dark-cyan);
+}
+
+.dark-sitios-aviso {
+  color: #ff5a5a;
+  font-size: 11px;
+}
+
+.dark-sitios-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20px;
+}
+
+/* Acciones de texto, sin caja: el borde del panel ya es el marco, y un botón
+   redondeado dentro es un segundo marco peleando con el octógono. */
+.dark-sitios-cerrar,
+.dark-sitios-guardar {
+  border: 0;
+  border-radius: 0;
+  padding: 2px 0;
+  background: none;
+  color: var(--dark-cyan);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.dark-sitios-cerrar:hover,
+.dark-sitios-guardar:hover:not(:disabled) {
+  color: #b9d9e8;
+}
+
+.dark-sitios-cerrar {
+  color: rgba(210, 222, 233, 0.62);
+}
+
+.dark-sitios-guardar {
+  border-bottom: 1px solid rgba(131, 182, 202, 0.35);
+}
+
+.dark-sitios-guardar:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dark-menu-stack {
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  left: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  pointer-events: none;
+}
+
+.dark-menu-reveal {
+  position: relative;
+  flex: 0 1 min(340px, 42vw);
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows 360ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 240ms ease;
+}
+
+.dark-menu-reveal.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dark-menu-reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* La caja del panel: lo que mide y lo que ocupa. El dibujo es de
+   `.dark-hud-panel` y de su figura, no de aquí. */
+.dark-menu-panel {
+  width: 100%;
+}
+
+/* El tope de altura y el scroll viven DENTRO del cuadro dibujado. Si el propio
+   panel fuera el que hace scroll, su capa absoluta con `inset: 0` —la del
+   marco— rueda con el contenido y el borde se desalinea de la caja que se mira:
+   medido aquí, el marco mide la caja visible. */
+.dark-menu-scroll {
+  max-height: min(34vh, 380px);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* El reposo de `.dark-marco-lleno` es `opacity: 0`: así empieza sin borde el
+   morph del núcleo. Cada panel que mete la figura tiene que encenderla y ponerla
+   detrás de lo escrito, o el dibujo queda puesto e invisible. */
+.dark-menu-panel > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+/* Un panel que se lee, el mismo suelo que el campo y que los archivos. */
+.dark-menu-panel .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+@media (max-width: 640px) {
+  .dark-menu-stack {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    gap: 10px;
+  }
+
+  .dark-menu-reveal {
+    flex-basis: calc(50% - 5px);
+  }
+
+  .dark-menu-scroll {
+    max-height: 32vh;
+    padding: 10px;
+  }
+}
+
+.dark-tesseract-orbit {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.55;
+  opacity: 0.12;
+  stroke-dasharray: 1 7;
+}
+
+/* El grosor y la opacidad los pone TesseractCore.tsx cuadro a cuadro según la
+   profundidad en el cuarto eje, en estilo en línea. Aquí no queda ninguno de
+   los dos: la regla vieja de `stroke-width: 1.1` quedaría siempre tapada, y la
+   transición de `opacity` filtraría a 400 ms un valor que cambia a 18 fps, o sea
+   que la sombra de profundidad no se vería nunca. */
+.dark-tesseract-edge {
+  stroke: currentColor;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 400ms ease;
+}
+
+.dark-tesseract-node {
+  fill: currentColor;
+}
+
+.dark-speech-text {
+  color: oklch(0.97 0.02 230);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+  font-weight: 500;
+}
+
+/* ============================================================
+ *  Paneles HUD (recursos / tareas)
+ * ============================================================ */
+
+/* El marco lo pone la figura chaflanada que el propio panel lleva dentro
+   (`MarcoLleno`), igual que en el modal de archivos: 1 px tenue, relleno sólido
+   y un corchete en cada una de las CUATRO esquinas. Aquí no queda nada pintado:
+   el `border`, el `border-radius: 12px`, el glow y las dos escuadras de `::before`
+   / `::after` eran cinco decisiones de dibujo donde el parte pide una.
+   `isolation` es lo que deja que el marco se ponga detrás del texto con
+   `z-index: -1` sin escaparse del panel. */
+.dark-hud-panel {
+  position: relative;
+  isolation: isolate;
+  color: var(--color-foreground);
+}
+
+.dark-hud-title {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dark-cyan);
+  font-weight: 600;
+}
+
+.dark-meter {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dark-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--dark-cyan), #4a9fff);
+  box-shadow: 0 0 8px rgba(100, 180, 255, 0.45);
+  transition: width 0.4s ease;
+}
+
+/* ============================================================
+ *  Input de texto (HUD)
+ * ============================================================ */
+
+.dark-text-input-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: dark-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dark-text-input-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--dark-cyan);
+  font-weight: 600;
+  text-shadow: 0 0 12px rgba(126, 200, 255, 0.45);
+}
+
+.dark-text-input-hint {
+  margin-left: auto;
+  letter-spacing: 0.12em;
+  color: var(--color-muted-foreground);
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.dark-text-input-panel {
+  padding: 6px 12px 6px 14px;
+  box-shadow:
+    0 0 32px var(--dark-panel-glow),
+    0 0 0 1px rgba(126, 200, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark-text-input-prompt {
+  color: var(--dark-cyan);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0.85;
+  text-shadow: 0 0 10px rgba(126, 200, 255, 0.5);
+  user-select: none;
+}
+
+.dark-text-input-field {
+  color: oklch(0.97 0.02 230);
+  caret-color: var(--dark-cyan);
+  letter-spacing: 0.01em;
+}
+
+.dark-text-input-field::placeholder {
+  color: oklch(0.7 0.04 240 / 0.55);
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================
+ *  Resultados / carrusel
+ * ============================================================ */
+
+/* La card de resultado es el mismo cuadro que el campo, el modal y el panel del
+   HUD: línea de 1 px, relleno sólido y un corchete en cada esquina. Se van el
+   rectángulo redondeado de 14 px, su `border`, su halo de 28 px y el salto del
+   hover (`translateY(-6px) scale(1.03)`), que era un marco nuevo en cada paso del
+   ratón: el estado se lee en la figura, quieto dentro de su caja.
+   El `padding` de 18 px no es aire decorativo: `chaflan` corta el lado corto de
+   la card —la anchura fija de 360 y la altura que sale del texto, 260 a 340— en
+   0,1 · lado con tope de 34, y la diagonal de la esquina superior izquierda se
+   lleva todo punto con x + y < corte. La esquina de la imagen está en (p, p), así
+   que hace falta p ≥ corte/2 = 17. Con menos, la imagen cruzaría el corte y el
+   octógono dejaría de ser la silueta que se mira. */
+.dark-result-card {
+  position: relative;
+  isolation: isolate;
+  padding: 18px;
+}
+
+.dark-result-card > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+.dark-result-card .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+/* Hover y foco: el mismo gesto que «escribiendo» —el trazo no cambia de color ni
+   se le suma un marco, la luz se va a las cuatro esquinas y engorda medio
+   píxel—. Son los dos estados que piden ser vistos; el resto está en reposo. */
+.dark-result-card:hover .dark-envoltura-corchete,
+.dark-result-card:focus-visible .dark-envoltura-corchete {
+  opacity: 1;
+  stroke-width: 1.5;
+}
+
+/* La tecla de navegación: la silueta chica en el markup y aquí solo su campo.
+   Sin `border`, sin halo de 16 px y sin `scale(1.05)`; el `disabled` ya se lee
+   en el campo apagado. */
+.dark-nav-btn {
+  background: var(--tecla-reposo);
+  color: var(--dark-cyan);
+  transition: background 160ms ease;
+}
+
+.dark-nav-btn:hover:not(:disabled),
+.dark-nav-btn:focus-visible:not(:disabled) {
+  background: var(--tecla-activa);
+}
+
+/* ============================================================
+ *  Carrusel de interfaces (el selector modal)
+ * ============================================================ */
+
+/* Lo que se pone encima de todo cuando hay un selector abierto. Un solo valor
+   compartido con el fondo del lightbox: las dos son la misma promesa —la
+   superficie de atrás se retira para que mande la que se está eligiendo—, así
+   que se atenúa una vez. No lleva desenfoque: sobre una tele que ya es opaca
+   (parte B) el `backdrop-filter` sólo emborrona lo propio de D.A.R.K. */
+.dark-carrusel-velo {
+  background: var(--velo-modal);
+}
+
+/* La card del selector es el mismo cuadro chaflanado que el campo, el modal de
+   archivos, el panel del HUD y la card de resultado. Con perspectiva de 1100 px
+   el centro se dibuja a escala 1,05; el `MarcoLleno` mide la caja de layout —la
+   escala del `style` no entra en `offsetWidth`— y como vive DENTRO de la card
+   escala con ella: la figura nunca se despega del cuadro que se mira.
+
+   El posicionamiento lo pone el componente (`absolute`): las cartas se apilan en
+   el centro y el anillo las reparte con `translateX/translateZ`. Aquí NO se puede
+   declarar `position` sin capa: pisaría al utility `absolute` (que vive en
+   `@layer`) y volvería las cartas ítems flex en fila — doble posicionamiento que
+   las amontona y descentra. `absolute` también sirve de ancestro posicionado para
+   el `MarcoLleno`, así que basta con no tocar el position. */
+.dark-carrusel-card {
+  isolation: isolate;
+}
+
+.dark-carrusel-card > .dark-marco-lleno {
+  z-index: -1;
+  opacity: 1;
+}
+
+.dark-carrusel-card .dark-envoltura-relleno {
+  fill: var(--panel-relleno);
+}
+
+/* Los tres estados se leen en la figura, sin borde de dos píxeles ni halo de 35
+   px: la card de al lado es reposo (sólo la línea); la del centro enciende los
+   corchetes —el mismo gesto que «escribiendo» en la barra—; la que ya está
+   puesta sube además la línea, porque ahí lo que se afirma es el cuadro entero. */
+.dark-carrusel-card.is-centro .dark-envoltura-corchete {
+  opacity: 1;
+  stroke-width: 1.5;
+}
+
+.dark-carrusel-card.is-activa .dark-envoltura-marco {
+  opacity: 0.55;
+}
+
+/* ============================================================
+ *  Lightbox de imagen (zoom + acciones)
+ * ============================================================ */
+
+.dark-lightbox-root {
+  animation: dark-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dark-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--velo-modal);
+}
+
+.dark-lightbox-img {
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(140, 200, 255, 0.25),
+    0 0 48px rgba(80, 160, 255, 0.25),
+    0 24px 64px rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dark-lightbox-panel {
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: rgba(8, 18, 40, 0.94);
+  border: 1px solid rgba(160, 210, 255, 0.4);
+  box-shadow:
+    0 0 28px rgba(100, 170, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dark-lightbox-title {
+  color: oklch(0.95 0.02 230);
+  text-shadow: 0 0 16px rgba(100, 180, 255, 0.25);
+}
+
+.dark-lightbox-btn {
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: 1px solid rgba(126, 200, 255, 0.35);
+  background: rgba(126, 200, 255, 0.1);
+  color: var(--dark-cyan);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.dark-lightbox-btn:hover {
+  background: rgba(126, 200, 255, 0.2);
+  border-color: var(--dark-cyan);
+  box-shadow: 0 0 16px rgba(100, 180, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.dark-lightbox-btn-primary {
+  background: linear-gradient(
+    135deg,
+    rgba(90, 170, 255, 0.95),
+    rgba(60, 140, 230, 0.95)
+  );
+  border-color: rgba(154, 212, 255, 0.55);
+  color: #0a1628;
+  box-shadow: 0 0 20px rgba(100, 180, 255, 0.3);
+}
+
+.dark-lightbox-btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 28px rgba(100, 180, 255, 0.45);
+}
+
+/* ============================================================
+ *  Utilidades / animaciones
+ * ============================================================ */
+
+@utility bar-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@keyframes dark-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dark-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+
+@keyframes dark-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@utility animate-dark-in {
+  animation: dark-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-dark-out {
+  animation: dark-out 0.3s ease-in both;
+}
+
+@utility animate-breathe {
+  animation: dark-breathe 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-screen,
+  .dark-screen::before {
+    transition: none;
+  }
+  .dark-core-shell,
+  .dark-core-shell > .dark-core-transform .dark-core-entity,
+  .dark-core-input,
+  .dark-marco-lleno,
+  .dark-files-content,
+  .dark-files-dropzone,
+  .dark-menu-reveal {
+    transition: none;
+  }
+  .dark-files-content[data-estado="arrastrando"] .dark-files-marca {
+    animation: none;
+  }
+  /* El haz es recorrido, y un recorrido es justo lo que esta preferencia pide
+     quitar. Apagado del todo —un trazo brillando quieto en una esquina sería una
+     mancha sin significado— y «procesando» se sigue leyendo con la silueta
+     entera un poco más encendida que en el reposo. */
+  .dark-contorno-procesando .dark-envoltura-haz {
+    display: none;
+  }
+  .dark-contorno-procesando .dark-envoltura-marco {
+    opacity: 0.55;
+  }
+  .dark-envoltura-marco {
+    transition: none;
+  }
+  .dark-tesseract {
+    transition: none;
+  }
+  .dark-tesseract-edge {
+    transition: none;
+  }
+  .dark-specialist-flota,
+  .dark-desborda {
+    animation: none;
+  }
+  .dark-specialist-slot,
+  .dark-specialist-core {
+    transition: none;
+  }
+}
+
+/* Panel del registro facial opcional: reutiliza la card de "Mis sitios". */
+.dark-rostro-texto {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  max-width: 34rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+.dark-rostro-texto li {
+  margin-bottom: 0.3rem;
+}
+
+.dark-rostro-estado {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.dark-rostro-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.dark-rostro-check input {
+  margin-top: 0.2rem;
+}
+
+/* Estado de capacidades (P1): insignia discreta y panel de solo lectura. */
+.dark-capacidades-insignia {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--neb-acento, rgba(169, 214, 232, 0.9));
+  background: rgba(6, 10, 16, 0.62);
+  border: 1px solid rgba(131, 182, 202, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.78;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.dark-capacidades-insignia:hover,
+.dark-capacidades-insignia:focus-visible {
+  opacity: 1;
+  border-color: rgba(169, 214, 232, 0.65);
+}
+
+.dark-capacidades-insignia.is-error {
+  color: #ff9a9a;
+  border-color: rgba(255, 90, 90, 0.45);
+}
+
+.dark-capacidades-punto {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.dark-capacidades-card {
+  width: min(40rem, 88vw);
+  max-height: min(70vh, 34rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(131, 182, 202, 0.4) transparent;
+}
+
+.dark-capacidades-lista {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dark-capacidades-fila {
+  padding: 0.5rem 0.7rem;
+  border-left: 2px solid rgba(131, 182, 202, 0.35);
+  background: rgba(8, 12, 20, 0.5);
+}
+
+.dark-capacidades-fila.nivel-ok {
+  border-left-color: rgba(120, 220, 160, 0.7);
+}
+
+.dark-capacidades-fila.nivel-atencion {
+  border-left-color: rgba(198, 167, 123, 0.9);
+}
+
+.dark-capacidades-fila.nivel-error {
+  border-left-color: rgba(255, 90, 90, 0.9);
+}
+
+.dark-capacidades-cabecera {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.8rem;
+}
+
+.dark-capacidades-nombre {
+  font-weight: 600;
+}
+
+.dark-capacidades-nivel {
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+}
+
+.dark-capacidades-motivo,
+.dark-capacidades-arreglo,
+.dark-capacidades-datos {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  opacity: 0.88;
+}
+
+.dark-capacidades-arreglo {
+  color: rgba(198, 167, 123, 0.95);
+}
+
+.dark-capacidades-datos {
+  opacity: 0.65;
+}
+
+/* Centro de configuración (P2): asistente inicial, navegación y bibliotecas. */
+/* Capa propia a pantalla completa: la tarjeta es lo único interactivo (el resto deja
+   pasar el ratón al escritorio, igual que el resto del overlay). */
+.dark-centro-raiz {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: dark-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dark-centro-interactivo {
+  pointer-events: auto;
+  max-width: 96vw;
+  max-height: 94vh;
+}
+
+.dark-centro-card {
+  width: min(52rem, 88vw);
+  max-width: 100%;
+  max-height: min(78vh, 40rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(131, 182, 202, 0.4) transparent;
+}
+
+.dark-centro-cuerpo {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.dark-centro-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 10rem;
+}
+
+.dark-centro-seccion {
+  position: relative;
+  padding: 0.45rem 0.8rem;
+  text-align: left;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: inherit;
+  background: rgba(8, 12, 20, 0.5);
+  border: 1px solid rgba(131, 182, 202, 0.2);
+  cursor: pointer;
+}
+
+.dark-centro-seccion.is-activa {
+  border-color: rgba(169, 214, 232, 0.7);
+  background: rgba(18, 26, 36, 0.8);
+}
+
+.dark-centro-aviso {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0.5rem;
+  border-radius: 50%;
+  background: rgba(198, 167, 123, 0.95);
+}
+
+.dark-centro-contenido {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.dark-centro-asistente,
+.dark-centro-bienvenida {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.dark-biblioteca {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dark-biblioteca-cabecera,
+.dark-biblioteca-fila-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dark-biblioteca-titulo {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+}
+
+.dark-biblioteca-lista,
+.dark-biblioteca-cadena {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dark-biblioteca-fila,
+.dark-biblioteca-asignacion,
+.dark-biblioteca-agregar,
+.dark-biblioteca-trabajo {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(131, 182, 202, 0.2);
+  background: rgba(8, 12, 20, 0.5);
+  font-size: 0.78rem;
+}
+
+.dark-biblioteca-trabajo.estado-error {
+  border-color: rgba(255, 90, 90, 0.5);
+}
+
+.dark-biblioteca-trabajo progress {
+  width: 100%;
+}
+
+.dark-biblioteca-cadena li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dark-biblioteca-cadena li span {
+  flex: 1;
+}
+
+.dark-biblioteca-cadena button {
+  padding: 0 0.4rem;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(131, 182, 202, 0.25);
+  cursor: pointer;
+}
+
+.dark-biblioteca-cadena button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.dark-biblioteca-revision h5 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.82rem;
+}
+
+.dark-biblioteca-revision ul {
+  margin: 0 0 0.4rem;
+  padding-left: 1.1rem;
+}
+
+.dark-biblioteca-ok {
+  margin: 0.3rem 0;
+  color: rgba(120, 220, 160, 0.95);
+  font-size: 0.78rem;
+}
+
+.dark-biblioteca select,
+.dark-biblioteca input[type="text"],
+.dark-biblioteca input[type="password"],
+.dark-biblioteca input[type="number"] {
+  color: inherit;
+  background: rgba(4, 6, 10, 0.8);
+  border: 1px solid rgba(131, 182, 202, 0.3);
+  padding: 0.3rem 0.5rem;
+}
+
+/* Barra de progreso de las bibliotecas: con el acento de D.A.R.K., no el verde nativo. */
+.dark-biblioteca-trabajo progress {
+  appearance: none;
+  height: 6px;
+  border: 0;
+  background: rgba(131, 182, 202, 0.15);
+}
+
+.dark-biblioteca-trabajo progress::-webkit-progress-bar {
+  background: rgba(131, 182, 202, 0.15);
+}
+
+.dark-biblioteca-trabajo progress::-webkit-progress-value {
+  background: var(--neb-acento, rgba(169, 214, 232, 0.9));
+  transition: width 0.25s ease;
+}
+
+.dark-biblioteca-trabajo progress::-moz-progress-bar {
+  background: var(--neb-acento, rgba(169, 214, 232, 0.9));
+}
+
+/* Sección Claves */
+.dark-claves-fila {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.dark-claves-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dark-claves-acciones {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.dark-claves-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.dark-claves-formulario label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.dark-claves-formulario input[type="password"],
+.dark-claves-formulario input[type="text"] {
+  background: rgba(131, 182, 202, 0.08);
+  border: 1px solid rgba(131, 182, 202, 0.35);
+  border-radius: 4px;
+  color: inherit;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+}
+
+/* Lo que D.A.R.K. dice al abrir una sección del Centro */
+.dark-centro-guia {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-left: 2px solid var(--neb-acento, rgba(169, 214, 232, 0.9));
+  background: rgba(131, 182, 202, 0.07);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  animation: dark-centro-guia-entra 0.45s ease both;
+}
+
+.dark-centro-guia-quien {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  opacity: 0.7;
+}
+
+@keyframes dark-centro-guia-entra {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-centro-guia {
+    animation: none;
+  }
+}
+
+/* Primer arranque: Tu equipo, ruta rápida y prueba */
+.dark-centro-datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+}
+
+.dark-centro-datos dt {
+  opacity: 0.7;
+}
+
+.dark-centro-datos dd {
+  margin: 0;
+}
+
+.dark-centro-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+.dark-centro-ruta .dark-sitios-acciones {
+  margin-bottom: 0.6rem;
+}
+
+/* Secciones por bloques (Memoria, Privacidad, Sistema…) */
+.dark-bloques {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.dark-bloques-tabla table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.dark-bloques-tabla th,
+.dark-bloques-tabla td {
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(131, 182, 202, 0.15);
+}
+
+.dark-bloques-tabla th {
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.dark-bloques-ayuda {
+  display: block;
+  opacity: 0.65;
+  margin-top: 0.15rem;
+}
+
+.dark-bloques-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dark-bloques-fila {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.dark-bloques-confirmar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(131, 182, 202, 0.3);
+  border-radius: 4px;
+  max-width: 34rem;
+}
+
+.dark-bloques-confirmar input[type="text"],
+.dark-bloques-confirmar input[type="password"] {
+  background: rgba(131, 182, 202, 0.08);
+  border: 1px solid rgba(131, 182, 202, 0.35);
+  border-radius: 4px;
+  color: inherit;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+}
+
+.dark-bloques-peligro {
+  border-color: rgba(255, 120, 120, 0.7);
+  color: rgb(255, 160, 160);
+}
+
+/* El teseracto señalando lo que D.A.R.K. explica */
+.dark-puntero {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.dark-puntero-capa {
+  position: absolute;
+  inset: 0;
+}
+
+/* El teseracto pequeño del que sale el rayo: el mismo núcleo, a escala de emblema. */
+.dark-puntero-emblema {
+  position: absolute;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 8px var(--neb-acento, #a9d6e8));
+}
+
+.dark-puntero-emblema > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.dark-puntero-rayo {
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 6 8;
+  filter: drop-shadow(0 0 4px var(--neb-acento, #a9d6e8));
+}
+
+.dark-puntero-marco {
+  fill: none;
+  stroke: var(--neb-acento, #a9d6e8);
+  stroke-width: 1.5;
+  opacity: 0.8;
+  animation: dark-puntero-late 1.6s ease-in-out infinite;
+}
+
+.dark-puntero.is-hablando .dark-puntero-rayo {
+  stroke-width: 2.2;
+  animation: dark-puntero-corre 0.9s linear infinite;
+}
+
+@keyframes dark-puntero-corre {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes dark-puntero-late {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark-puntero-rayo,
+  .dark-puntero-marco,
+  .dark-puntero.is-hablando .dark-puntero-rayo {
+    animation: none;
+  }
+}
+
+/* Galería de voces: oír antes de elegir. */
+.dark-galeria {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.dark-galeria-titulo {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+}
+
+.dark-galeria-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dark-galeria-voz {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(131, 182, 202, 0.2);
+  background: rgba(8, 12, 20, 0.5);
+  font-size: 0.78rem;
+}
+
+.dark-galeria-voz.en-uso {
+  border-color: rgba(131, 214, 202, 0.55);
+}
+
+.dark-galeria-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.dark-galeria-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+/* Que nada se salga de su caja: los campos de las bibliotecas se encogen en vez de ensanchar el contenedor
+   (una opción con un nombre largo ensanchaba el desplegable y sacaba el formulario de la tarjeta). */
+.dark-centro-contenido,
+.dark-biblioteca,
+.dark-biblioteca-agregar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dark-biblioteca-agregar {
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.dark-biblioteca .dark-sitios-campo {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.dark-biblioteca select,
+.dark-biblioteca input[type="text"],
+.dark-biblioteca input[type="password"],
+.dark-biblioteca input[type="number"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.dark-biblioteca fieldset {
+  min-width: 0;
+}
+
+/* Paso «Una prueba antes de terminar»: nombre, estado y botón en una fila que se parte si no cabe. */
+.dark-centro-prueba .dark-biblioteca-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.9rem;
+}
+
+.dark-centro-prueba .dark-biblioteca-fila > span:first-child {
+  flex: 1 1 14rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dark-centro-prueba .dark-biblioteca-fila > span:not(:first-child) {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dark-centro-prueba .dark-biblioteca-fila > button {
+  flex: none;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid rgba(131, 182, 202, 0.45);
+  color: var(--dark-cyan);
+}
+
+.dark-centro-prueba .dark-biblioteca-fila > button:hover {
+  border-color: rgba(169, 214, 232, 0.8);
+}

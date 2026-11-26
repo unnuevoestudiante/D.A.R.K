@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fondo 3D de las apps — prototipo</title>
+<!-- En el kit final las fuentes van incluidas en cada proyecto; aquí se cargan
+     de Google Fonts solo para poder ver el prototipo sin instalar nada. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet" />
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+<style>
+  /* Mismos tokens que prototipos/kit-coder/index.html: una personalidad, un juego de variables. */
+  :root, [data-p="tecnico"] {
+    --bg: #07090c; --panel: #0b0e12; --fg: #dfe7ee; --muted: #6f7c88; --line: #1a2129;
+    --accent: #5ee6ff; --accent-fg: #021014; --negativo: #ff8a7a;
+    --font-ui: "Space Grotesk", system-ui, sans-serif; --font-num: "JetBrains Mono", ui-monospace, monospace;
+    --font-titulo: var(--font-ui); --peso-titulo: 500; --radio: 2px; --track: 0.02em;
+    --particula: #5ee6ff; --fondo-estatico: radial-gradient(circle at 30% 20%, #0d1826, #05070a 70%);
+  }
+  [data-p="sobrio"] {
+    --bg: #f6f5f2; --panel: #fbfaf8; --fg: #1b1d1f; --muted: #7a7d80; --line: #e2e0db;
+    --accent: #2f4ad0; --accent-fg: #ffffff; --negativo: #b4432f;
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif; --font-num: "IBM Plex Mono", ui-monospace, monospace;
+    --font-titulo: var(--font-ui); --peso-titulo: 600; --radio: 6px; --track: -0.01em;
+    --particula: #2f4ad0; --fondo-estatico: radial-gradient(circle at 70% 10%, #eef0f7, #e4e2dc 70%);
+  }
+  [data-p="calido"] {
+    --bg: #f4ede1; --panel: #faf5ec; --fg: #2b2420; --muted: #8b7d70; --line: #e4d8c6;
+    --accent: #c4623a; --accent-fg: #fff8f0; --negativo: #b04a35;
+    --font-ui: "Figtree", system-ui, sans-serif; --font-num: "Figtree", system-ui, sans-serif;
+    --font-titulo: "Fraunces", Georgia, serif; --peso-titulo: 600; --radio: 10px; --track: 0;
+    --particula: #c4623a; --fondo-estatico: radial-gradient(circle at 25% 15%, #f8ecd9, #efe3cf 70%);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    --margen: 36px;
+    box-sizing: border-box; background: #000; color: var(--fg);
+    font: 15px/1.45 var(--font-ui); letter-spacing: var(--track);
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+    padding: var(--margen);
+  }
+  @media (max-width: 760px) { body { --margen: 16px; } }
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+  /* ------------------------------------------------------------------
+     EL FONDO. Vive detrás de todo, siempre; nunca es lo que se mira.
+     ------------------------------------------------------------------ */
+  #fondo { position: fixed; inset: 0; z-index: 0; }
+  #fondo canvas { display: block; width: 100%; height: 100%; }
+  #fondo.sin-gpu { background: var(--fondo-estatico); }
+  .aviso-calma {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    font: 12px var(--font-num); color: #cfd6dc; background: rgba(0,0,0,0.5);
+    padding: 5px 12px; border-radius: 999px; opacity: 0; transition: opacity 0.3s; z-index: 5;
+    pointer-events: none;
+  }
+  .aviso-calma.activo { opacity: 1; }
+
+  /* ------------------------------------------------------------------
+     LA VENTANA DE LA APP. Sin fondo, sin borde, sin radio: no es una caja.
+     El contenido flota sobre la misma escena que el margen fijo del body;
+     lo único que lo distingue del vacío es el espacio y las líneas finas.
+     ------------------------------------------------------------------ */
+  .ventana {
+    position: relative; z-index: 1; color: var(--fg);
+    width: min(1180px, 100%); height: 100%;
+    margin: 0 auto; overflow: hidden;
+    display: grid; grid-template-rows: auto minmax(0, 1fr); transition: color 0.3s;
+  }
+  [data-nav="lateral"] .ventana { grid-template-columns: 1fr; }
+
+  header.cabecera {
+    display: flex; align-items: center; gap: 24px; padding: 16px 24px; border-bottom: 1px solid var(--line);
+  }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 600; white-space: nowrap; }
+  .marca svg { color: var(--accent); flex: none; }
+  nav.secciones-top { display: flex; gap: 20px; color: var(--muted); overflow-x: auto; }
+  nav.secciones-top a, nav.lateral a {
+    color: inherit; text-decoration: none; padding: 4px 0; white-space: nowrap;
+  }
+  nav.secciones-top a[aria-current] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+  .usuario { margin-left: auto; width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+    color: var(--accent-fg); display: grid; place-items: center; font: 500 12px var(--font-ui); flex: none; }
+
+  .cuerpo { display: grid; grid-template-columns: 1fr; min-height: 0; }
+  [data-nav="lateral"] .cuerpo { grid-template-columns: 220px minmax(0,1fr); }
+  nav.lateral {
+    display: none; flex-direction: column; gap: 2px; padding: 18px 14px; border-right: 1px solid var(--line);
+    color: var(--muted); overflow: auto;
+  }
+  [data-nav="lateral"] nav.lateral { display: flex; }
+  nav.lateral a { padding: 9px 12px; border-radius: var(--radio); }
+  nav.lateral a[aria-current] { background: var(--accent); color: var(--accent-fg); }
+
+  main.contenido { padding: 24px 28px 28px; overflow: auto; min-height: 0; }
+  .fila-titulo { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .fila-titulo h1 { font: var(--peso-titulo) 24px var(--font-titulo); margin: 0; letter-spacing: -0.01em; }
+  .fila-titulo .cuenta { color: var(--muted); font-size: 13px; }
+  .fila-titulo .boton { margin-left: auto; }
+
+  .boton {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0;
+    cursor: pointer; background: var(--accent); color: var(--accent-fg); font: 500 14px var(--font-ui);
+    border-radius: var(--radio);
+  }
+  .boton.fantasma { background: none; color: var(--fg); border: 1px solid var(--line); }
+
+  .estadisticas { display: flex; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+  .estadistica { border: 1px solid var(--line); border-radius: var(--radio); padding: 12px 16px; min-width: 120px; }
+  .estadistica .etiqueta { color: var(--muted); font-size: 12px; }
+  .estadistica .valor { font: var(--peso-titulo) 26px/1.1 var(--font-titulo); margin-top: 2px; }
+
+  .formulario-nota {
+    border: 1px solid var(--line); border-radius: var(--radio); padding: 14px; margin-bottom: 14px;
+    display: none; gap: 10px; flex-direction: column;
+  }
+  .formulario-nota.abierto { display: flex; }
+  .formulario-nota input, .formulario-nota textarea {
+    width: 100%; background: transparent; color: var(--fg); border: 1px solid var(--line);
+    border-radius: var(--radio); padding: 9px 11px; font: 14px var(--font-ui); resize: vertical;
+  }
+  .formulario-nota .acciones { display: flex; gap: 10px; justify-content: flex-end; }
+
+  ul.notas { list-style: none; margin: 0; padding: 0; }
+  ul.notas li {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  ul.notas li .titulo-nota { font-weight: 500; }
+  ul.notas li .fragmento { color: var(--muted); font-size: 13px; grid-column: 1; }
+  ul.notas li .fecha { color: var(--muted); font-size: 12px; align-self: start; }
+
+  .vacio { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .vacio p { margin: 0 0 16px; }
+
+  .carga li { border-bottom: 1px solid var(--line); padding: 14px 0; }
+  .carga .barra { height: 11px; border-radius: 3px; background: var(--line); }
+  .carga .barra.corta { width: 40%; margin-top: 8px; }
+  .carga li:not(.sin-animar) .barra { animation: pulso 1.4s ease-in-out infinite; }
+  @keyframes pulso { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+  @media (max-width: 760px) {
+    nav.secciones-top { display: none; }
+    [data-nav="lateral"] .cuerpo { grid-template-columns: 1fr; }
+    nav.lateral { display: none !important; }
+  }
+
+  /* ------------------------------------------------------------------
+     CONTROLES DEL PROTOTIPO (no son parte de la app)
+     ------------------------------------------------------------------ */
+  .proto {
+    position: fixed; left: 0; right: 0; top: 0; min-height: 40px; z-index: 10;
+    display: flex; align-items: center; gap: 10px; padding: 6px 14px; flex-wrap: wrap;
+    background: #111; color: #ddd; font: 12px ui-monospace, Consolas, monospace;
+  }
+  .proto .titulo { color: #777; white-space: nowrap; }
+  .proto .grupo { display: flex; gap: 4px; flex-wrap: wrap; }
+  .proto a { color: #8ab; text-decoration: none; margin-right: 10px; }
+  .proto button { background: none; color: inherit; border: 0; padding: 7px 9px; border-radius: 5px; cursor: pointer; }
+  .proto button[aria-pressed="true"] { background: #fff; color: #111; }
+  .proto .sep { width: 1px; background: #333; margin: 4px 2px; align-self: stretch; }
+</style>
+</head>
+<body data-nav="superior">
+
+<div id="fondo"><canvas id="lienzo-fondo"></canvas></div>
+<div class="aviso-calma" id="aviso-calma"></div>
+
+<div class="ventana" data-p="tecnico" id="ventana">
+  <header class="cabecera" id="cabecera">
+    <div class="marca">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Bitácora
+    </div>
+    <nav class="secciones-top" id="nav-top" aria-label="Secciones"></nav>
+    <div class="usuario">AM</div>
+  </header>
+  <div class="cuerpo">
+    <nav class="lateral" id="nav-lateral" aria-label="Secciones"></nav>
+    <main class="contenido">
+      <div class="fila-titulo">
+        <h1>Notas</h1>
+        <span class="cuenta num" id="cuenta-notas"></span>
+        <button class="boton" id="nueva-nota">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Nueva nota
+        </button>
+      </div>
+      <div class="estadisticas">
+        <div class="estadistica"><div class="etiqueta">Notas</div><div class="valor num" id="stat-notas">8</div></div>
+        <div class="estadistica"><div class="etiqueta">Ancladas</div><div class="valor num">2</div></div>
+        <div class="estadistica"><div class="etiqueta">Esta semana</div><div class="valor num">5</div></div>
+      </div>
+      <form class="formulario-nota" id="form-nota">
+        <input type="text" placeholder="Título" id="nota-titulo" required />
+        <textarea rows="2" placeholder="Escribe algo…" id="nota-texto"></textarea>
+        <div class="acciones">
+          <button type="button" class="boton fantasma" id="cancelar-nota">Cancelar</button>
+          <button type="submit" class="boton">Guardar</button>
+        </div>
+      </form>
+      <ul class="notas" id="lista-notas"></ul>
+      <div class="vacio" id="vacio" style="display:none">
+        <p>Todavía no hay notas.</p>
+        <button class="boton fantasma">Escribe la primera</button>
+      </div>
+      <ul class="notas carga" id="carga" style="display:none">
+        <li><div class="barra" style="width:55%"></div><div class="barra corta"></div></li>
+        <li><div class="barra" style="width:70%"></div><div class="barra corta"></div></li>
+        <li><div class="barra" style="width:45%"></div><div class="barra corta"></div></li>
+      </ul>
+    </main>
+  </div>
+</div>
+
+<div class="proto" role="toolbar" aria-label="Controles del prototipo">
+  <span class="titulo">prototipo · fondo de apps — la app de notas es solo un ejemplo cualquiera para probarlo, no es la idea</span>
+  <div class="grupo">
+    <button data-p="tecnico" aria-pressed="true">Técnico</button>
+    <button data-p="sobrio" aria-pressed="false">Sobrio</button>
+    <button data-p="calido" aria-pressed="false">Cálido</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grupo">
+    <button id="toggle-secciones" aria-pressed="false">Secciones: pocas (barra superior)</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grupo">
+    <button id="toggle-reducido" aria-pressed="false">Movimiento reducido</button>
+    <button id="toggle-gpu" aria-pressed="false">Sin GPU</button>
+    <button id="toggle-foco" aria-pressed="false">Pestaña en segundo plano</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grupo">
+    <button id="toggle-vacio" aria-pressed="false">Ver vacío</button>
+    <button id="toggle-carga" aria-pressed="false">Ver carga</button>
+  </div>
+  <span class="sep"></span>
+  <div class="grupo">
+    <a href="index.html">app con 3D central</a><a href="inmersivo.html">modo inmersivo</a>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+
+// --------------------------------------------------------------------
+// DATOS DE EJEMPLO
+// --------------------------------------------------------------------
+const SECCIONES_POCAS = ["Notas", "Archivo", "Papelera", "Ajustes"];
+const SECCIONES_MUCHAS = ["Notas", "Etiquetas", "Archivo", "Compartidas", "Plantillas", "Papelera", "Integraciones", "Ajustes"];
+const NOTAS_INICIALES = [
+  { titulo: "Ideas para el viaje", fragmento: "Rutas por el norte, reservar el refugio antes del jueves…", fecha: "Hoy" },
+  { titulo: "Lista de la compra", fragmento: "Café, avena, limones, pilas AA…", fecha: "Hoy" },
+  { titulo: "Notas de la reunión", fragmento: "Cerrar el presupuesto antes de fin de mes…", fecha: "Ayer" },
+  { titulo: "Libro: página 212", fragmento: "El capítulo 9 retoma la idea del primero…", fecha: "Ayer" },
+  { titulo: "Receta: lentejas", fragmento: "Sofrito, pimentón, una hoja de laurel…", fecha: "Lunes" },
+  { titulo: "Regalo de cumpleaños", fragmento: "Preguntó por una funda nueva para la bici…", fecha: "Lunes" },
+  { titulo: "Contraseña del router", fragmento: "Está en la pegatina de abajo, no en el cajón…", fecha: "Domingo" },
+  { titulo: "Pendiente con el banco", fragmento: "Llamar antes de las 14h para la tarjeta…", fecha: "Domingo" },
+];
+
+// --------------------------------------------------------------------
+// EL FONDO: un campo de partículas sutil. Nunca es lo que se mira.
+// Se calma solo: pestaña en segundo plano, movimiento reducido o sin GPU.
+// --------------------------------------------------------------------
+const fondoEl = document.getElementById("fondo");
+const avisoEl = document.getElementById("aviso-calma");
+let renderer, escena, camara, puntos, animando = false, estatico = false;
+
+function colorParticula(p) {
+  return { tecnico: 0x5ee6ff, sobrio: 0x2f4ad0, calido: 0xc4623a }[p] || 0x5ee6ff;
+}
+function colorEscena(p) {
+  // El mismo tono que ve el contenido: no hay una caja distinta detrás, es
+  // una sola escena continua, también donde no hay interfaz.
+  return { tecnico: 0x07090c, sobrio: 0xf1efe9, calido: 0xf0e7d6 }[p] || 0x07090c;
+}
+
+function construirFondo(personalidad) {
+  if (renderer) { renderer.dispose(); fondoEl.innerHTML = ""; }
+  const lienzo = document.createElement("canvas");
+  fondoEl.innerHTML = "";
+  fondoEl.appendChild(lienzo);
+  renderer = new THREE.WebGLRenderer({ canvas: lienzo, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(colorEscena(personalidad), 1);
+  escena = new THREE.Scene();
+  camara = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 40);
+  camara.position.z = 9;
+
+  const N = 420;
+  const posiciones = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const r = 6 + Math.random() * 9, t = Math.random() * Math.PI * 2, f = Math.acos(2 * Math.random() - 1);
+    posiciones[i * 3] = r * Math.sin(f) * Math.cos(t);
+    posiciones[i * 3 + 1] = r * Math.sin(f) * Math.sin(t) * 0.5;
+    posiciones[i * 3 + 2] = r * Math.cos(f) - 6;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(posiciones, 3));
+  const mat = new THREE.PointsMaterial({
+    color: colorParticula(personalidad), size: 0.05, transparent: true,
+    opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  puntos = new THREE.Points(geo, mat);
+  escena.add(puntos);
+  renderer.setSize(innerWidth, innerHeight);
+}
+
+function cuadro(t) {
+  if (puntos) { puntos.rotation.y = t * 0.00002; puntos.position.y = Math.sin(t * 0.00015) * 0.3; }
+  renderer.render(escena, camara);
+}
+
+function debeEstarQuieto() {
+  return reducidoManual || document.hidden || focoSimulado || !conGPU() ||
+         matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function bucle(t) {
+  if (!conGPU()) return;
+  cuadro(t);
+  if (debeEstarQuieto()) { animando = false; mostrarAviso(); return; }
+  ocultarAviso();
+  animando = true;
+  requestAnimationFrame(bucle);
+}
+
+function asegurarAnimando() {
+  if (!conGPU() || debeEstarQuieto()) { if (renderer) cuadro(performance.now()); mostrarAviso(); return; }
+  ocultarAviso();
+  if (!animando) requestAnimationFrame(bucle);
+}
+
+function mostrarAviso() {
+  if (!conGPU()) { avisoEl.classList.remove("activo"); return; }
+  const motivo = reducidoManual || matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "movimiento reducido" : document.hidden ? "pestaña en segundo plano (real)"
+    : focoSimulado ? "pestaña en segundo plano (simulada)" : "";
+  if (!motivo) { avisoEl.classList.remove("activo"); return; }
+  avisoEl.textContent = `fondo en pausa · ${motivo}`;
+  avisoEl.classList.add("activo");
+}
+function ocultarAviso() { avisoEl.classList.remove("activo"); }
+
+// La barra de controles del prototipo puede partirse en varias filas en una
+// ventana angosta: el margen superior del body sigue su alto real para no
+// solaparse nunca con la app de abajo.
+const barraProto = document.querySelector(".proto");
+new ResizeObserver(() => {
+  document.body.style.paddingTop = `${barraProto.offsetHeight}px`;
+}).observe(barraProto);
+
+window.addEventListener("resize", () => {
+  if (!renderer) return;
+  renderer.setSize(innerWidth, innerHeight);
+  camara.aspect = innerWidth / innerHeight;
+  camara.updateProjectionMatrix();
+  cuadro(performance.now());
+});
+document.addEventListener("visibilitychange", asegurarAnimando);
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener?.("change", asegurarAnimando);
+
+// --------------------------------------------------------------------
+// CONTROLES DEL PROTOTIPO
+// --------------------------------------------------------------------
+let reducidoManual = false, focoSimulado = false, sinGpu = false;
+function conGPU() { return !sinGpu; }
+
+function aplicarGpu() {
+  if (sinGpu) {
+    fondoEl.classList.add("sin-gpu");
+    fondoEl.innerHTML = "";
+    avisoEl.classList.remove("activo");
+  } else {
+    fondoEl.classList.remove("sin-gpu");
+    construirFondo(document.getElementById("ventana").dataset.p);
+    asegurarAnimando();
+  }
+}
+
+const ventana = document.getElementById("ventana");
+const botonesP = document.querySelectorAll(".proto button[data-p]");
+function personalidad(p) {
+  ventana.dataset.p = p;
+  botonesP.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.p === p)));
+  if (conGPU()) { construirFondo(p); asegurarAnimando(); }
+  else fondoEl.style.setProperty("--particula", colorParticula(p));
+}
+botonesP.forEach((b) => b.addEventListener("click", () => personalidad(b.dataset.p)));
+
+// Navegación: Tareas decide barra lateral o superior según cuántas secciones tenga la app.
+const navTop = document.getElementById("nav-top");
+const navLateral = document.getElementById("nav-lateral");
+const toggleSecciones = document.getElementById("toggle-secciones");
+let muchas = false;
+function pintarNav() {
+  const secciones = muchas ? SECCIONES_MUCHAS : SECCIONES_POCAS;
+  document.body.dataset.nav = muchas ? "lateral" : "superior";
+  const html = secciones.map((s, i) =>
+    `<a href="#" ${i === 0 ? 'aria-current="page"' : ""}>${s}</a>`).join("");
+  navTop.innerHTML = html;
+  navLateral.innerHTML = html;
+  toggleSecciones.textContent = muchas
+    ? "Secciones: muchas (barra lateral)" : "Secciones: pocas (barra superior)";
+  toggleSecciones.setAttribute("aria-pressed", String(muchas));
+}
+toggleSecciones.addEventListener("click", () => { muchas = !muchas; pintarNav(); });
+pintarNav();
+
+document.getElementById("toggle-reducido").addEventListener("click", (ev) => {
+  reducidoManual = !reducidoManual;
+  ev.target.setAttribute("aria-pressed", String(reducidoManual));
+  asegurarAnimando();
+});
+document.getElementById("toggle-gpu").addEventListener("click", (ev) => {
+  sinGpu = !sinGpu;
+  ev.target.setAttribute("aria-pressed", String(sinGpu));
+  aplicarGpu();
+});
+document.getElementById("toggle-foco").addEventListener("click", (ev) => {
+  focoSimulado = !focoSimulado;
+  ev.target.setAttribute("aria-pressed", String(focoSimulado));
+  asegurarAnimando();
+});
+
+// --------------------------------------------------------------------
+// LA APP DE EJEMPLO: lista, formulario, vacío y carga.
+// --------------------------------------------------------------------
+const listaEl = document.getElementById("lista-notas");
+const vacioEl = document.getElementById("vacio");
+const cargaEl = document.getElementById("carga");
+const cuentaEl = document.getElementById("cuenta-notas");
+let notas = [...NOTAS_INICIALES];
+
+function pintarNotas() {
+  cuentaEl.textContent = `${notas.length} notas`;
+  listaEl.innerHTML = notas.map((n) => `
+    <li>
+      <span class="titulo-nota">${n.titulo}</span>
+      <span class="fecha">${n.fecha}</span>
+      <span class="fragmento">${n.fragmento}</span>
+    </li>`).join("");
+}
+pintarNotas();
+
+const formNota = document.getElementById("form-nota");
+document.getElementById("nueva-nota").addEventListener("click", () => formNota.classList.add("abierto"));
+document.getElementById("cancelar-nota").addEventListener("click", () => formNota.classList.remove("abierto"));
+formNota.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const titulo = document.getElementById("nota-titulo").value.trim();
+  if (!titulo) return;
+  notas.unshift({ titulo, fragmento: document.getElementById("nota-texto").value.trim() || "Sin más texto.", fecha: "Ahora" });
+  pintarNotas();
+  formNota.reset();
+  formNota.classList.remove("abierto");
+});
+
+document.getElementById("toggle-vacio").addEventListener("click", (ev) => {
+  const activo = vacioEl.style.display !== "none";
+  vacioEl.style.display = activo ? "none" : "block";
+  listaEl.style.display = activo ? "" : "none";
+  ev.target.setAttribute("aria-pressed", String(!activo));
+});
+document.getElementById("toggle-carga").addEventListener("click", (ev) => {
+  const activo = cargaEl.style.display !== "none";
+  cargaEl.style.display = activo ? "none" : "block";
+  listaEl.style.display = activo ? "" : "none";
+  ev.target.setAttribute("aria-pressed", String(!activo));
+  if (!activo && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    cargaEl.querySelectorAll("li").forEach((li) => li.classList.add("sin-animar"));
+  }
+});
+
+personalidad("tecnico");
+</script>
+</body>
+</html>

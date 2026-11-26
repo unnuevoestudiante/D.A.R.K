@@ -1,0 +1,4 @@
+# Búsqueda y lectura de contenido web.
+duckduckgo-search
+ddgs
+beautifulsoup4

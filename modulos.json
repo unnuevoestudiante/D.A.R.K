@@ -1,0 +1,14 @@
+{
+  "next_number": 2,
+  "modules": {
+    "4bb638ac7b7149ac9df00e05b3769d18": {
+      "id": "4bb638ac7b7149ac9df00e05b3769d18",
+      "number": 1,
+      "name": "Módulo 1",
+      "first_seen": "2026-09-20T18:08:04+00:00",
+      "device_key": "369208e7e9a88be26a10d34be7360da5ca2f2b6422d6e08087cd4a4ea2a4760d",
+      "device": "motorola moto g05",
+      "last_seen": "2026-09-22T15:13:01+00:00"
+    }
+  }
+}

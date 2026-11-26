@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "target": "win-x64",
+  "runtime": ".NET 10.0.15",
+  "sdkUsed": "10.0.301",
+  "packageSource": "https://api.nuget.org/v3/index.json",
+  "packageSourceMapping": "NuGet.Config restricts network source to these four package IDs; all other dependencies use the existing local cache.",
+  "runtimePacks": [
+    {
+      "name": "Microsoft.NETCore.App.Runtime.win-x64",
+      "version": "10.0.15",
+      "bytes": 39989758,
+      "sha256": "7423f58917342b9e4bf276fb164d5726d2c90fe2fe989c552b9e39056256a035"
+    },
+    {
+      "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+      "version": "10.0.15",
+      "bytes": 12795364,
+      "sha256": "d2a18c23269c91106c7d87695600f7fc25d56672dcdb9c59ed947f8f71611a72"
+    },
+    {
+      "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+      "version": "10.0.15",
+      "bytes": 39196103,
+      "sha256": "a036c174bac57a716e21dedccf96459804e4d8d8c31a08e3a8de649bf7684497"
+    },
+    {
+      "name": "Microsoft.NETCore.App.Host.win-x64",
+      "version": "10.0.15",
+      "bytes": 5800874,
+      "sha256": "41d6989224d9e273880072041c0fa7a2d8c92f1cf11e989e8967d3d589a066ad"
+    }
+  ],
+  "publishedServices": [
+    {
+      "name": "DarkManager",
+      "files": 359,
+      "bytes": 117029441,
+      "executableSha256": "3a8e53067d68f2e49a23b28e23d936d88799bbe6df163bd53d470e456ad52d5e"
+    },
+    {
+      "name": "DarkTaskManager",
+      "files": 344,
+      "bytes": 111421788,
+      "executableSha256": "5b5f88e52b95eeba7c4814999512bf3e9b01239695090e4c9e6ac8508433ea91"
+    },
+    {
+      "name": "DarkSupervisor",
+      "files": 192,
+      "bytes": 80630398,
+      "executableSha256": "092d200a0f4eaecd4d21e56f3df314a05c73b1e9cbee89d4e6669dfec72d57c6"
+    }
+  ],
+  "note": "Publicaciones locales de prototipo desde el estado de trabajo actual; no son todavía un payload completo de release."
+}

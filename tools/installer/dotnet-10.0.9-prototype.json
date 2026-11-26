@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "target": "win-x64",
+  "configuration": "Release",
+  "runtime": ".NET 10.0.9",
+  "restore": {
+    "source": "local global NuGet cache only",
+    "networkDownloads": false
+  },
+  "outputs": [
+    {
+      "name": "DarkManager",
+      "files": 359,
+      "bytes": 116616921,
+      "executableSha256": "ddcc3ea42d73e0dcc97745cb9c4d62e26aa9f28b43be04a17fb9866ec0bd538b"
+    },
+    {
+      "name": "DarkTaskManager",
+      "files": 344,
+      "bytes": 111009268,
+      "executableSha256": "136c1c455858fa265a7724fc82063b79a48ffc658f1bec287579fd6f8fe33a30"
+    },
+    {
+      "name": "DarkSupervisor",
+      "files": 192,
+      "bytes": 80299920,
+      "executableSha256": "00b6c3234f7ddf0a18ae47b722d109d0113c2a3c1d7ea52d54a318dd5af830483"
+    }
+  ],
+  "note": "Artefacto de prototipo construido desde el árbol local actual. No es release; debe regenerarse con el parche .NET vigente y fuente de build controlada."
+}

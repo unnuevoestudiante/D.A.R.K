@@ -1,0 +1,529 @@
+{
+  "_nota": [
+    "Escenarios de referencia para el cubo AGARRABLE del escritorio de HollOSW.",
+    "",
+    "Los mismos eventos, el mismo entorno y la misma configuración los recorren dos",
+    "sitios: `gestos-logica.escritorio.test.mjs` (la referencia en TypeScript, que es",
+    "la que fija qué tiene que salir) y un proyecto aparte que compila",
+    "HollOSW.Engine/Services/GestosLogica.cs (el puerto a C#). Si las dos salidas",
+    "difieren, el puerto se fue de la regla; si la salida del TS cambia sin tocar",
+    "gestos-logica.ts, el entorno de estos escenarios se escribió mal.",
+    "",
+    "Los eventos están en la forma que manda el motor (con `seq`, `n` y campos que",
+    "esta capa no usa), porque leerlos también es parte de lo que se verifica.",
+    "Salida de cada escenario: una línea por evento con",
+    "  <indice>|agarrado|grupo|dx|dy|escala|giro|topado|motivo|reclamo",
+    "redondeada a 6 decimales. `objeto` es la posesión del objeto agarrable."
+  ],
+
+  "config": {
+    "margen": 0.12,
+    "escalaMin": 0.5,
+    "escalaMax": 1.2,
+    "permanencia": 0.25
+  },
+
+  "entorno": {
+    "ancho": 1920,
+    "alto": 1200,
+    "rects": [
+      {
+        "id": "teseracto",
+        "x": 432,
+        "y": 72,
+        "w": 1056,
+        "h": 1056,
+        "pintada": 1
+      }
+    ],
+    "obstaculos": [
+      {
+        "id": "respuesta",
+        "x": 460,
+        "y": 1040,
+        "w": 1000,
+        "h": 120,
+        "pintada": 1
+      }
+    ]
+  },
+
+  "escenarios": [
+    {
+      "nombre": "A escala al techo y traslado a la esquina",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.3,
+              "candida": true,
+              "forma": "abierta",
+              "apertura": 0.9,
+              "dedo": 0.5,
+              "pinza": 0.2,
+              "giro": 4,
+              "vel": 0.1
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.5, 0.5],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0.6,
+          "dy": 0.4,
+          "escala": 1.9,
+          "giro": 0.35,
+          "seq": 4
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 2.2,
+          "dy": 1.6,
+          "escala": 2.4,
+          "giro": 0.9,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "nombre": "B se suma la segunda mano y suelta el motor",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.7777777778,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.4,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.5, 0.5],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0.1,
+          "dy": 0.05,
+          "escala": 1.1,
+          "giro": 0.2,
+          "seq": 4
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.45,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.1,
+              "candida": true,
+              "forma": "abierta"
+            },
+            {
+              "id": 2,
+              "x": 0.7,
+              "y": 0.3,
+              "cerrada": false,
+              "quietud": 0.0,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 5
+        },
+        {
+          "evento": "agarre_cambio",
+          "manos": [1, 2],
+          "n": 2,
+          "ancla": [0.5, 0.5],
+          "origen": "permanencia",
+          "seq": 6
+        },
+        {
+          "evento": "transformacion",
+          "n": 2,
+          "dx": -0.2,
+          "dy": 0.1,
+          "escala": 0.7,
+          "giro": -0.2,
+          "seq": 7
+        },
+        { "evento": "agarre_fin", "motivo": "quietud", "seq": 8 }
+      ]
+    },
+    {
+      "nombre": "C soltar encima de la banda de la respuesta",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.6,
+              "cerrada": false,
+              "quietud": 0.5,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.5, 0.6],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0,
+          "dy": 0.35,
+          "escala": 1.2,
+          "giro": 0,
+          "seq": 4
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0,
+          "dy": 0.5,
+          "escala": 1.2,
+          "giro": 0,
+          "seq": 5
+        },
+        { "evento": "agarre_fin", "motivo": "quietud", "seq": 6 }
+      ]
+    },
+    {
+      "nombre": "D la mano fuera del cubo no reclama y el ancla sin objeto no abre tramo",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.02,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.9,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.02, 0.5],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0.4,
+          "dy": 0.4,
+          "escala": 2,
+          "giro": 0.5,
+          "seq": 4
+        },
+        { "evento": "agarre_fin", "motivo": "sin objeto", "seq": 5 }
+      ]
+    },
+    {
+      "nombre": "E agarre de puño: la segunda mano no se suma sola",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": true,
+              "quietud": 0.8,
+              "candida": true,
+              "forma": "puno"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.5, 0.5],
+          "seq": 3
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.1,
+              "candida": true,
+              "forma": "abierta"
+            },
+            {
+              "id": 2,
+              "x": 0.6,
+              "y": 0.4,
+              "cerrada": false,
+              "quietud": 0.9,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 4
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0.2,
+          "dy": -0.1,
+          "escala": 1.05,
+          "giro": -0.4,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "nombre": "F mano cerrada o fantasma: nada que reclamar",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": true,
+              "quietud": 1.2,
+              "candida": true,
+              "forma": "puno"
+            },
+            {
+              "id": 2,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 1.2,
+              "candida": false,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 2
+        }
+      ]
+    },
+    {
+      "nombre": "G la C agarra sin quietud y el encogido toca el suelo",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 3,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0,
+              "candida": true,
+              "forma": "C"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [3],
+          "n": 1,
+          "ancla": [0.5, 0.5],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0,
+          "dy": 0.9,
+          "escala": 0.2,
+          "giro": 0.1,
+          "seq": 4
+        },
+        { "evento": "agarre_fin", "seq": 5 }
+      ]
+    },
+    {
+      "nombre": "H gestos_off con el objeto en la mano",
+      "eventos": [
+        {
+          "evento": "gestos_on",
+          "motivo": "palma",
+          "aspecto": 1.3333333333,
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 1,
+              "x": 0.5,
+              "y": 0.5,
+              "cerrada": false,
+              "quietud": 0.3,
+              "candida": true,
+              "forma": "abierta"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [1],
+          "n": 1,
+          "ancla": [0.5, 0.5],
+          "origen": "permanencia",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": 0.15,
+          "dy": 0.1,
+          "escala": 1.3,
+          "giro": 0.25,
+          "seq": 4
+        },
+        { "evento": "gestos_off", "motivo": "puño", "seq": 5 }
+      ]
+    },
+    {
+      "nombre": "I hola con el último estado dentro: se aplica como si llegara ahora",
+      "eventos": [
+        {
+          "evento": "hola",
+          "canal": "gestos",
+          "version": 1,
+          "estado": {
+            "evento": "gestos_on",
+            "motivo": "reenganche",
+            "aspecto": 1.6
+          },
+          "seq": 1
+        },
+        {
+          "evento": "manos",
+          "manos": [
+            {
+              "id": 7,
+              "x": 0.52,
+              "y": 0.48,
+              "cerrada": false,
+              "quietud": 0.3,
+              "candida": true,
+              "forma": "pinza"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "evento": "agarre_inicio",
+          "manos": [7],
+          "n": 1,
+          "ancla": [0.52, 0.48],
+          "origen": "pinza",
+          "seq": 3
+        },
+        {
+          "evento": "transformacion",
+          "n": 1,
+          "dx": -0.3,
+          "dy": 0.2,
+          "escala": 0.9,
+          "giro": -0.15,
+          "seq": 4
+        }
+      ]
+    }
+  ]
+}

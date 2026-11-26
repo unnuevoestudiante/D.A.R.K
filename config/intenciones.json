@@ -1,0 +1,87 @@
+[
+  {
+    "intencion": "reproducir_musica",
+    "accion": "multimedia.play_music",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "reproduce música",
+      "pon algo para concentrarme",
+      "quiero escuchar algo de mozart",
+      "pon algo de música de fondo",
+      "inicia la música"
+    ]
+  },
+  {
+    "intencion": "abrir_navegador",
+    "accion": "sistema.open_browser",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "abre el navegador",
+      "necesito consultar unas cosas en internet",
+      "abre chrome",
+      "abre google chrome para buscar algo",
+      "entra a internet"
+    ]
+  },
+  {
+    "intencion": "iluminacion_linterna",
+    "accion": "celular.torch",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "enciende la linterna",
+      "prende la luz",
+      "no veo nada aquí a oscuras",
+      "ilumina un poco",
+      "activa el flash"
+    ]
+  },
+  {
+    "intencion": "crear_documento",
+    "accion": "docs.create",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "hazme un documento con esta información",
+      "déjame esto guardado en un archivo",
+      "guarda esto en un bloc de notas",
+      "crea un nuevo documento"
+    ]
+  },
+  {
+    "intencion": "consultar_hora",
+    "accion": "sistema.get_time",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "¿qué hora es?",
+      "dime la hora actual",
+      "¿qué horas son?",
+      "¿tienes hora?"
+    ]
+  },
+  {
+    "intencion": "programar_aviso",
+    "accion": "sistema.set_timer",
+    "tipo": "ACCION",
+    "ejemplos": [
+      "avísame cuando pasen veinte minutos",
+      "pon una alarma en 10 minutos",
+      "recuérdame en media hora",
+      "pon un temporizador"
+    ]
+  },
+  {
+    "intencion": "charla_o_pregunta_explicativa",
+    "accion": "NINGUNA_SOLO_HABLAR",
+    "tipo": "CONVERSACION",
+    "ejemplos": [
+      "¿cómo funciona un reproductor de música?",
+      "¿cómo abriría Chrome desde Python?",
+      "cómo se programa un reproductor",
+      "más tarde quiero escuchar música",
+      "luego pongo algo de música",
+      "cuéntame una historia interesante",
+      "¿qué piensas sobre la robótica?",
+      "explícame qué es un archivo binario",
+      "¿de qué manera se abre una aplicación en windows?"
+    ]
+  }
+]

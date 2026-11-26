@@ -1,0 +1,58 @@
+/* El contenido flota sobre el fondo: sin fondo, borde ni radio propios. El
+   margen fijo que deja ver la escena es el padding del body, no una caja. */
+body { --margen: 36px; box-sizing: border-box; padding: var(--margen); }
+@media (max-width: 760px) { body { --margen: 16px; } }
+
+.ventana {
+  position: relative; z-index: 1; color: var(--fg); height: 100%;
+  width: min(1180px, 100%); margin: 0 auto; overflow: hidden;
+  display: grid; grid-template-rows: auto minmax(0, 1fr);
+}
+
+header.cabecera { display: flex; align-items: center; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.marca { display: flex; align-items: center; gap: 10px; font-weight: 600; white-space: nowrap; }
+.marca svg { color: var(--accent); flex: none; }
+nav.secciones-top { display: flex; gap: 20px; color: var(--muted); overflow-x: auto; }
+nav.secciones-top a, nav.lateral a { color: inherit; text-decoration: none; padding: 4px 0; white-space: nowrap; }
+nav.secciones-top a[aria-current] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+
+.cuerpo { display: grid; grid-template-columns: 1fr; min-height: 0; }
+[data-nav="lateral"] .cuerpo { grid-template-columns: 200px minmax(0, 1fr); }
+nav.lateral { display: flex; flex-direction: column; gap: 2px; padding-top: 18px; border-right: 1px solid var(--line); color: var(--muted); overflow: auto; }
+nav.lateral a { padding: 9px 12px; border-radius: var(--radio); }
+nav.lateral a[aria-current] { background: var(--accent); color: var(--accent-fg); }
+
+main.contenido { padding: 24px 0 0; overflow: auto; min-height: 0; }
+[data-nav="lateral"] main.contenido { padding-left: 24px; }
+.fila-titulo { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.fila-titulo h1 { font: var(--peso-titulo) 24px var(--font-titulo); margin: 0; letter-spacing: -0.01em; }
+.fila-titulo .cuenta { color: var(--muted); font-size: 13px; }
+.texto-libre { color: var(--fg); max-width: 60ch; }
+
+.boton { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; cursor: pointer; background: var(--accent); color: var(--accent-fg); font: 500 14px var(--font-ui); border-radius: var(--radio); margin-bottom: 14px; }
+.boton.fantasma { background: none; color: var(--fg); border: 1px solid var(--line); }
+
+.estadisticas { display: flex; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+.estadistica { border: 1px solid var(--line); border-radius: var(--radio); padding: 12px 16px; min-width: 120px; }
+.estadistica .etiqueta { color: var(--muted); font-size: 12px; }
+.estadistica .valor { font: var(--peso-titulo) 26px/1.1 var(--font-titulo); margin-top: 2px; }
+
+.formulario { border: 1px solid var(--line); border-radius: var(--radio); padding: 14px; margin-bottom: 14px; display: flex; gap: 10px; flex-direction: column; }
+.formulario input, .formulario textarea { width: 100%; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: var(--radio); padding: 9px 11px; font: 14px var(--font-ui); resize: vertical; }
+.formulario .acciones { display: flex; gap: 10px; justify-content: flex-end; }
+
+ul.lista { list-style: none; margin: 0; padding: 0; }
+ul.lista li { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+ul.lista li .titulo-fila { font-weight: 500; }
+ul.lista li .detalle { color: var(--muted); font-size: 13px; grid-column: 1; }
+ul.lista li .nota { color: var(--muted); font-size: 12px; align-self: start; }
+
+.vacio { text-align: center; padding: 60px 20px; color: var(--muted); }
+.vacio p { margin: 0; }
+
+@media (max-width: 760px) {
+  nav.secciones-top { display: none; }
+  [data-nav="lateral"] .cuerpo { grid-template-columns: 1fr; }
+  nav.lateral { display: none !important; }
+  [data-nav="lateral"] main.contenido { padding-left: 0; }
+}

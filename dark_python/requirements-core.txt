@@ -1,0 +1,23 @@
+# Dependencias para el Núcleo y sus interfaces comunes.
+# Versiones fijadas a las del entorno de desarrollo (23-oct-2026):
+requests==2.34.2
+numpy==2.5.3
+websockets==17.1
+# Wyoming client protocol. Piper itself is an optional, separate process.
+wyoming==1.10.2
+# EspecialistaTareas.escribir_documento y el traductor escriben .pdf con esto;
+# sin el paquete, la ruta de documento en vivo devuelve «fpdf2 no está instalado».
+fpdf2==2.9.0
+# El traductor LEE .pdf con pdfplumber (`herramientas/externas/traductor.py`);
+# sin él, traducir un documento devuelve «pdfplumber no está instalado».
+# Es la misma versión que trae `.venv`; el intérprete que corre la suite no la
+# tenía y por eso la ruta de lectura no se ejercitaba nunca.
+pdfplumber==0.11.10
+# Memoria a largo plazo (etapa 1): SQLite cifrado con SQLCipher 4.20.0.
+# Es `sqlcipher3`, NO `sqlcipher3-binary`: el segundo solo publica ruedas
+# manylinux y no instala en Windows. Esta versión trae rueda cp312 win_amd64.
+sqlcipher3==0.6.5
+# La copia de recuperación de la clave se exporta cifrada con frase de paso
+# (AES-256-GCM + scrypt). Ya estaba en el venv como dependencia transitiva;
+# el Núcleo ahora la usa directamente.
+cryptography==50.0.1

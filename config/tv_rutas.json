@@ -1,0 +1,52 @@
+{
+  "rutas": {
+    "perfil de netflix": {
+      "nombre": "perfil de netflix",
+      "contexto": null,
+      "pasos": [
+        {
+          "op": "app",
+          "app": "netflix"
+        },
+        {
+          "op": "key",
+          "key": "KEY_UP",
+          "times": 1
+        },
+        {
+          "op": "key",
+          "key": "KEY_OK",
+          "times": 1
+        }
+      ],
+      "actualizado": 1792209909.8729713
+    },
+    "reproducir viendo mas reciente": {
+      "nombre": "reproducir viendo mas reciente",
+      "contexto": null,
+      "pasos": [
+        {
+          "op": "key",
+          "key": "KEY_DOWN",
+          "times": 1
+        },
+        {
+          "op": "key",
+          "key": "KEY_DOWN",
+          "times": 1
+        },
+        {
+          "op": "key",
+          "key": "KEY_OK",
+          "times": 1
+        },
+        {
+          "op": "key",
+          "key": "KEY_OK",
+          "times": 1
+        }
+      ],
+      "actualizado": 1792210009.9736507
+    }
+  }
+}

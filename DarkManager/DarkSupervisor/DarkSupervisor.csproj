@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- WinExe: al abrir D.A.R.K. no aparece una ventana de consola (la persona no ve una terminal). -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

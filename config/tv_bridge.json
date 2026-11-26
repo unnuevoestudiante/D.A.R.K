@@ -1,0 +1,9 @@
+{
+  "module_id": "8d73fce915d94cb9bb05c15f0af52ec1",
+  "host": "192.168.1.82",
+  "driver": "vidaa",
+  "mac_address": "b8:ab:62:4a:76:b3",
+  "ui_app": "browser",
+  "ui_url": "http://192.168.1.56:8767/tv",
+  "ui_present_delay": 1.2
+}

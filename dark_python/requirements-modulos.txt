@@ -1,0 +1,4 @@
+# Integraciones de reproducción y dispositivos externos.
+yt-dlp
+vlc-python
+vidaa-control

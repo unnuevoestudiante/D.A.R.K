@@ -1,0 +1,12 @@
+@DarkManager_HostAddress = http://localhost:5050
+@ModeloEjemplo = qwen3:4b-instruct-2507-q8_0
+
+###
+GET {{DarkManager_HostAddress}}/status
+Accept: application/json
+
+###
+POST {{DarkManager_HostAddress}}/load/{{ModeloEjemplo}}
+
+###
+POST {{DarkManager_HostAddress}}/unload/{{ModeloEjemplo}}

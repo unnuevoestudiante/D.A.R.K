@@ -1,0 +1,10 @@
+.fondo { position: fixed; inset: 0; z-index: 0; }
+.fondo canvas { display: block; width: 100%; height: 100%; }
+.fondo-sin-gpu { background: var(--fondo-estatico); }
+.aviso-calma {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+  font: 12px var(--font-num); color: #cfd6dc; background: rgba(0, 0, 0, 0.5);
+  padding: 5px 12px; border-radius: 999px; opacity: 0; transition: opacity 0.3s;
+  z-index: 5; pointer-events: none;
+}
+.aviso-calma.activo { opacity: 1; }

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "profile": "development",
+  "paths": {
+    "models": "piper_voices",
+    "logs": "dark_python/_voz_logs",
+    "temporary": "dark_python/nucleo/_tts_temp",
+    "cache": "dark_python/nucleo/_tts_cache"
+  },
+  "services": {
+    "ui": { "name": "DARK UI", "url": "http://localhost:8080" },
+    "overlay": { "name": "DARK Overlay Bridge", "host": "0.0.0.0", "websocketPort": 8765, "httpPort": 8767 },
+    "hive": { "name": "DARK Hive", "mode": "embedded", "host": "0.0.0.0", "port": 8766 },
+    "gestures": { "name": "DARK Gestures", "host": "127.0.0.1", "port": 8768 },
+    "manager": { "name": "DarkManager", "url": "http://localhost:5050" },
+    "taskManager": { "name": "DarkTaskManager", "url": "http://localhost:5051" },
+    "ollama": { "name": "Ollama", "url": "http://localhost:11434" },
+    "llamaCpp": { "name": "llama.cpp", "url": "http://localhost:8080" },
+    "piper": { "name": "Piper Wyoming", "host": "127.0.0.1", "port": 10200, "voice": "es_ES-davefx-medium" },
+    "whisper": { "name": "Whisper Wyoming", "host": "127.0.0.1", "port": 10300, "model": "small" },
+    "whisperCpp": { "name": "whisper.cpp", "url": "http://127.0.0.1:9080" }
+  },
+  "models": {
+    "chat": "qwen3:4b-instruct-2507-q8_0",
+    "nucleus": "qwen2.5:7b-instruct"
+  },
+  "runtime": {
+    "nucleusModelKeepAlive": "45m",
+    "managerModelKeepAlive": "30m",
+    "taskPlannerModelKeepAlive": "10m"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "packageId": "BlackSharp.Core",
+      "version": "1.0.7",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/Blacktempel/BlackSharp",
+      "commit": "c70b735c6cec123ee8a046ac4a0bc6c606f52cf0",
+      "uri": "https://github.com/Blacktempel/BlackSharp/archive/c70b735c6cec123ee8a046ac4a0bc6c606f52cf0.zip",
+      "path": "tools/installer/third-party/sources/BlackSharp-1.0.7-MPL-2.0-source.zip",
+      "bytes": 133878,
+      "sha256": "ab50d38c8cfec1cc041d924730bc417b6d9c81b5b0ff542572a03ad9163cdc1e"
+    },
+    {
+      "packageId": "DiskInfoToolkit",
+      "version": "1.1.2",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/Blacktempel/DiskInfoToolkit",
+      "commit": "25319eae5781e75bcf141e844ceab2afe94d40ea",
+      "uri": "https://github.com/Blacktempel/DiskInfoToolkit/archive/25319eae5781e75bcf141e844ceab2afe94d40ea.zip",
+      "path": "tools/installer/third-party/sources/DiskInfoToolkit-1.1.2-MPL-2.0-source.zip",
+      "bytes": 993083,
+      "sha256": "2df4f067370fc3bb338ce60bdee12879c67ee5377d72e6cc8d79167001039102"
+    },
+    {
+      "packageId": "LibreHardwareMonitorLib",
+      "version": "0.9.6",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
+      "commit": "3d331e3370efb858411f19511373eff65a218701",
+      "uri": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/archive/3d331e3370efb858411f19511373eff65a218701.zip",
+      "path": "tools/installer/third-party/sources/LibreHardwareMonitorLib-0.9.6-MPL-2.0-source.zip",
+      "bytes": 3955089,
+      "sha256": "5a83ee3f504a85efb6afee4112447e60caca1b7ec2e2d71f4651570b8b9b4230"
+    },
+    {
+      "packageId": "RAMSPDToolkit-NDD",
+      "version": "1.4.2",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/Blacktempel/RAMSPDToolkit",
+      "commit": "3b47b960e0830fef344624ad5e389675d5f0a1ce",
+      "uri": "https://github.com/Blacktempel/RAMSPDToolkit/archive/3b47b960e0830fef344624ad5e389675d5f0a1ce.zip",
+      "path": "tools/installer/third-party/sources/RAMSPDToolkit-NDD-1.4.2-MPL-2.0-source.zip",
+      "bytes": 379926,
+      "sha256": "a1a0b3c3e94fea2d88a70abb74a08776a7602866b1e2d6ea6c3ab262dda925ba"
+    }
+  ]
+}

@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>D.A.R.K. — modo inmersivo (prototipo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  } }
+</script>
+<style>
+  :root {
+    --cian: #8fdcf2;
+    --rojo: #e8736b;
+    --texto: #dbe6ef;
+    --tenue: rgba(219, 230, 239, 0.55);
+  }
+  * { box-sizing: border-box; }
+  html { background: #000; }
+  body {
+    margin: 0;
+    color: var(--texto);
+    font: 300 16px/1.5 "Space Grotesk", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* El recorrido: la altura de la página es el largo del viaje. */
+  .recorrido { height: 700vh; }
+  canvas#mundo { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+  /* Las estaciones: HTML de verdad (se lee, se busca, se oye con lector de
+     pantalla); el motor solo decide cuál se ve y la hace aparecer. */
+  .estacion {
+    position: fixed;
+    left: clamp(24px, 7vw, 120px);
+    bottom: clamp(48px, 14vh, 160px);
+    max-width: 520px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease, transform 0.9s cubic-bezier(.2,.7,.2,1);
+    transform: translateY(18px);
+  }
+  .estacion.viva { opacity: 1; transform: none; pointer-events: auto; }
+  .estacion.derecha { left: auto; right: clamp(24px, 7vw, 120px); text-align: right; }
+  .estacion.centro { left: 50%; right: auto; bottom: 50%; transform: translate(-50%, 50%); text-align: center; max-width: 760px; }
+  .estacion.centro.viva { transform: translate(-50%, 50%); }
+  .estacion .indice {
+    font: 400 11px "JetBrains Mono", monospace;
+    letter-spacing: 0.32em; text-transform: uppercase; color: var(--cian);
+  }
+  .estacion h2 {
+    margin: 14px 0 12px;
+    font-weight: 300;
+    font-size: clamp(36px, 5.2vw, 72px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+  }
+  .estacion p { margin: 0; color: var(--tenue); font-size: 17px; max-width: 440px; }
+  .estacion.derecha p { margin-left: auto; }
+  .estacion.pie { left: 50%; right: auto; bottom: 9vh; transform: translate(-50%, 18px); text-align: center; max-width: 760px; }
+  .estacion.pie.viva { transform: translate(-50%, 0); }
+  .estacion.pie p { margin: 0 auto; }
+  /* Legibilidad sobre el gas: un velo oscuro pegado a las letras, no una tarjeta. */
+  .estacion h1, .estacion h2, .estacion p { text-shadow: 0 0 18px #000, 0 0 42px #000c; }
+  .marca {
+    font-weight: 300;
+    font-size: clamp(54px, 11vw, 150px);
+    letter-spacing: 0.32em;
+    padding-left: 0.32em;
+    margin: 0;
+  }
+  .llamada {
+    display: inline-flex; gap: 14px; align-items: center; margin-top: 28px;
+    font: 400 13px "JetBrains Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #00131a; background: var(--cian); padding: 14px 22px; text-decoration: none;
+  }
+  .pista {
+    position: fixed; left: 50%; bottom: 28px; translate: -50% 0;
+    font: 400 10px "JetBrains Mono", monospace; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--tenue); transition: opacity .5s;
+  }
+  .etiqueta-3d {
+    position: fixed; left: 0; top: 0; pointer-events: none;
+    font: 400 10px "JetBrains Mono", monospace; letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--texto); opacity: 0; transition: opacity .4s; white-space: nowrap;
+    translate: 12px -50%;
+  }
+  .etiqueta-3d::before { content: ""; display: inline-block; width: 18px; height: 1px; background: var(--cian); vertical-align: middle; margin-right: 8px; }
+
+  /* Ficha de un objeto: texto anclado con una línea, sin caja. */
+  .ficha {
+    position: fixed; left: 0; top: 0; pointer-events: none; z-index: 3;
+    max-width: 300px; opacity: 0; transition: opacity .25s;
+    padding-left: 46px;
+  }
+  .ficha::before {
+    content: ""; position: absolute; left: 0; top: 0.75em; width: 36px; height: 1px;
+    background: var(--cian); transform-origin: left; transform: scaleX(var(--linea, 0));
+    transition: transform .35s cubic-bezier(.2,.7,.2,1);
+  }
+  .ficha.visible { opacity: 1; --linea: 1; }
+  /* A la izquierda del objeto: la línea sale por la derecha y el texto se alinea a ella. */
+  .ficha.izquierda { padding-left: 0; padding-right: 46px; text-align: right; }
+  .ficha.izquierda::before { left: auto; right: 0; transform-origin: right; }
+  .ficha b {
+    display: block; font: 400 11px "JetBrains Mono", monospace;
+    letter-spacing: 0.28em; text-transform: uppercase; color: var(--cian);
+  }
+  .ficha span { display: block; margin-top: 6px; font-size: 14px; color: var(--texto); text-shadow: 0 0 14px #000; }
+  .ficha .mas { display: none; color: var(--tenue); font-size: 13px; }
+  .ficha.fija .mas { display: block; }
+  body.apuntando, body.apuntando canvas { cursor: pointer; }
+
+  /* Sonido */
+  .sonido {
+    position: fixed; top: 44px; right: 18px; z-index: 6;
+    display: flex; align-items: center; gap: 10px;
+    background: none; border: 0; cursor: pointer; padding: 6px 0;
+    font: 400 10px "JetBrains Mono", monospace; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--tenue);
+  }
+  .sonido i { display: flex; gap: 2px; align-items: flex-end; height: 12px; }
+  .sonido i span { width: 2px; background: var(--cian); height: 3px; transition: height .2s; }
+  .sonido.activo i span { animation: barra 1.1s ease-in-out infinite; }
+  .sonido.activo i span:nth-child(2) { animation-delay: -.4s; }
+  .sonido.activo i span:nth-child(3) { animation-delay: -.8s; }
+  @keyframes barra { 0%, 100% { height: 3px; } 50% { height: 12px; } }
+  .entrar {
+    margin-top: 30px; background: none; cursor: pointer;
+    border: 1px solid #8fdcf255; color: var(--texto); padding: 12px 20px;
+    font: 400 11px "JetBrains Mono", monospace; letter-spacing: 0.26em; text-transform: uppercase;
+  }
+  .entrar:hover { border-color: var(--cian); }
+  .sin-webgl .sonido, .sin-webgl .entrar, .sin-webgl .ficha { display: none; }
+
+  /* Barra del prototipo (no es parte de la web) */
+  .proto {
+    position: fixed; top: 0; left: 0; right: 0; height: 34px; z-index: 5;
+    display: flex; align-items: center; gap: 16px; padding: 0 14px;
+    font: 11px ui-monospace, Consolas, monospace; color: #888;
+    background: linear-gradient(#000c, #0000);
+  }
+  .proto a { color: #bbb; }
+  .proto .avance { flex: 1; height: 1px; background: #222; position: relative; }
+  .proto .avance i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--cian); }
+
+  /* Respaldo: sin WebGL (o pidiendo menos movimiento) es una página normal. */
+  .sin-webgl .recorrido { height: auto; }
+  .sin-webgl canvas#mundo, .sin-webgl .pista, .sin-webgl .etiqueta-3d { display: none; }
+  .sin-webgl body, body.sin-webgl { background: radial-gradient(circle at 50% 0%, #0b1a24, #000 60%); }
+  .sin-webgl .estacion { position: static; opacity: 1; transform: none; margin: 18vh auto; padding: 0 24px; max-width: 640px; text-align: left; }
+  .sin-webgl .estacion.centro, .sin-webgl .estacion.pie { transform: none; text-align: center; }
+</style>
+</head>
+<body>
+<div class="proto">
+  <span>prototipo · modo inmersivo</span>
+  <a href="index.html">app con 3D central</a>
+  <span class="avance"><i id="avance"></i></span>
+</div>
+
+<canvas id="mundo" aria-hidden="true"></canvas>
+<div class="recorrido" id="recorrido"></div>
+
+<main>
+  <section class="estacion centro" data-desde="0" data-hasta="0.1">
+    <div class="indice">Asistente de escritorio</div>
+    <h1 class="marca" data-revuelve>D.A.R.K.</h1>
+    <p style="margin:12px auto 0">Un asistente que vive en tu equipo, escucha cuando lo llamas y construye contigo.</p>
+    <button class="entrar" id="entrar">Entrar con sonido</button>
+  </section>
+  <section class="estacion" data-desde="0.15" data-hasta="0.33">
+    <div class="indice">01 · Voz</div>
+    <h2 data-revuelve>Te escucha</h2>
+    <p>Dices «Dark» y despierta. Entiende lo que pides aunque no lo digas como una orden, y te contesta con su propia voz.</p>
+  </section>
+  <section class="estacion derecha" data-desde="0.38" data-hasta="0.58">
+    <div class="indice">02 · Especialistas</div>
+    <h2 data-revuelve>Piensa contigo</h2>
+    <p>Un núcleo y cuatro especialistas: planifica contigo, programa, habla con tus aplicaciones y conversa. Cada uno piensa a su manera.</p>
+  </section>
+  <section class="estacion" data-desde="0.63" data-hasta="0.84">
+    <div class="indice">03 · Coder</div>
+    <h2 data-revuelve>Construye<br />contigo</h2>
+    <p>De una idea a una app que funciona: primero el plan, luego el código, después la revisión. Sin plantillas que se noten.</p>
+  </section>
+  <section class="estacion pie" data-desde="0.9" data-hasta="1.01">
+    <div class="indice">Todo en tu equipo</div>
+    <h2 data-revuelve>Di «Dark»</h2>
+    <p style="margin:0 auto">Sin depender de nada de pago. Tus datos se quedan contigo.</p>
+    <a class="llamada" href="#">Descargar para Windows <span aria-hidden="true">→</span></a>
+  </section>
+</main>
+<div class="pista" id="pista">Desliza para entrar · pasa el cursor por lo que veas</div>
+<button class="sonido" id="sonido" aria-pressed="false"><i><span></span><span></span><span></span></i><em>Sonido apagado</em></button>
+<div class="ficha" id="ficha" role="status" aria-live="polite"><b></b><span class="breve"></span><span class="mas"></span></div>
+<div class="etiqueta-3d" data-orbita="0">Tareas</div>
+<div class="etiqueta-3d" data-orbita="1">Código</div>
+<div class="etiqueta-3d" data-orbita="2">Comunicación</div>
+<div class="etiqueta-3d" data-orbita="3">Conversación</div>
+
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+
+const menosMovimiento = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const lienzo = document.getElementById("mundo");
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: lienzo, antialias: false, powerPreference: "high-performance" });
+} catch { renderer = null; }
+if (!renderer || menosMovimiento) {
+  document.documentElement.classList.add("sin-webgl");
+  document.querySelectorAll(".estacion").forEach((e) => e.classList.add("viva"));
+  throw new Error("modo sin WebGL");  // el resto es solo para el mundo 3D
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+const escena = new THREE.Scene();
+escena.background = new THREE.Color("#010205");
+escena.fog = new THREE.FogExp2("#010205", 0.012);
+const camara = new THREE.PerspectiveCamera(55, 1, 0.1, 600);
+
+const CIAN = new THREE.Color("#8fdcf2");
+const ROJO = new THREE.Color("#e8736b");
+const AZUL = new THREE.Color("#2b49d6");
+const AMBAR = new THREE.Color("#ffcf8a");
+
+// ------------------------------------------------------------------ estrellas
+{
+  const n = 5000, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(160 + Math.random() * 200);
+    pos.set([v.x, v.y, v.z - 30], i * 3);
+  }
+  const brillo = new Float32Array(n).map(() => 0.25 + Math.random() ** 4 * 1.4);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("brillo", new THREE.BufferAttribute(brillo, 1));
+  // Punto redondo y fino: un PointsMaterial sin textura pinta cuadrados, y el
+  // bloom los convertía en manchas cuadradas borrosas.
+  escena.add(new THREE.Points(geo, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      attribute float brillo; varying float vB;
+      void main() {
+        vB = brillo;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = 1.5 + brillo * 1.8;
+      }`,
+    fragmentShader: `
+      varying float vB;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.1, d) * min(vB, 0.9) * 0.8;
+        gl_FragColor = vec4(vec3(0.82, 0.9, 1.0) * a, a);
+      }`,
+  })));
+}
+
+// ------------------------------------------------------------------ nebulosa
+// Gas en volumen: partículas blandas agrupadas en grumos de un color cada uno
+// (como el shader 2D de D.A.R.K.: zonas de paleta, no un promedio gris).
+const nebulosa = (() => {
+  const grumos = [
+    { c: [0, 0, 0], r: [9, 4, 9], col: CIAN, n: 2600 },
+    { c: [-7, 2, -4], r: [6, 3, 6], col: AZUL, n: 1800 },
+    { c: [6, -1, 3], r: [5, 3, 5], col: ROJO, n: 1500 },
+    { c: [2, 1, -7], r: [4, 2.5, 4], col: AMBAR, n: 900 },
+    { c: [-3, -2, 6], r: [5, 2, 4], col: CIAN, n: 1200 },
+  ];
+  const total = grumos.reduce((s, g) => s + g.n, 0);
+  const pos = new Float32Array(total * 3), col = new Float32Array(total * 3), tam = new Float32Array(total);
+  let k = 0;
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+  for (const g of grumos) {
+    for (let i = 0; i < g.n; i++, k++) {
+      pos.set([g.c[0] + gauss() * g.r[0], g.c[1] + gauss() * g.r[1], g.c[2] + gauss() * g.r[2]], k * 3);
+      const c = g.col.clone().lerp(CIAN, Math.random() * 0.25).multiplyScalar(0.55 + Math.random() * 0.6);
+      col.set([c.r, c.g, c.b], k * 3);
+      tam[k] = 0.6 + Math.random() ** 3 * 3.2;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("tam", new THREE.BufferAttribute(tam, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uT: { value: 0 }, uPx: { value: 1 },
+      uRaton: { value: new THREE.Vector3(0, 0, 999) }, uFuerza: { value: 0 },
+      uOnda: { value: new THREE.Vector4(0, 0, 0, -99) },
+    },
+    vertexShader: `
+      attribute float tam; varying vec3 vC; uniform float uT; uniform float uPx;
+      uniform vec3 uRaton; uniform float uFuerza; uniform vec4 uOnda;
+      void main() {
+        vec3 p = position;
+        float a = uT * 0.03 + length(p.xz) * 0.015;   // deriva: gira más lento por fuera
+        p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
+        p.y += sin(uT * 0.4 + p.x * 0.3) * 0.25;
+        // El cursor aparta el gas y lo aviva: una burbuja que sigue a la mano.
+        vec3 d = p - uRaton;
+        float cerca = exp(-dot(d, d) / 7.0) * uFuerza;
+        p += normalize(d + 1e-4) * cerca * 2.4;
+        // La onda del clic: un frente esférico que empuja y se apaga.
+        float edad = uT - uOnda.w;
+        vec3 o = p - uOnda.xyz;
+        float frente = edad * 10.0;
+        float onda = step(0.0, edad) * exp(-pow(length(o) - frente, 2.0) / 3.0) * exp(-edad * 0.9);
+        p += normalize(o + 1e-4) * onda * 1.8;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = tam * uPx * 34.0 / -mv.z * (1.0 + cerca * 0.8 + onda);
+        vC = color * (1.0 + cerca * 1.6 + onda * 2.0);
+      }`,
+    fragmentShader: `
+      varying vec3 vC;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vC * a * a, a * 0.55);
+      }`,
+    vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const puntos = new THREE.Points(geo, mat);
+  escena.add(puntos);
+  return mat;
+})();
+
+// ------------------------------------------------------------------ el núcleo
+const NUCLEO = new THREE.Vector3(0, 0, -34);
+const nucleo = (() => {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uT: { value: 0 }, uFoco: { value: 0 }, uLatido: { value: -99 } },
+    vertexShader: `
+      uniform float uT; uniform float uFoco; uniform float uLatido;
+      varying vec3 vN; varying vec3 vV; varying float vR;
+      float ondas(vec3 p) {
+        return sin(p.x * 3.1 + uT * 1.3) * sin(p.y * 2.7 - uT * 1.1) * sin(p.z * 3.4 + uT * 0.9);
+      }
+      void main() {
+        float respira = 1.6 + uFoco * 2.2;                             // apuntado, respira más rápido
+        float latido = exp(-max(uT - uLatido, 0.0) * 3.0) * step(uLatido, uT);
+        float r = ondas(normal * (1.7 + uFoco)) * (0.18 + uFoco * 0.14) + sin(uT * respira) * 0.06
+                + latido * 0.6;
+        vec3 p = position + normal * r;
+        vR = r;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float uFoco;
+      varying vec3 vN; varying vec3 vV; varying float vR;
+      void main() {
+        float f = pow(1.0 - max(dot(vN, vV), 0.0), 2.2 - uFoco * 0.8);  // borde de luz
+        vec3 c = mix(vec3(0.05, 0.12, 0.18), vec3(0.56, 0.86, 0.95), f);
+        c += vec3(1.0, 0.82, 0.55) * smoothstep(0.1, 0.24, vR) * 0.6;  // vetas calientes
+        gl_FragColor = vec4(c * (0.55 + f * 1.6) * (1.0 + uFoco * 0.5), 1.0);
+      }`,
+  });
+  const esfera = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 64), mat);
+  esfera.position.copy(NUCLEO);
+  escena.add(esfera);
+  // Halo: un sprite blando detrás, para que el bloom tenga de dónde tirar.
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.ShaderMaterial({
+    uniforms: {}, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `varying vec2 vU; void main(){ float d = length(vU - 0.5); float a = exp(-d*d*30.0)*0.32; gl_FragColor = vec4(vec3(0.45,0.8,0.95)*a, a); }`,
+  }));
+  halo.position.copy(NUCLEO);
+  escena.add(halo);
+  // El pulso del clic: un anillo de luz que se abre y se apaga.
+  const pulso = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 96), new THREE.MeshBasicMaterial({
+    color: CIAN, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pulso.position.copy(NUCLEO);
+  escena.add(pulso);
+  return { mat, halo, esfera, pulso };
+})();
+
+// Los cuatro especialistas: lunas en órbitas inclinadas alrededor del núcleo.
+const orbitas = [0, 1, 2, 3].map((i) => {
+  const radio = 6 + i * 1.6, incl = [0.35, -0.6, 0.9, -0.2][i], vel = [0.32, 0.24, 0.19, 0.15][i];
+  const grupo = new THREE.Group();
+  grupo.position.copy(NUCLEO);
+  grupo.rotation.set(incl, i * 0.8, incl * 0.4);
+  const anillo = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(
+      Array.from({ length: 128 }, (_, k) => new THREE.Vector3(Math.cos(k / 128 * Math.PI * 2) * radio, 0, Math.sin(k / 128 * Math.PI * 2) * radio))),
+    new THREE.LineBasicMaterial({ color: "#2c4b5a", transparent: true, opacity: 0.6 }));
+  const luna = new THREE.Mesh(new THREE.SphereGeometry(0.28, 24, 24),
+    new THREE.MeshBasicMaterial({ color: i === 1 ? ROJO : CIAN }));
+  // Una luna mide pocos píxeles: se apunta a una esfera invisible más generosa.
+  const blanco = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 12), new THREE.MeshBasicMaterial({ visible: false }));
+  luna.add(blanco);
+  grupo.add(anillo, luna);
+  escena.add(grupo);
+  return { grupo, luna, blanco, anillo, radio, vel, fase: i * 1.7, foco: 0 };
+});
+
+// ------------------------------------------------------------------ teseracto
+// La misma geometría que el núcleo giratorio de D.A.R.K.: 16 vértices en 4D,
+// 32 aristas, giro en dos planos y proyección en perspectiva desde w.
+const TESERACTO = new THREE.Vector3(0, 0, -72);
+const VERT = Array.from({ length: 16 }, (_, i) => [i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1, i & 8 ? 1 : -1]);
+const ARISTAS = VERT.flatMap((_, i) => [1, 2, 4, 8].filter((b) => !(i & b)).map((b) => [i, i | b]));
+const geoTes = new LineSegmentsGeometry();
+const matTes = new LineMaterial({ color: CIAN, linewidth: 2.2, worldUnits: false, transparent: true });
+const tes = new LineSegments2(geoTes, matTes);
+tes.position.copy(TESERACTO);
+escena.add(tes);
+const posTes = new Float32Array(ARISTAS.length * 6);
+const blancoTes = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 16), new THREE.MeshBasicMaterial({ visible: false }));
+blancoTes.position.copy(TESERACTO);
+escena.add(blancoTes);
+let tiempoTes = 0, despliegue = -99;
+function teseracto(t, dt, foco) {
+  tiempoTes += dt * (1 + foco * 3.5);                  // apuntado, el giro 4D se acelera
+  const a = tiempoTes * 0.35, b = tiempoTes * 0.23;
+  const abre = 1 + Math.exp(-Math.max(t - despliegue, 0) * 2.2) * (t >= despliegue ? 0.9 : 0);
+  const P = VERT.map(([x, y, z, w]) => {
+    let x1 = x * Math.cos(a) - w * Math.sin(a), w1 = x * Math.sin(a) + w * Math.cos(a);
+    let z1 = z * Math.cos(b) - w1 * Math.sin(b), w2 = z * Math.sin(b) + w1 * Math.cos(b);
+    const f = 3.2 / (3 - w2) * abre;
+    return [x1 * f * 2.6, y * f * 2.6, z1 * f * 2.6];
+  });
+  ARISTAS.forEach(([i, j], k) => posTes.set([...P[i], ...P[j]], k * 6));
+  geoTes.setPositions(posTes);
+}
+
+// ------------------------------------------------------------------ cámara
+// El viaje: la cámara recorre una curva y mira a otra. Cada tramo es una estación.
+const ruta = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, 1.5, 62),
+  new THREE.Vector3(3, 1, 26),
+  new THREE.Vector3(-2, 0.5, 6),
+  new THREE.Vector3(-15, 3.5, -14),
+  new THREE.Vector3(14, -1.5, -48),
+  new THREE.Vector3(9, 3, -62),
+  new THREE.Vector3(-4, 6, -58),
+  new THREE.Vector3(0, 22, 38),
+]);
+const mira = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, 7, -34),   // el núcleo queda bajo el título, no encima
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(0, 0, -10),
+  NUCLEO.clone(),
+  NUCLEO.clone(),
+  TESERACTO.clone(),
+  TESERACTO.clone(),
+  new THREE.Vector3(0, -10, -40),
+]);
+
+// ------------------------------------------------------------------ posproceso
+const compositor = new EffectComposer(renderer);
+compositor.addPass(new RenderPass(escena, camara));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.95, 0.6, 0.42);
+compositor.addPass(bloom);
+const grano = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uT: { value: 0 } },
+  vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uT; varying vec2 vU;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + uT) * 43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vU).rgb;
+      float v = smoothstep(1.15, 0.35, length(vU - 0.5));       // viñeta
+      c *= mix(0.55, 1.0, v);
+      c += (h(vU * 900.0) - 0.5) * 0.035;                         // grano
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+compositor.addPass(grano);
+compositor.addPass(new OutputPass());
+
+function ajustar() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  compositor.setSize(w, h);
+  bloom.setSize(w / 2, h / 2);
+  camara.aspect = w / h;
+  camara.updateProjectionMatrix();
+  matTes.resolution.set(w, h);
+  nebulosa.uniforms.uPx.value = h / 900 * renderer.getPixelRatio();
+}
+addEventListener("resize", ajustar);
+ajustar();
+
+// ------------------------------------------------------------------ texto
+// Las letras se revuelven y se asientan al entrar en su estación.
+const SIGNOS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+<>/";
+function revolver(el) {
+  const final = el.dataset.final ?? (el.dataset.final = el.innerHTML);
+  const texto = el.textContent;
+  const t0 = performance.now(), dura = 750;
+  cancelAnimationFrame(el._raf);
+  const paso = (t) => {
+    const k = Math.min(1, (t - t0) / dura);
+    const fijas = Math.floor(texto.length * k);
+    el.textContent = [...texto].map((c, i) =>
+      i < fijas || c === " " || c === "." ? c : SIGNOS[(Math.random() * SIGNOS.length) | 0]).join("");
+    if (k < 1) el._raf = requestAnimationFrame(paso); else el.innerHTML = final;
+  };
+  el._raf = requestAnimationFrame(paso);
+}
+const estaciones = [...document.querySelectorAll(".estacion")];
+const etiquetas = [...document.querySelectorAll(".etiqueta-3d")];
+
+// ------------------------------------------------------------------ sonido
+// Todo sintetizado en el momento con Web Audio: sin archivos, funciona sin red.
+// El navegador no deja sonar sin un gesto, así que nace apagado hasta un clic.
+const sonido = (() => {
+  let ctx = null, activo = false;
+  let maestro, envio, filtro, pulsoGan, vientoGan, filtroViento, tensionGan;
+
+  function eco(segundos) {
+    const n = Math.floor(ctx.sampleRate * segundos);
+    const b = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.2);
+    }
+    return b;
+  }
+
+  function montar() {
+    ctx = new AudioContext();
+    maestro = ctx.createGain();
+    maestro.gain.value = 0;
+    maestro.connect(ctx.destination);
+    // Sala: un eco largo y oscuro al que van los acentos y una parte del fondo.
+    const sala = ctx.createConvolver();
+    sala.buffer = eco(3.8);
+    envio = ctx.createGain();
+    envio.gain.value = 0.45;
+    envio.connect(sala).connect(maestro);
+
+    // El fondo: un acorde grave lento (la, mi, la, mi) con un filtro que respira.
+    filtro = ctx.createBiquadFilter();
+    filtro.type = "lowpass";
+    filtro.frequency.value = 380;
+    filtro.Q.value = 0.7;
+    pulsoGan = ctx.createGain();
+    const fondo = ctx.createGain();
+    fondo.gain.value = 0.15;
+    pulsoGan.connect(filtro).connect(fondo);
+    fondo.connect(maestro);
+    fondo.connect(envio);
+    [[55, "sine", 0.5, -5], [82.41, "sine", 0.32, 6], [110.2, "sine", 0.22, -3], [164.8, "triangle", 0.05, 4]]
+      .forEach(([f, tipo, vol, des]) => {
+        const o = ctx.createOscillator();
+        o.type = tipo;
+        o.frequency.value = f;
+        o.detune.value = des;
+        const g = ctx.createGain();
+        g.gain.value = vol;
+        o.connect(g).connect(pulsoGan);
+        o.start();
+      });
+    const respira = ctx.createOscillator();
+    respira.frequency.value = 0.07;
+    const hondo = ctx.createGain();
+    hondo.gain.value = 150;
+    respira.connect(hondo).connect(filtro.frequency);
+    respira.start();
+
+    // Una nota tensa (si bemol contra el la) que solo suena en el teseracto.
+    const tension = ctx.createOscillator();
+    tension.frequency.value = 466.16;
+    tensionGan = ctx.createGain();
+    tensionGan.gain.value = 0;
+    tension.connect(tensionGan);
+    tensionGan.connect(envio);
+    tensionGan.connect(maestro);
+    tension.start();
+
+    // El viento: ruido filtrado que sopla más cuanto más rápido se viaja.
+    const ruido = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const datos = ruido.getChannelData(0);
+    for (let i = 0; i < datos.length; i++) datos[i] = Math.random() * 2 - 1;
+    const fuente = ctx.createBufferSource();
+    fuente.buffer = ruido;
+    fuente.loop = true;
+    filtroViento = ctx.createBiquadFilter();
+    filtroViento.type = "bandpass";
+    filtroViento.frequency.value = 450;
+    filtroViento.Q.value = 0.9;
+    vientoGan = ctx.createGain();
+    vientoGan.gain.value = 0.02;
+    fuente.connect(filtroViento).connect(vientoGan).connect(maestro);
+    fuente.start();
+  }
+
+  function activar(si) {
+    if (si && !ctx) montar();
+    if (!ctx) return;
+    activo = si;
+    if (si) ctx.resume();
+    maestro.gain.setTargetAtTime(si ? 0.85 : 0, ctx.currentTime, 0.5);
+  }
+
+  function pausa(oculta) {
+    if (!ctx || !activo) return;
+    if (oculta) ctx.suspend(); else ctx.resume();
+  }
+
+  // Cada estación tiene su color: brillante en la nebulosa, grave y con latido
+  // en el núcleo, tenso en el teseracto, abierto al final.
+  let estacion = -1;
+  function marcha(p, velocidad) {
+    if (!ctx || !activo) return;
+    const ahora = ctx.currentTime;
+    vientoGan.gain.setTargetAtTime(0.018 + Math.min(velocidad * 3.5, 0.2), ahora, 0.15);
+    filtroViento.frequency.setTargetAtTime(380 + Math.min(velocidad * 9000, 1500), ahora, 0.25);
+    const e = p < 0.12 ? 0 : p < 0.36 ? 1 : p < 0.6 ? 2 : p < 0.87 ? 3 : 4;
+    if (e !== estacion) {
+      estacion = e;
+      filtro.frequency.setTargetAtTime([360, 900, 260, 620, 1300][e], ahora, 1.4);
+      tensionGan.gain.setTargetAtTime(e === 3 ? 0.028 : 0, ahora, 1.6);
+    }
+    const latido = e === 2 ? 0.72 + 0.28 * Math.pow(Math.max(Math.sin(ahora * 2.6), 0), 3) : 1;
+    pulsoGan.gain.setTargetAtTime(latido, ahora, 0.04);
+  }
+
+  // Acento al apuntar: una nota corta, con su eco.
+  function nota(frecuencia, volumen = 0.08) {
+    if (!ctx || !activo) return;
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.frequency.value = frecuencia;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(volumen, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+    o.connect(g);
+    g.connect(maestro);
+    g.connect(envio);
+    o.start(t0);
+    o.stop(t0 + 0.7);
+  }
+
+  // Al hacer clic: una campana de FM, metálica y larga.
+  function campana(frecuencia) {
+    if (!ctx || !activo) return;
+    const t0 = ctx.currentTime;
+    const portadora = ctx.createOscillator();
+    portadora.frequency.value = frecuencia * 2;
+    const moduladora = ctx.createOscillator();
+    moduladora.frequency.value = frecuencia * 2 * 3.5;
+    const indice = ctx.createGain();
+    indice.gain.setValueAtTime(frecuencia * 5, t0);
+    indice.gain.exponentialRampToValueAtTime(1, t0 + 1.8);
+    moduladora.connect(indice).connect(portadora.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.11, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.8);
+    portadora.connect(g);
+    g.connect(maestro);
+    g.connect(envio);
+    for (const o of [portadora, moduladora]) { o.start(t0); o.stop(t0 + 3); }
+  }
+
+  // La onda del gas: un golpe grave que cae.
+  function retumbo() {
+    if (!ctx || !activo) return;
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(90, t0);
+    o.frequency.exponentialRampToValueAtTime(32, t0 + 1.1);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.32, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.4);
+    o.connect(g);
+    g.connect(maestro);
+    g.connect(envio);
+    o.start(t0);
+    o.stop(t0 + 1.5);
+  }
+
+  return { activar, pausa, marcha, nota, campana, retumbo, get activo() { return activo; } };
+})();
+
+const botonSonido = document.getElementById("sonido");
+function ponerSonido(si) {
+  sonido.activar(si);
+  botonSonido.classList.toggle("activo", si);
+  botonSonido.setAttribute("aria-pressed", String(si));
+  botonSonido.querySelector("em").textContent = si ? "Sonido" : "Sonido apagado";
+  try { localStorage.setItem("dark-sonido", si ? "1" : "0"); } catch { /* sin almacenamiento */ }
+}
+botonSonido.addEventListener("click", () => ponerSonido(!sonido.activo));
+document.getElementById("entrar").addEventListener("click", () => {
+  ponerSonido(true);
+  scrollBy({ top: innerHeight * 0.9, behavior: "smooth" });
+});
+// Quien ya lo encendió otra vez lo recupera con su primer gesto en la página.
+let quiereSonido = false;
+try { quiereSonido = localStorage.getItem("dark-sonido") === "1"; } catch { /* sin almacenamiento */ }
+if (quiereSonido) addEventListener("pointerdown", () => { if (!sonido.activo) ponerSonido(true); }, { once: true });
+document.addEventListener("visibilitychange", () => sonido.pausa(document.hidden));
+// ?prueba-sonido: arranca el motor y dispara cada efecto (revisión sin ratón).
+if (new URLSearchParams(location.search).has("prueba-sonido")) {
+  ponerSonido(true);
+  [0, 0.25, 0.5, 0.75, 1].forEach((p) => sonido.marcha(p, 0.05));
+  sonido.nota(220); sonido.campana(392); sonido.retumbo();
+  console.log("prueba-sonido: motor en marcha, estado", sonido.activo);
+}
+
+// ------------------------------------------------------------------ interacción
+// Lo que cuenta cada objeto. La nota es la del acento al apuntarlo (escala de la).
+const FICHAS = {
+  nucleo: {
+    titulo: "Núcleo", nota: 220,
+    breve: "Escucha, entiende y decide quién responde.",
+    mas: "Recibe tu voz o tu texto, interpreta la intención y reparte el trabajo entre los especialistas. Todo ocurre en tu equipo.",
+  },
+  0: { titulo: "Tareas", nota: 329.63, breve: "Planifica contigo.",
+       mas: "Convierte una idea en un plan con pantallas, datos y criterios. Pregunta solo lo que falta." },
+  1: { titulo: "Código", nota: 392, breve: "Programa a partir del plan.",
+       mas: "Construye la app con un kit de diseño propio, la abre, la mira y la corrige antes de entregarla." },
+  2: { titulo: "Comunicación", nota: 440, breve: "Habla con tus aplicaciones.",
+       mas: "Abre programas, pone música, traduce y busca por ti." },
+  3: { titulo: "Conversación", nota: 493.88, breve: "Charla contigo.",
+       mas: "Recuerda lo importante, entiende el contexto y sabe cuándo callar." },
+  teseracto: {
+    titulo: "Coder", nota: 261.63,
+    breve: "Cuatro dimensiones proyectadas en tres.",
+    mas: "Así trabaja el coder: plan, código, revisión y entrega, cada cara a la vista. Haz clic otra vez para desplegarlo.",
+  },
+};
+
+const rayoUI = new THREE.Raycaster();
+const punteroUI = new THREE.Vector2(9, 9);
+let hayPuntero = false;
+addEventListener("pointermove", (e) => {
+  punteroUI.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  hayPuntero = true;
+});
+document.documentElement.addEventListener("pointerleave", () => { hayPuntero = false; });
+
+const focos = { nucleo: 0, teseracto: 0 };
+let apuntado = null, fijado = null, fijadoHasta = 0, pulsoT = -99;
+const puntoGas = new THREE.Vector3(0, 0, 999);
+const CENTRO_GAS = new THREE.Vector3(0, 0, 0);
+
+// Solo se apunta a lo de la estación en la que se está: un objeto lejano no roba el cursor.
+function blancos(p) {
+  const lista = [];
+  if (p > 0.36 && p < 0.62) {
+    lista.push([nucleo.esfera, "nucleo"]);
+    orbitas.forEach((o, i) => lista.push([o.blanco, i]));
+  }
+  if (p > 0.6 && p < 0.9) lista.push([blancoTes, "teseracto"]);
+  return lista;
+}
+const gasFuerza = (p) => THREE.MathUtils.smoothstep(p, 0.06, 0.14) * (1 - THREE.MathUtils.smoothstep(p, 0.34, 0.42));
+
+function apuntar(p, t) {
+  let nuevo = null;
+  if (hayPuntero) {
+    rayoUI.setFromCamera(punteroUI, camara);
+    const lista = blancos(p);
+    const golpe = rayoUI.intersectObjects(lista.map((b) => b[0]), false)[0];
+    if (golpe) nuevo = lista.find((b) => b[0] === golpe.object)[1];
+    // En el gas el cursor es un punto del espacio a la profundidad de la nube.
+    const hondo = THREE.MathUtils.clamp(camara.position.distanceTo(CENTRO_GAS), 4, 40);
+    rayoUI.ray.at(hondo, puntoGas);
+  }
+  const u = nebulosa.uniforms;
+  u.uRaton.value.lerp(puntoGas, 0.2);
+  u.uFuerza.value += ((hayPuntero ? gasFuerza(p) : 0) - u.uFuerza.value) * 0.08;
+
+  if (nuevo !== apuntado) {
+    apuntado = nuevo;
+    document.body.classList.toggle("apuntando", nuevo !== null);
+    if (nuevo !== null) sonido.nota(FICHAS[nuevo].nota);
+  }
+  if (fijado !== null && (t > fijadoHasta || !blancos(p).some((b) => b[1] === fijado))) fijado = null;
+  const activo = (clave) => (apuntado === clave || fijado === clave ? 1 : 0);
+  focos.nucleo += (activo("nucleo") - focos.nucleo) * 0.08;
+  focos.teseracto += (activo("teseracto") - focos.teseracto) * 0.08;
+  orbitas.forEach((o, i) => { o.foco += (activo(i) - o.foco) * 0.1; });
+  nucleo.mat.uniforms.uFoco.value = focos.nucleo;
+}
+
+addEventListener("click", (e) => {
+  if (e.target.closest("button, a")) return;
+  const t = reloj.getElapsedTime();
+  if (apuntado === null) {
+    // En la nebulosa, un clic suelta una onda en el gas.
+    if (gasFuerza(THREE.MathUtils.clamp(avance, 0, 1)) > 0.5) {
+      nebulosa.uniforms.uOnda.value.set(puntoGas.x, puntoGas.y, puntoGas.z, t);
+      sonido.retumbo();
+    }
+    fijado = null;
+    return;
+  }
+  if (apuntado === "teseracto" && fijado === "teseracto") despliegue = t;
+  fijado = apuntado;
+  fijadoHasta = t + 9;
+  sonido.campana(FICHAS[apuntado].nota);
+  if (apuntado === "nucleo") {
+    pulsoT = t;
+    nucleo.mat.uniforms.uLatido.value = t;
+  }
+});
+
+// ?fija=nucleo (o 0..3, teseracto) deja una ficha fijada, para revisarla sin ratón.
+{
+  const pedida = new URLSearchParams(location.search).get("fija");
+  if (pedida !== null) {
+    fijado = /^\d$/.test(pedida) ? +pedida : pedida;
+    fijadoHasta = Infinity;
+  }
+}
+
+// La ficha: sigue al objeto en pantalla, a su derecha y fuera de su silueta.
+const ficha = document.getElementById("ficha");
+const posFicha = new THREE.Vector3();
+let fichaDe;
+function colocarFicha() {
+  const clave = fijado ?? apuntado;
+  if (clave === null) {
+    ficha.classList.remove("visible", "fija");
+    return;
+  }
+  if (clave !== fichaDe) {
+    fichaDe = clave;
+    const f = FICHAS[clave];
+    ficha.querySelector("b").textContent = f.titulo;
+    ficha.querySelector(".breve").textContent = f.breve;
+    ficha.querySelector(".mas").textContent = f.mas;
+  }
+  ficha.classList.add("visible");
+  ficha.classList.toggle("fija", fijado === clave);
+  // Hacia qué lado: el núcleo, al contrario que el texto de su estación; una
+  // luna, hacia fuera del núcleo, para que la ficha nunca caiga sobre su luz.
+  let radio, izquierda;
+  if (clave === "nucleo") { posFicha.copy(NUCLEO); radio = 3.4; izquierda = true; }
+  else if (clave === "teseracto") { posFicha.copy(TESERACTO); radio = 5; izquierda = false; }
+  else {
+    orbitas[clave].luna.getWorldPosition(posFicha);
+    radio = 0.8;
+    const centro = NUCLEO.clone().project(camara);
+    const luna = posFicha.clone().project(camara);
+    izquierda = luna.x < centro.x;
+  }
+  const lado = new THREE.Vector3().setFromMatrixColumn(camara.matrixWorld, 0)
+    .multiplyScalar(izquierda ? -radio : radio);
+  posFicha.add(lado).project(camara);
+  const ancho = ficha.offsetWidth || 320;
+  const borde = (posFicha.x * 0.5 + 0.5) * innerWidth;
+  const x = izquierda
+    ? Math.max(borde - 8 - ancho, 16)
+    : Math.min(borde + 8, innerWidth - ancho - 16);
+  const y = (-posFicha.y * 0.5 + 0.5) * innerHeight - 10;
+  ficha.classList.toggle("izquierda", izquierda);
+  ficha.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+// ------------------------------------------------------------------ bucle
+let avance = 0, objetivo = 0;
+const raton = new THREE.Vector2();
+addEventListener("pointermove", (e) => raton.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
+function leerScroll() {
+  const max = document.documentElement.scrollHeight - innerHeight;
+  objetivo = max > 0 ? scrollY / max : 0;
+}
+addEventListener("scroll", leerScroll, { passive: true });
+leerScroll();
+// ?p=0.5 salta a ese punto del viaje (para revisar una estación sin recorrerlo).
+const salto = parseFloat(new URLSearchParams(location.search).get("p"));
+if (salto >= 0 && salto <= 1) {
+  // Sin desplazar la página: el viaje empieza ahí y el scroll lo retoma al moverse.
+  objetivo = avance = salto;
+  addEventListener("scroll", () => {}, { once: true });
+}
+
+const reloj = new THREE.Clock();
+const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
+const barra = document.getElementById("avance");
+const pista = document.getElementById("pista");
+
+let tAnterior = 0;
+renderer.setAnimationLoop(() => {
+  const t = reloj.getElapsedTime();
+  const dt = Math.min(t - tAnterior, 0.1);
+  tAnterior = t;
+  avance += (objetivo - avance) * 0.055;                 // inercia: el viaje no da tirones
+  const p = THREE.MathUtils.clamp(avance, 0, 1);
+
+  ruta.getPointAt(p, tmp);
+  tmp.x += raton.x * 1.6; tmp.y -= raton.y * 1.0;       // paralaje con el ratón
+  camara.position.copy(tmp);
+  mira.getPointAt(p, tmp2);
+  camara.lookAt(tmp2);
+
+  apuntar(p, t);
+  nebulosa.uniforms.uT.value = t;
+  nucleo.mat.uniforms.uT.value = t;
+  nucleo.halo.lookAt(camara.position);
+  nucleo.halo.scale.setScalar(1 + focos.nucleo * 0.35);
+  const edadPulso = t - pulsoT;
+  nucleo.pulso.lookAt(camara.position);
+  nucleo.pulso.scale.setScalar(3 + edadPulso * 14);
+  nucleo.pulso.material.opacity = edadPulso >= 0 ? Math.max(0, 0.9 - edadPulso * 0.6) : 0;
+  for (const o of orbitas) {
+    // El ángulo se integra: frenar la luna apuntada no la hace saltar.
+    o.fase += dt * o.vel * (1 - o.foco * 0.85);
+    o.luna.position.set(Math.cos(o.fase) * o.radio, 0, Math.sin(o.fase) * o.radio);
+    o.luna.scale.setScalar(1 + o.foco * 1.2);
+    o.anillo.material.opacity = 0.6 + o.foco * 0.4;
+  }
+  teseracto(t, dt, focos.teseracto);
+  matTes.color.copy(CIAN).lerp(ROJO, focos.teseracto * 0.7);
+  sonido.marcha(p, Math.abs(objetivo - avance));
+  tes.rotation.y = t * 0.08;
+  matTes.opacity = THREE.MathUtils.smoothstep(p, 0.5, 0.66);
+  grano.uniforms.uT.value = t;
+
+  // Estaciones de texto y etiquetas de los especialistas.
+  for (const e of estaciones) {
+    const viva = p >= +e.dataset.desde && p < +e.dataset.hasta;
+    if (viva && !e.classList.contains("viva")) e.querySelectorAll("[data-revuelve]").forEach(revolver);
+    e.classList.toggle("viva", viva);
+  }
+  const enNucleo = p > 0.4 && p < 0.58;
+  etiquetas.forEach((el, i) => {
+    const o = orbitas[i];
+    o.luna.getWorldPosition(tmp).project(camara);
+    const delante = tmp.z < 1;
+    el.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * innerWidth}px, ${(-tmp.y * 0.5 + 0.5) * innerHeight}px)`;
+    // Con su ficha abierta, la etiqueta sobra: diría el mismo nombre dos veces.
+    const conFicha = (fijado ?? apuntado) === i;
+    el.style.opacity = enNucleo && delante && !conFicha ? 1 : 0;
+  });
+  barra.style.width = `${p * 100}%`;
+  pista.style.opacity = p < 0.03 ? 1 : 0;
+  colocarFicha();
+
+  compositor.render();
+});
+</script>
+</body>
+</html>

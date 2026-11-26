@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dark.local/schemas/runtime-v1.json",
+  "title": "D.A.R.K. runtime configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profile", "paths", "services", "models", "runtime"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profile": { "enum": ["development", "installed"] },
+    "paths": {
+      "type": "object", "additionalProperties": false,
+      "required": ["models", "logs", "temporary", "cache"],
+      "properties": { "models": { "type": "string", "minLength": 1 }, "logs": { "type": "string", "minLength": 1 }, "temporary": { "type": "string", "minLength": 1 }, "cache": { "type": "string", "minLength": 1 } }
+    },
+    "services": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ui", "overlay", "hive", "gestures", "manager", "taskManager", "ollama", "llamaCpp", "piper", "whisper", "whisperCpp"],
+      "properties": {
+        "ui": { "$ref": "#/$defs/urlService" },
+        "overlay": { "$ref": "#/$defs/twoPorts" },
+        "hive": { "type": "object", "additionalProperties": false, "required": ["name", "mode", "host", "port"], "properties": { "name": { "type": "string", "minLength": 1 }, "mode": { "enum": ["embedded", "external"] }, "host": { "type": "string", "minLength": 1 }, "port": { "$ref": "#/$defs/port" } } },
+        "gestures": { "$ref": "#/$defs/portService" },
+        "manager": { "$ref": "#/$defs/urlService" }, "taskManager": { "$ref": "#/$defs/urlService" }, "ollama": { "$ref": "#/$defs/urlService" }, "llamaCpp": { "$ref": "#/$defs/urlService" }, "whisperCpp": { "$ref": "#/$defs/urlService" },
+        "piper": { "$ref": "#/$defs/piperService" }, "whisper": { "$ref": "#/$defs/whisperService" }
+      }
+    },
+    "models": { "type": "object", "additionalProperties": false, "required": ["chat", "nucleus"], "properties": { "chat": { "type": "string", "minLength": 1 }, "nucleus": { "type": "string", "minLength": 1 } } },
+    "runtime": { "type": "object", "additionalProperties": false, "required": ["nucleusModelKeepAlive", "managerModelKeepAlive", "taskPlannerModelKeepAlive"], "properties": { "nucleusModelKeepAlive": { "type": "string", "minLength": 1 }, "managerModelKeepAlive": { "type": "string", "minLength": 1 }, "taskPlannerModelKeepAlive": { "type": "string", "minLength": 1 } } }
+  },
+  "$defs": {
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "urlService": { "type": "object", "additionalProperties": false, "required": ["name", "url"], "properties": { "name": { "type": "string", "minLength": 1 }, "url": { "type": "string", "format": "uri" } } },
+    "portService": { "type": "object", "additionalProperties": false, "required": ["name", "host", "port"], "properties": { "name": { "type": "string", "minLength": 1 }, "host": { "type": "string", "minLength": 1 }, "port": { "$ref": "#/$defs/port" } } },
+    "twoPorts": { "type": "object", "additionalProperties": false, "required": ["name", "host", "websocketPort", "httpPort"], "properties": { "name": { "type": "string", "minLength": 1 }, "host": { "type": "string", "minLength": 1 }, "websocketPort": { "$ref": "#/$defs/port" }, "httpPort": { "$ref": "#/$defs/port" } } },
+    "piperService": { "type": "object", "additionalProperties": false, "required": ["name", "host", "port", "voice"], "properties": { "name": { "type": "string", "minLength": 1 }, "host": { "type": "string", "minLength": 1 }, "port": { "$ref": "#/$defs/port" }, "voice": { "type": "string", "minLength": 1 } } },
+    "whisperService": { "type": "object", "additionalProperties": false, "required": ["name", "host", "port", "model"], "properties": { "name": { "type": "string", "minLength": 1 }, "host": { "type": "string", "minLength": 1 }, "port": { "$ref": "#/$defs/port" }, "model": { "type": "string", "minLength": 1 } } }
+  }
+}

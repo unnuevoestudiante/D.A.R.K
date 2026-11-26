@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "authorization": "User authorized only these two official PyPI wheels; no dependencies or voice models.",
+  "target": "win_amd64 / Python 3.12 compatible",
+  "artifacts": [
+    {
+      "name": "piper_tts-1.8.0-cp39-abi3-win_amd64.whl",
+      "version": "1.8.0",
+      "uri": "https://files.pythonhosted.org/packages/12/9c/c736d1961cf9ce0655278731b9430df41892ca2ded7b09dabcb340612158/piper_tts-1.8.0-cp39-abi3-win_amd64.whl",
+      "bytes": 34119688,
+      "sha256": "5da9bfdb05dfe15da3536859d422e605483ffa6d2b3ec2c5b9593bae6b5aa6a4",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "name": "wyoming_piper-2.5.4-py3-none-any.whl",
+      "version": "2.5.4",
+      "uri": "https://files.pythonhosted.org/packages/bd/f9/bff7d2e14aced2947cb170467119c568d9ef7a0f0982fe4947779780d725/wyoming_piper-2.5.4-py3-none-any.whl",
+      "bytes": 80795,
+      "sha256": "52dd75a498dbd39239387622150231fb95d370c08aeb5181c2fe8ce0abab9c9f",
+      "license": "MIT"
+    }
+  ],
+  "downloadedTo": ".output/piper-wheels-authorized",
+  "transitiveDependenciesDownloaded": true,
+  "voiceModelsDownloaded": false,
+  "transitiveDependenciesRecord": "tools/installer/piper-runtime-dependency-candidates.json"
+}

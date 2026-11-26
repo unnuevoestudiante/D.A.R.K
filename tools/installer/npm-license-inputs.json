@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "inputs": [
+    {
+      "appliesTo": [
+        {
+          "name": "embla-carousel",
+          "version": "8.6.0"
+        },
+        {
+          "name": "embla-carousel-react",
+          "version": "8.6.0"
+        },
+        {
+          "name": "embla-carousel-reactive-utils",
+          "version": "8.6.0"
+        }
+      ],
+      "uri": "https://github.com/davidjerleke/embla-carousel/blob/v8.6.0/LICENSE",
+      "path": "tools/installer/third-party/npm/embla-carousel-v8.6.0-LICENSE",
+      "bytes": 1066,
+      "sha256": "992490064b90ec94c302fe5f29dcc14cb44145857064e46f9ffe6c8f511c1093"
+    },
+    {
+      "appliesTo": [
+        {
+          "name": "react-remove-scroll-bar",
+          "version": "2.3.8"
+        }
+      ],
+      "uri": "https://github.com/theKashey/react-remove-scroll-bar/blob/master/LICENSE",
+      "path": "tools/installer/third-party/npm/react-remove-scroll-bar-LICENSE",
+      "bytes": 1093,
+      "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84"
+    },
+    {
+      "appliesTo": [
+        {
+          "name": "victory-vendor",
+          "version": "36.9.2"
+        }
+      ],
+      "uri": "https://github.com/FormidableLabs/victory/blob/v36.9.2/LICENSE.txt",
+      "path": "tools/installer/third-party/npm/victory-vendor-36.9.2-LICENSE.txt",
+      "bytes": 1626,
+      "sha256": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4"
+    }
+  ]
+}

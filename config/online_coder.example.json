@@ -1,0 +1,30 @@
+{
+  "enabled": true,
+  "cooldown_429_segundos": 60,
+  "cooldown_diario_segundos": 3600,
+  "cooldown_5xx_segundos": 300,
+  "timeout": 60,
+  "providers": [
+    {
+      "name": "google-gemini",
+      "provider": "gemini",
+      "api_key": "PEGA_AQUI_TU_CLAVE_DE_GEMINI",
+      "text_model": "gemini-2.5-flash-lite",
+      "vision_model": "gemini-2.5-flash-lite"
+    },
+    {
+      "name": "groq-gpt-oss-120b",
+      "provider": "groq",
+      "api_key": "PEGA_AQUI_TU_CLAVE_DE_GROQ",
+      "model": "openai/gpt-oss-120b",
+      "text_model": "qwen/qwen3.8-27b",
+      "chat_model": "meta-llama-3.3-70b-versatile"
+    },
+    {
+      "name": "groq-gpt-oss-20b",
+      "provider": "groq",
+      "api_key": "PEGA_AQUI_TU_CLAVE_DE_GROQ",
+      "model": "openai/gpt-oss-20b"
+    }
+  ]
+}

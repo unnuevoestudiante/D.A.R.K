@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ============================================================
+         Permisos
+         ============================================================ -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Arranque automático al encender el dispositivo -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- Hardware opcional: la app se puede instalar aunque no exista -->
+    <uses-feature
+        android:name="android.hardware.camera.flash"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="Dark"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
+        <!-- ============================================================
+             Activity de configuración (permisos y arranque)
+             ============================================================ -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ============================================================
+             Servicio de fondo principal (escucha wake words, habla)
+             ============================================================ -->
+        <service
+            android:name=".core.DarkBackgroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- ============================================================
+             Asistente predeterminado del sistema (VoiceInteractionService)
+             ============================================================ -->
+        <service
+            android:name=".core.DarkVoiceService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/dark_interaction" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".core.DarkSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
+
+        <!-- ============================================================
+             Reconocimiento de voz (exigido por el asistente)
+             ============================================================ -->
+        <service
+            android:name=".core.DarkRecognitionService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- ============================================================
+             Receptor de arranque del sistema
+             ============================================================ -->
+        <receiver
+            android:name=".core.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.dark.node.REMINDER_FIRE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".core.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".overlay.OverlayService"
+            android:exported="false" />
+
+        <service
+            android:name=".core.ImportantNotificationService"
+            android:label="Dark avisos importantes"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

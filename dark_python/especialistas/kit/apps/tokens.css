@@ -1,0 +1,38 @@
+/* Tokens del kit de apps de D.A.R.K. Tres personalidades, nada más: no hay
+   paleta libre por proyecto (a diferencia de la web inmersiva) porque estos
+   valores ya están probados. `<body data-p="...">` elige una. */
+:root, [data-p="tecnico"] {
+  --fg: #dfe7ee; --muted: #6f7c88; --line: #1a2129;
+  --accent: #5ee6ff; --accent-fg: #021014; --negativo: #ff8a7a;
+  --font-ui: "Space Grotesk", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, monospace;
+  --font-titulo: var(--font-ui); --peso-titulo: 500; --radio: 2px; --track: 0.02em;
+  --particula: #5ee6ff; --escena: #07090c;
+  --fondo-estatico: radial-gradient(circle at 30% 20%, #0d1826, #05070a 70%);
+}
+[data-p="sobrio"] {
+  --fg: #1b1d1f; --muted: #7a7d80; --line: #e2e0db;
+  --accent: #2f4ad0; --accent-fg: #ffffff; --negativo: #b4432f;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --font-titulo: var(--font-ui); --peso-titulo: 600; --radio: 6px; --track: -0.01em;
+  --particula: #2f4ad0; --escena: #f1efe9;
+  --fondo-estatico: radial-gradient(circle at 70% 10%, #eef0f7, #e4e2dc 70%);
+}
+[data-p="calido"] {
+  --fg: #2b2420; --muted: #8b7d70; --line: #e4d8c6;
+  --accent: #c4623a; --accent-fg: #fff8f0; --negativo: #b04a35;
+  --font-ui: "Figtree", system-ui, sans-serif;
+  --font-num: "Figtree", system-ui, sans-serif;
+  --font-titulo: "Fraunces", Georgia, serif; --peso-titulo: 600; --radio: 10px; --track: 0;
+  --particula: #c4623a; --escena: #f0e7d6;
+  --fondo-estatico: radial-gradient(circle at 25% 15%, #f8ecd9, #efe3cf 70%);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+body {
+  background: #000; color: var(--fg); font: 15px/1.45 var(--font-ui); letter-spacing: var(--track);
+  -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }

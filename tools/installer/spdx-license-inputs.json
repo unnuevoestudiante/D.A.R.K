@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "source": "SPDX License List data v3.29.0",
+  "sourceUrl": "https://github.com/spdx/license-list-data/tree/v3.29.0/text",
+  "licenses": [
+    {
+      "spdxId": "MIT",
+      "path": "tools/installer/third-party/spdx-3.29.0/MIT.txt",
+      "bytes": 1078,
+      "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5"
+    },
+    {
+      "spdxId": "MPL-2.0",
+      "path": "tools/installer/third-party/spdx-3.29.0/MPL-2.0.txt",
+      "bytes": 16727,
+      "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+    },
+    {
+      "spdxId": "BSD-3-Clause",
+      "path": "C:/Users/samue/Desktop/D.A.R.K/tools/installer/third-party/spdx-3.29.0/BSD-3-Clause.txt",
+      "bytes": 1460,
+      "sha256": "5a93d5831e1297ab10fe643e1a631e83be392896da14ee2951285a79012df69d"
+    }
+  ]
+}
