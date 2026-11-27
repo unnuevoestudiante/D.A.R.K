@@ -293,6 +293,19 @@ test("capacidades: parseDarkMessage las lleva en el payload", () => {
   assert.equal(dato.capacidades.resumen.pendientes, 1);
 });
 
+test("el foco de especialista solo acepta los tres identificadores conocidos", () => {
+  assert.equal(
+    parseDarkMessage(JSON.stringify({ state: "idle", especialistaEnfocado: "tareas" }))
+      .especialistaEnfocado,
+    "tareas",
+  );
+  assert.equal(
+    parseDarkMessage(JSON.stringify({ state: "idle", especialistaEnfocado: "inventado" }))
+      .especialistaEnfocado,
+    null,
+  );
+});
+
 test("capacidades: un mensaje sin ellas no las inventa", () => {
   const dato = parseDarkMessage(JSON.stringify({ state: "idle" }));
   assert.equal(dato.capacidades, undefined);

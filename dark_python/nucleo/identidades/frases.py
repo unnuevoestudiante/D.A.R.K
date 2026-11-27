@@ -19,6 +19,26 @@ _PRE_ACCION = [
 
 FRASES = {
     # --- tareas ----------------------------------------------------------
+    "tareas_entrada_foco": [
+        "Estoy con usted en la planificación, señor.",
+        "Tareas queda a su disposición para definir el proyecto.",
+        "Le acompaño a convertir su idea en un plan claro.",
+    ],
+    "tareas_ejecutar": [
+        "Voy a ordenar lo definido y revisar qué decisión sigue pendiente.",
+        "Revisaré el alcance y los criterios antes de proponer el siguiente paso.",
+        "Voy a comprobar qué sabemos y qué conviene decidir ahora.",
+    ],
+    "tareas_hueco": [
+        "Falta decidir {decision}. Definirlo ahora deja el alcance más claro; posponerlo reduce decisiones de entrada. ¿Qué prefiere?",
+        "Aún no definimos {decision}. Si lo fijamos ahora, el plan será más concreto; si lo dejamos abierto, puede cambiar el alcance. ¿Qué prefiere?",
+        "El plan aún no define {decision}. ¿Prefiere que lo proponga como supuesto o que lo decidamos ahora?",
+    ],
+    "tareas_traspaso": [
+        "La especificación queda aprobada. Se la paso a Coder para construirla.",
+        "Con estos criterios queda definida la primera versión. Coder puede empezar.",
+        "Ya está acordado el plan. Se lo entrego a Coder para la construcción.",
+    ],
     "pre_accion": _PRE_ACCION,
     "comando_en_camino": _PRE_ACCION,
     "confirmar_accion": [

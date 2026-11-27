@@ -403,6 +403,9 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         nucleo = DarkNucleo.__new__(DarkNucleo)
         nucleo.esp_tareas = tareas or Mock(pide_app=Mock(return_value=True))
         nucleo.speak = Mock()
+        nucleo.overlay = Mock()
+        nucleo.cerebro = Mock()
+        nucleo.cerebro.responder.return_value = "Estoy con usted en la planificación."
         nucleo._decir_filler = Mock()
         nucleo._plan_lock = threading.Lock()
         nucleo._command_lock = threading.Lock()
@@ -412,6 +415,29 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         nucleo._normalizar_arg_ruta = lambda ruta: ruta
         nucleo._crear_tarea = Mock(return_value="tarea-plan")
         return nucleo
+
+    def test_el_foco_se_valida_y_se_comparte_con_el_bridge_y_el_cerebro(self):
+        nucleo = self.nucleo()
+        self.assertTrue(nucleo._establecer_especialista_enfocado("tareas"))
+        self.assertEqual(nucleo.especialista_enfocado, "tareas")
+        nucleo.overlay.set_especialista_enfocado.assert_called_once_with("tareas")
+        nucleo.cerebro.enfocar_especialista.assert_called_once_with("tareas")
+        nucleo.cerebro.responder.assert_called_once_with("especialista_entrada_foco")
+        nucleo.speak.assert_called_once_with("Estoy con usted en la planificación.")
+        self.assertFalse(nucleo._establecer_especialista_enfocado("inventado"))
+        self.assertEqual(nucleo.especialista_enfocado, "tareas")
+
+    def test_quitar_el_foco_no_anuncia_otra_entrada(self):
+        nucleo = self.nucleo()
+        nucleo.especialista_enfocado = "tareas"
+        self.assertTrue(nucleo._establecer_especialista_enfocado(None))
+        nucleo.cerebro.enfocar_especialista.assert_called_once_with(None)
+        nucleo.cerebro.responder.assert_not_called()
+
+    def test_respaldo_proactivo_de_tareas_usa_el_banco_formal_aunque_no_haya_foco(self):
+        nucleo = self.nucleo()
+        nucleo._frase_tareas_hueco("datos")
+        nucleo.cerebro.responder.assert_called_once_with("tareas_hueco", decision="datos")
 
     @staticmethod
     def intencion(tarea):
@@ -541,6 +567,26 @@ class PruebaPropuestaInterfazTareas(unittest.TestCase):
         self.assertNotIn("Propuesta de navegación", resumen)
         self.assertIn("Personalidad del kit propuesta", especificacion.seccion("visual"))
         self.assertIn("Fondo 3D propuesto", especificacion.seccion("visual"))
+
+    def test_la_pregunta_proactiva_usa_solo_nube_y_filtra_con_guardia(self):
+        from contratos.especialista import Especificacion
+
+        tareas = EspecialistaTareas(chat_provider=Mock(), cliente_manager=Mock(), helpers={})
+        tareas._plan = {
+            "pedido": "organizar gastos de una pareja",
+            "especificacion": Especificacion(
+                titulo="Gastos", secciones={"vision": "Registrar compras y revisar el total."}),
+            "respuestas": 1,
+        }
+        tareas._texto_online = Mock(return_value="¿Qué pantallas quieres incluir?")
+        tareas._helpers["filtrar_voz"] = lambda texto: "¿Qué pantallas quiere incluir?"
+        salida = tareas._pregunta_proactiva("pantallas")
+        self.assertEqual(salida, "¿Qué pantallas quiere incluir?")
+        sistema = tareas._texto_online.call_args.args[1]
+        prompt = tareas._texto_online.call_args.args[0]
+        self.assertIn("trato formal", sistema)
+        self.assertIn("trade-off", sistema)
+        self.assertIn("No invente datos", prompt)
 
 
 class PruebaDecisionCuotaCoder(unittest.TestCase):

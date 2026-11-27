@@ -824,6 +824,7 @@ class DarkNucleo:
             puede_pintar=self._overlay_puede_pintar,
             al_cambiar_estado=self._trazar_estado_overlay,
         )
+        self.especialista_enfocado = None
         self._overlay_start_thread = threading.Thread(
             target=self._delegar_arranque_ui,
             daemon=True,
@@ -860,6 +861,7 @@ class DarkNucleo:
 
         print("Iniciando Cerebro...")
         self.cerebro = Cerebro()
+        self.cerebro.enfocar_especialista(self.especialista_enfocado)
         self.cerebro.iniciar()
         atexit.register(self.cerebro.cerrar)
 
@@ -928,6 +930,8 @@ class DarkNucleo:
             preparar_modelo=self._preparar_modelo_de_trabajo,
             helpers={
                 "decir_filler": self._decir_filler,
+                "filtrar_voz": self._filtrar_voz_tareas,
+                "pregunta_hueco": self._frase_tareas_hueco,
                 "llm_pedido_chat": self._llm_pedido_chat,
                 "tarea_bg_cancel": self._tarea_bg_cancel,
                 "cargar_partial": self._cargar_partial,
@@ -2872,7 +2876,8 @@ class DarkNucleo:
     # =========================================================================
 
     def _manejar_con_intencion(self, texto, desde_modulo=False,
-                               resultado_precalculado=None):
+                               resultado_precalculado=None,
+                               acciones_permitidas=None):
         """Interpreta el texto y, si puede, ejecuta, pregunta o confirma.
 
         Devuelve True si el turno quedó manejado (habló o ejecutó).
@@ -2895,11 +2900,34 @@ class DarkNucleo:
             else:
                 self.speak(msg)
 
+        def permitida(resultado):
+            if acciones_permitidas is None:
+                return True
+            if isinstance(resultado, list):
+                return bool(resultado) and all(
+                    getattr(paso, "action", None) in acciones_permitidas
+                    for paso in resultado
+                )
+            accion = getattr(resultado, "action", None)
+            return bool(accion and accion in acciones_permitidas)
+
+        def descartar(resultado):
+            candidatos = resultado if isinstance(resultado, list) else [resultado]
+            for candidato in candidatos:
+                if getattr(candidato, "id", None):
+                    try:
+                        self.intencion.marcar_cancelada(candidato.id)
+                    except Exception:
+                        pass
+            return False
+
         # V2.2.b — Fase 4: si hay una ambigüedad pendiente, intentar
         # resolverla con este texto. Si el texto no es elección válida,
         # se cancela la ambigüedad y el turno sigue normal.
         resuelta = self.intencion.intentar_resolver_ambiguedad(texto)
         if resuelta is not None:
+            if not permitida(resuelta):
+                return descartar(resuelta)
             self._actualizar_traza_intencion(resuelta, matcher="ambiguedad")
             if resuelta.completa():
                 if (resuelta.action == "accion_imagenes"
@@ -2956,6 +2984,8 @@ class DarkNucleo:
             ctx_entidades=self.entidades,
         )
         if isinstance(r, list):
+            if not permitida(r):
+                return descartar(r)
             self._actualizar_traza_intencion(r)
             # V4.1 — ejecuta los pasos compuestos en el orden solicitado.
             pasos = [
@@ -2990,6 +3020,8 @@ class DarkNucleo:
                     _decir(self._narrar_resultado(mensaje, paso))
                 self._marcar_resultado_intencion(paso, mensaje)
             return True
+        if not permitida(r):
+            return descartar(r)
         self._actualizar_traza_intencion(r)
         if (r.action == "accion_imagenes"
                 and not self._hay_imagenes_visibles()):
@@ -2997,6 +3029,8 @@ class DarkNucleo:
         # V1 — Anticipación: ofrecer la acción inferida y esperar autorización.
         if r.tipo in (DESEO, NECESIDAD) and not r.action:
             implicita = self.intencion.inferir_intencion_implicita(texto)
+            if implicita is not None and not permitida(implicita):
+                implicita = None
             if implicita is not None:
                 self._actualizar_traza_intencion(implicita)
                 try:
@@ -4377,6 +4411,10 @@ class DarkNucleo:
         if not self._plan_lock.acquire(blocking=False):
             self.speak("Sigo pensando lo anterior; un momento, señor.")
             return
+        cerebro = getattr(self, "cerebro", None)
+        if (getattr(self, "especialista_enfocado", None) == "tareas"
+                and cerebro is not None):
+            self.speak(cerebro.responder("especialista_ejecutar"))
 
         def correr():
             try:
@@ -4409,6 +4447,10 @@ class DarkNucleo:
                        "Pídame que lo construya en un momento, señor.")
             return
         try:
+            cerebro = getattr(self, "cerebro", None)
+            if (getattr(self, "especialista_enfocado", None) == "tareas"
+                    and cerebro is not None):
+                self.speak(cerebro.responder("especialista_traspaso"))
             intencion = self.intencion.intencion_desde_cache(
                 traspaso["tarea"], "escribir_codigo", params)
             if intencion is None:
@@ -5137,6 +5179,9 @@ class DarkNucleo:
 
         try:
             if isinstance(data, dict):
+                if data.get("action") == "focus_specialist":
+                    self._establecer_especialista_enfocado(data.get("id"))
+                    return
                 if data.get("action") == "file_task":
                     files = data.get("files") or []
                     instruction = (data.get("instruction") or "").strip()
@@ -5185,6 +5230,34 @@ class DarkNucleo:
             self._accion_ui(self._ejecutar_comando_menu, tipo_menu, texto)
             return
         self._text_queue.put(mensaje)
+
+    def _establecer_especialista_enfocado(self, especialista):
+        """Valida el control del overlay y replica el foco en UI, núcleo y Cerebro."""
+        if especialista not in (None, "coder", "tareas", "conversacional"):
+            print("[Especialistas] foco ignorado: identificador no reconocido")
+            return False
+        anterior = getattr(self, "especialista_enfocado", None)
+        self.especialista_enfocado = especialista
+        try:
+            self.overlay.set_especialista_enfocado(especialista)
+        except Exception as error:
+            print(f"[Especialistas] no pude publicar el foco: {error}")
+        cerebro = getattr(self, "cerebro", None)
+        if cerebro is not None:
+            cerebro.enfocar_especialista(especialista)
+        if especialista == "tareas" and anterior != especialista and cerebro is not None:
+            self.speak(cerebro.responder("especialista_entrada_foco"))
+        return True
+
+    @staticmethod
+    def _filtrar_voz_tareas(texto):
+        """Pasa la intervención en nube por la misma Guardia del habla."""
+        return GuardiaHabla(log=False).filtrar(texto)
+
+    def _frase_tareas_hueco(self, decision):
+        """Frase local de respaldo, basada solo en el nombre de la decisión."""
+        return self.cerebro.responder(
+            "tareas_hueco", decision=decision)
 
     def _accion_sitio_web(self, datos, origen):
         """Guarda un sitio del usuario, si es que quien lo pide es este PC.
@@ -7935,6 +8008,17 @@ class DarkNucleo:
             esp_tareas = getattr(self, "esp_tareas", None)
             if esp_tareas is not None and not desde_modulo:
                 if esp_tareas.planificacion_activa():
+                    acciones_sistema = {
+                        capacidad.nombre
+                        for capacidad in getattr(
+                            getattr(self, "intencion", None), "_capacidades", ())
+                        if capacidad.nombre != "escribir_codigo"
+                    }
+                    if (getattr(self, "intencion", None) is not None
+                            and self._manejar_con_intencion(
+                                text, acciones_permitidas=acciones_sistema)):
+                        print(f"DEBUG - comando del sistema durante el plan: {text}")
+                        return True
                     self._planificar_en_fondo(esp_tareas.atender_planificacion, text)
                     print(f"DEBUG - turno del plan de proyecto: {text}")
                     return True
@@ -7942,6 +8026,30 @@ class DarkNucleo:
                     self._planificar_en_fondo(
                         esp_tareas.iniciar_planificacion, text, "guiado")
                     print(f"DEBUG - abre plan de proyecto guiado: {text}")
+                    return True
+                foco = getattr(self, "especialista_enfocado", None)
+                if foco in ("tareas", "coder"):
+                    acciones_sistema = {
+                        capacidad.nombre
+                        for capacidad in getattr(
+                            getattr(self, "intencion", None), "_capacidades", ())
+                        if capacidad.nombre != "escribir_codigo"
+                    }
+                    if (getattr(self, "intencion", None) is not None
+                            and self._manejar_con_intencion(
+                                text, acciones_permitidas=acciones_sistema)):
+                        print(f"DEBUG - comando del sistema con foco {foco}: {text}")
+                        return True
+                    if foco == "tareas":
+                        self._planificar_en_fondo(
+                            esp_tareas.iniciar_planificacion, text, "guiado")
+                        print(f"DEBUG - turno libre dirigido a Tareas: {text}")
+                        return True
+                    self._planificar_en_fondo(
+                        lambda pedido: {"decir": self.esp_codigo.modificar_ultimo_proyecto(pedido)},
+                        text,
+                    )
+                    print(f"DEBUG - cambio dirigido a Coder: {text}")
                     return True
 
             # --- Sistema de Intención ------------------------------------

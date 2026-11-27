@@ -104,6 +104,8 @@ export function DarkOverlay({
   onFacial,
   onCloseRostro,
   capacidades,
+  especialistaEnfocado = null,
+  onFocusSpecialist,
   onAbrirCentro,
   onCerrarCentro,
   onConfig,
@@ -172,6 +174,8 @@ export function DarkOverlay({
   onCloseRostro?: (() => void) | undefined;
   /** Registro de capacidades (P1): alimenta la insignia y el panel de estado. */
   capacidades?: CapacidadesPayload | null | undefined;
+  especialistaEnfocado?: SpecialistId | null;
+  onFocusSpecialist?: (id: SpecialistId | null) => boolean;
   onAbrirCentro?: (() => void) | undefined;
   onCerrarCentro?: (() => void) | undefined;
   /** Acciones del Centro de configuración hacia el Núcleo. */
@@ -280,6 +284,9 @@ export function DarkOverlay({
   const [activeSpecialist, setActiveSpecialist] = useState<SpecialistId | null>(null);
   const [hubArmado, setHubArmado] = useState(false);
   const [transicion, setTransicion] = useState<Transicion>(null);
+  useEffect(() => {
+    if (!transicion) setActiveSpecialist(especialistaEnfocado);
+  }, [especialistaEnfocado, transicion]);
   const tMaterial = useSecuenciaAcceso(transicion?.tipo === "materializando");
 
   // La zona sujeta con dos manos en vacío: el reclamo lo anota, y el pellizco
@@ -350,7 +357,7 @@ export function DarkOverlay({
       ZONA.materialDuracion * 1000,
     );
     return () => clearTimeout(t);
-  }, [transicion, restablecer]);
+  }, [transicion, restablecer, onFocusSpecialist]);
 
   // El retardo de agarre del menú: la mano que acaba de abrir la zona cae
   // donde cae, y en el primer cuadro agarraba el core derecho sin que nadie
@@ -978,7 +985,10 @@ export function DarkOverlay({
                 {activeSpecialist && (
                   <button
                     type="button"
-                    onClick={() => setActiveSpecialist(null)}
+                    onClick={() => {
+                      setActiveSpecialist(null);
+                      onFocusSpecialist?.(null);
+                    }}
                     className="dark-enlace-zona dark-enlace-zona-salir pointer-events-auto"
                     title="Salir del especialista enfocado y volver al núcleo general"
                   >
@@ -1040,6 +1050,7 @@ export function DarkOverlay({
             armado={hubArmado}
             saliendo={transicion?.tipo === "entrando" ? transicion.spec : null}
             onSelectSpecialist={(specId) => {
+              onFocusSpecialist?.(specId);
               setTransicion((t) => t ?? { tipo: "entrando", spec: specId });
             }}
             onClose={cerrarHub}

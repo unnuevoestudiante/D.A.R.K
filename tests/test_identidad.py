@@ -34,6 +34,23 @@ from herramientas.internas.ejecutor import (  # noqa: E402
 
 
 class PruebasIdentidad(unittest.TestCase):
+    def test_cerebro_elige_el_banco_del_especialista_enfocado(self):
+        cerebro = Cerebro.__new__(Cerebro)
+        cerebro.especialista_enfocado = "tareas"
+        cerebro.estado = Mock(return_value={"nivel": "medio", "modo": "normal"})
+        cerebro.perfil_conductual = None
+        cerebro.registrar_salida = Mock()
+        with patch("nucleo.identidades.cerebro.decir", return_value="frase de tareas") as decir_mock:
+            self.assertEqual(cerebro.responder("especialista_hueco", decision="datos"),
+                             "frase de tareas")
+        self.assertEqual(decir_mock.call_args.args[0], "tareas_hueco")
+        self.assertEqual(decir_mock.call_args.kwargs["decision"], "datos")
+
+        cerebro.especialista_enfocado = None
+        with patch("nucleo.identidades.cerebro.decir", return_value="frase general") as decir_mock:
+            self.assertEqual(cerebro.responder("especialista_hueco"), "frase general")
+        self.assertEqual(decir_mock.call_args.args[0], "comando_en_camino")
+
     def perfil_temporal(self, directorio):
         return PerfilConductual.cargar(
             str(Path(directorio) / "dark_perfil_conductual.json"))

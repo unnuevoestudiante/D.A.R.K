@@ -222,6 +222,9 @@ class FachadaOverlay:
     def set_capacidades(self, carga: dict | None) -> None:
         self.bridge.set_capacidades(carga)
 
+    def set_especialista_enfocado(self, especialista: str | None) -> None:
+        self.bridge.set_especialista_enfocado(especialista)
+
     def set_centinela(self, carga: dict | None) -> None:
         self.bridge.set_centinela(carga)
 

@@ -493,8 +493,8 @@ class PruebaAcoplamientoInvertido(unittest.TestCase):
         self.assertEqual(claves, {
             "cargar_partial", "decir_filler", "guardar_partial",
             "llm_pedido_chat", "resolver_ruta", "ruta_permitida",
-            "sanear_nombre", "tarea_bg_cancel"},
-            "cambió la lista de las 8 capacidades que tareas pide al núcleo; las "
+            "sanear_nombre", "tarea_bg_cancel", "filtrar_voz", "pregunta_hueco"},
+            "cambió la lista de las 10 capacidades que tareas pide al núcleo; las "
             "cuatro de sub-pasos que había aquí antes las borró la R4 Fase C2 porque "
             "nadie las llamaba, y `buscar_resultados_web`/`obtener_texto_pagina` se "
             "fueron con la isla web del núcleo: ningún lector las leía y el único "

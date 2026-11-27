@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DARK_RUNTIME } from "@/lib/runtime-config";
 import {
   resolveBridgeUrl,
@@ -51,6 +51,11 @@ type Bridge = {
   passwordError?: string | undefined;
   /** Registro de capacidades: lo que D.A.R.K. puede hacer en este equipo. */
   capacidades?: CapacidadesPayload | null | undefined;
+  especialistaEnfocado: "coder" | "tareas" | "conversacional" | null;
+  /** Cambia el foco de enrutamiento mediante el protocolo del bridge. */
+  focusSpecialist: (
+    id: "coder" | "tareas" | "conversacional" | null,
+  ) => boolean;
   setLocal: (payload: DarkPayload) => void;
   sendText: (text: string) => boolean;
   /**
@@ -318,6 +323,15 @@ export function useDarkBridge(url: string = resolveBridgeUrl()): Bridge {
     };
   }, [url]);
 
+  const focusSpecialist = useCallback(
+    (id: "coder" | "tareas" | "conversacional" | null) => {
+      if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
+      socketRef.current.send(JSON.stringify({ action: "focus_specialist", id }));
+      return true;
+    },
+    [],
+  );
+
   return {
     state: payload.state,
     lockInputReady: payload.lockInputReady ?? false,
@@ -343,6 +357,7 @@ export function useDarkBridge(url: string = resolveBridgeUrl()): Bridge {
     passwordChange: payload.passwordChange ?? false,
     passwordError: payload.passwordError,
     capacidades: payload.capacidades,
+    especialistaEnfocado: payload.especialistaEnfocado ?? null,
     setLocal: (next) => setPayload((prev) => ({ level: prev.level, ...next })),
     sendText: (text) => {
       if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -351,6 +366,7 @@ export function useDarkBridge(url: string = resolveBridgeUrl()): Bridge {
       }
       return false;
     },
+    focusSpecialist,
     sendSitioWeb: (nombre, url) => {
       const mensaje = sitioWebMensaje(nombre, url);
       if (mensaje === null) return false;

@@ -157,6 +157,8 @@ class OverlayBridge:
             # Registro de capacidades (P1): {resumen, items} calculado por el Núcleo.
             # Es un estado persistente, no un menú: la insignia lo lee siempre.
             "capacidades": None,
+            # Especialista que mantiene el foco de la Zona de Especialistas.
+            "especialistaEnfocado": None,
             # Audio TTS para la tele (HTML Audio en /tv)
             "audioSeq": 0,
             "audioData": None,
@@ -384,6 +386,15 @@ class OverlayBridge:
         if self._state.get("capacidades") == carga:
             return
         self._state["capacidades"] = carga
+        self._broadcast()
+
+    def set_especialista_enfocado(self, especialista: str | None) -> None:
+        """Publica el foco actual sin acoplar el puente a las clases especialistas."""
+        if especialista not in (None, "coder", "tareas", "conversacional"):
+            especialista = None
+        if self._state.get("especialistaEnfocado") == especialista:
+            return
+        self._state["especialistaEnfocado"] = especialista
         self._broadcast()
 
     def set_desktop_shown(self, shown: bool) -> None:

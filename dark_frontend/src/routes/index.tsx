@@ -643,6 +643,8 @@ function Index() {
         onFacial={(operacion, extra) => bridge.sendFacial(operacion, extra)}
         onCloseRostro={() => bridge.sendText("cerrar registro facial")}
         capacidades={bridge.capacidades}
+        especialistaEnfocado={bridge.especialistaEnfocado}
+        onFocusSpecialist={bridge.focusSpecialist}
         onAbrirCentro={() => bridge.sendConfig("abrir", { seccion: "resumen" })}
         onCerrarCentro={() => bridge.sendConfig("cerrar")}
         onConfig={(operacion, extra) => bridge.sendConfig(operacion, extra)}

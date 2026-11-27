@@ -855,6 +855,22 @@ class EspecialistaTareas:
         "estaciones (solo los nombres propios van como son)."
     )
 
+    _SISTEMA_VOZ_TAREAS = (
+        "Usted es Tareas, especialista de planificación de producto de D.A.R.K. "
+        "Habla con trato formal, en español, de forma breve y natural. No usa "
+        "tuteo ni llama a la persona por su nombre. Señala una sola decisión "
+        "pendiente por turno y explica el trade-off únicamente con datos que "
+        "aparezcan en la especificación. Si detecta un supuesto débil, lo cita "
+        "y explica qué decisión depende de él; no inventa riesgos ni requisitos. "
+        "Si la decisión afecta datos, permisos, persistencia o integraciones, "
+        "ayuda a pensar esa frontera de arquitectura con dos opciones concretas "
+        "y su consecuencia. Cuando una respuesta ya resolvió algo importante, "
+        "lo resume brevemente antes de avanzar; no repite el plan entero. "
+        "Termina con una pregunta concreta sobre la sección pendiente. No escribe "
+        "código, no repite el resumen entero y no trata sus propuestas como "
+        "decisiones aprobadas. Devuelve solo el texto que Tareas diría en voz alta."
+    )
+
     # ------------------------------------------------------------------
     #  Detección (la usa el Núcleo para decidir quién atiende el turno)
     # ------------------------------------------------------------------
@@ -930,6 +946,7 @@ class EspecialistaTareas:
         self._plan = {
             "modo": modo, "pedido": pedido, "ruta": ruta, "ts": time.time(),
             "estado": "preguntando", "especificacion": Especificacion(titulo=titulo),
+            "respuestas": 0,
         }
         if not pedido:
             return self._siguiente_paso()
@@ -964,6 +981,7 @@ class EspecialistaTareas:
                 return {"decir": "No pude aplicar el cambio ahora mismo. ¿Lo construyo "
                                  "así, o lo intento de nuevo en un rato?"}
             return self._siguiente_paso(cambio=True)
+        plan["respuestas"] = int(plan.get("respuestas", 0)) + 1
         # Preguntando: la respuesta va solo a la sección que se preguntó. Si el
         # modelo pudiera escribir las demás, las inventaría y dejaría de preguntar.
         hueco = plan.get("hueco") or ""
@@ -1000,7 +1018,7 @@ class EspecialistaTareas:
             preguntables = [c for c in huecos if c in self.PREGUNTAS_GUIADAS]
             if preguntables:
                 plan["hueco"] = preguntables[0]
-                return {"decir": self._pregunta_de(plan["hueco"])}
+                return {"decir": self._pregunta_proactiva(plan["hueco"])}
         if huecos:
             # Lo técnico (datos, stack, criterios, alcance) lo completa D.A.R.K.
             # como supuesto; en el modo rápido, también lo que el modelo dejó.
@@ -1012,10 +1030,53 @@ class EspecialistaTareas:
                 # un plan con secciones vacías.
                 plan["modo"], plan["estado"] = "guiado", "preguntando"
                 plan["hueco"] = huecos[0]
-                return {"decir": self._pregunta_de(plan["hueco"])}
+                return {"decir": self._pregunta_proactiva(plan["hueco"])}
         plan["estado"] = "esperando_aprobacion"
         plan["hueco"] = None
         return {"decir": self._resumen(plan["especificacion"], cambio=cambio)}
+
+    def _pregunta_proactiva(self, clave: str) -> str:
+        """Pide al modelo de nube una pregunta con voz de Tareas; cae al contrato."""
+        plan = self._plan or {}
+        pregunta = self._pregunta_de(clave)
+        if not plan.get("respuestas"):
+            return pregunta
+        seccion = next((s for s in SECCIONES_ESPECIFICACION if s.clave == clave), None)
+        if seccion is None:
+            return pregunta
+        prompt = (
+            f"Proyecto: {plan.get('pedido', '')}\n"
+            f"Especificación actual:\n{escribir_especificacion(plan['especificacion'])}\n\n"
+            f"Decisión que toca preguntar ({seccion.titulo}): {seccion.proposito}\n"
+            f"Pregunta base: {pregunta}\n\n"
+            "Formule una intervención oral de una o dos frases. Ponga sobre la mesa "
+            "un trade-off real o un supuesto débil solo si la especificación da "
+            "evidencia; después haga UNA pregunta concreta que resuelva esta "
+            "sección. Si no hay evidencia suficiente, haga la pregunta base sin "
+            "añadir una crítica. No invente datos ni responda por la persona."
+        )
+        try:
+            salida = self._texto_online(
+                prompt, self._SISTEMA_VOZ_TAREAS, max_tokens=150).strip()
+        except Exception as error:
+            print(f"[Tareas] no pude generar la pregunta proactiva: {error}")
+            salida = ""
+        if salida:
+            filtrar = self._helpers.get("filtrar_voz")
+            try:
+                salida = filtrar(salida) if filtrar else ""
+            except Exception as error:
+                print(f"[Tareas] Guardia no pudo filtrar la pregunta: {error}")
+                salida = ""
+        if salida:
+            return salida
+        frase_hueco = self._helpers.get("pregunta_hueco")
+        if frase_hueco:
+            try:
+                return frase_hueco(seccion.titulo.lower()) or pregunta
+            except Exception as error:
+                print(f"[Tareas] no pude preparar el empujón local: {error}")
+        return pregunta
 
     def _traspasar(self) -> Dict:
         """El plan aprobado pasa al coder: el Núcleo despacha `escribir_codigo`."""

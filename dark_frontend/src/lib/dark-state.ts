@@ -382,6 +382,8 @@ export type DarkPayload = {
    * (`menuData.capacidadesVisible`).
    */
   capacidades?: CapacidadesPayload | null;
+  /** Especialista enfocado para enrutar los mensajes de texto y voz. */
+  especialistaEnfocado?: "coder" | "tareas" | "conversacional" | null;
 };
 
 /**
@@ -1129,6 +1131,12 @@ export function parseDarkMessage(raw: string): DarkPayload | null {
       passwordError:
         typeof data.passwordError === "string" ? data.passwordError : undefined,
       capacidades: normalizeCapacidades(data.capacidades),
+      especialistaEnfocado:
+        data.especialistaEnfocado === "coder" ||
+        data.especialistaEnfocado === "tareas" ||
+        data.especialistaEnfocado === "conversacional"
+          ? data.especialistaEnfocado
+          : null,
     };
   } catch {
     return null;

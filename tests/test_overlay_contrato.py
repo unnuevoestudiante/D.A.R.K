@@ -20,7 +20,7 @@ from contratos.overlay import PuertoOverlay  # noqa: E402
 MIEMBROS = (
     "set", "level", "progress", "intencion", "silenciar", "reactivar",
     "set_lock_input_ready", "set_cambio_contrasena", "set_error_contrasena",
-    "set_capacidades", "set_arranque", "set_centinela",
+    "set_capacidades", "set_especialista_enfocado", "set_arranque", "set_centinela",
     "iniciar_senal_tv", "fin_senal_tv",
     "senal_tv_activa", "destino_ui", "modo_televisor", "modo_computador",
     "publish_audio", "estado", "tiene_resultados", "actualizar_sin_emitir",
@@ -63,6 +63,16 @@ class PruebaPuerto(unittest.TestCase):
 
 
 class PruebaAccessors(unittest.TestCase):
+    def test_especialista_enfocado_se_publica_con_guarda_de_cambio(self):
+        b = bridge_inerte()
+        emitidos = []
+        b._broadcast = lambda: emitidos.append(b._state.get("especialistaEnfocado"))
+        b.set_especialista_enfocado("tareas")
+        b.set_especialista_enfocado("tareas")
+        b.set_especialista_enfocado("no-existe")
+        b.set_especialista_enfocado(None)
+        self.assertEqual(emitidos, ["tareas", None])
+
     def test_estado_devuelve_el_estado_visible(self):
         b = bridge_inerte()
         self.assertEqual(b.estado(), "idle")

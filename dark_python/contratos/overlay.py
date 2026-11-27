@@ -124,6 +124,10 @@ class PuertoOverlay(Protocol):
         insignia y el panel de estado leen. `None` lo limpia."""
         ...
 
+    def set_especialista_enfocado(self, especialista: str | None) -> None:
+        """Publica el especialista al que se dirige el texto libre del overlay."""
+        ...
+
     def set_centinela(self, carga: dict | None) -> None:
         """Publica el estado del centinela: los avisos pendientes
         (`{cantidad, urgente, items}`) y si D.A.R.K. está hablando desde él

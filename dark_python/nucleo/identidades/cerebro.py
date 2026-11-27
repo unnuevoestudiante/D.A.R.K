@@ -405,6 +405,14 @@ class Cerebro:
         self._ultimas = deque(maxlen=4)   # últimas frases dichas
         self._activo = True
         self._lock = threading.Lock()
+        self.especialista_enfocado = None
+
+    def enfocar_especialista(self, especialista):
+        """Guarda el foco que el overlay publica para las frases del turno."""
+        self.especialista_enfocado = (
+            especialista if especialista in ("coder", "tareas", "conversacional")
+            else None
+        )
 
     # ----- ciclo de vida ---------------------------------------------------
     def iniciar(self):
@@ -463,6 +471,12 @@ class Cerebro:
     # ----- respuestas ------------------------------------------------------
     def responder(self, clave, extra=False, **datos):
         """Frase de la tarea + (a veces) un comentario con contexto."""
+        if clave.startswith("especialista_"):
+            funcion = clave.removeprefix("especialista_")
+            if self.especialista_enfocado == "tareas":
+                clave = f"tareas_{funcion}"
+            else:
+                clave = "comando_en_camino"
         est = self.estado()
         frase = decir(clave, nivel=est["nivel"], modo=est["modo"],
                       perfil=self.perfil_conductual, **datos)
