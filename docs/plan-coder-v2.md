@@ -64,7 +64,7 @@ Estado de la Fase 0 (25/11/2026):
 - **Hecho.** Modo paciente en `proveedores/llm/remoto.py`: `leer_cupo`, `espera_preventiva`, `complete_paciente` y `soltar_trabajo`. El 429 respeta `retry-after` y uno de más de 15 min cuenta como diario.
 - **Hecho.** Roles por proveedor en `online_coder.json` (`chat_model`, `model` para código, `text_model`), con cuota y enfriamiento separados por rol.
 - **Hecho.** `crear_proveedor_trabajo` en `proveedores/llm/fabrica.py` y `nube_de_trabajo` en `cadena.py`: manda la cadena «codigo» del Centro y se respeta «solo local».
-- **Hecho.** El coder usa el modo paciente (`_llamar_online`) y avisa por voz las esperas de 10 s o más, como mucho una vez cada 2 min. El 429 diario sigue cayendo al modelo local; la pausa con opciones llega en la Fase 5.
+- **Hecho.** El coder usa el modo paciente (`_llamar_online`) y avisa por voz las esperas de 10 s o más, como mucho una vez cada 2 min. El 429 diario pausa y guarda el proyecto; en la Fase 5 se ofrecen Ollama, esperar el reinicio o dejarlo pausado.
 - **Hecho.** Tareas redacta documentos con el rol `texto` en modo paciente (se quitó la pausa fija de 5 s entre secciones), y el resumen de terminal del Núcleo usa el mismo rol sin esperas, porque es parte de un turno. El aviso de voz es uno solo para los dos (`aviso_de_espera` en `remoto.py`). Se retiraron `herramientas/externas/programador_online.py` y su atajo en `respaldo/compatibilidad/`.
 - **Pendiente.** Quitar del planner las reglas que prohíben apps; va junto con la Fase 3, que trae el reemplazo.
 
@@ -151,10 +151,15 @@ Resto por decidir/construir:
 
 **Fase 5. Entrega y presencia.** Progreso visible por etapas en el overlay (planificando, construyendo, revisando y la ronda en curso). Al terminar, D.A.R.K. abre la app y cuenta qué hizo, qué supuso y qué quedó pendiente.
 
+**Hecha (26/11/2026): presencia y estimación del Coder.** Las apps React y las webs inmersivas muestran en el progreso existente del overlay la estimación inicial y las etapas de composición, construcción, revisión y corrección (incluido el número de ronda). La app React se abre al completar el build; el kit Vite usa rutas relativas para que también funcione desde su `dist/index.html`. El cierre resume pantallas o estaciones, supuestos marcados y hallazgos pendientes.
+
+**Hecha con límite declarado (26/11/2026): cuota diaria.** El coder guarda la fase, proveedor y alternativas en `.dark_project.json`; ofrece continuar con Ollama, esperar el reinicio o dejar el trabajo pausado. Si se elige esperar, repite la misma llamada y el mismo proveedor. El repositorio no identifica claves de pago ni guarda tarifas, así que no presenta una opción de pago ni inventa un costo. La respuesta a la decisión se espera hasta 120 s; después el proyecto conserva el estado pausado.
+
 **Después: automejoras.** El mismo ciclo (especificación → coder → verificación) aplicado a D.A.R.K. mismo: UI generativa en el overlay y capacidades nuevas, siempre en una rama o *worktree* aislado, con pruebas y con aprobación explícita del usuario antes de integrar.
 
 ## Riesgos
 
-- **Cuota gratuita.** Una app con 3 rondas de revisión gasta muchos más tokens que una página. Con el modo paciente no falla, pero puede tardar; D.A.R.K. debe decir cuánto calcula que tardará. Con una clave de pago, el estimado es de costo y se confirma antes de empezar.
+- **Cuota gratuita.** Una app con 3 rondas de revisión gasta muchos más tokens que una página. La estimación de tiempo es un rango y no cuenta una espera diaria. Si el proveedor agota la cuota, el trabajo se pausa; no se ofrece clave de pago mientras no haya una tarifa declarada.
 - **Seguridad del bucle de agente.** Necesita la lista blanca de comandos, la carpeta aislada y confirmación para instalar dependencias.
 - **Revisión visual.** Depende de que haya un modelo de visión gratuito disponible. Si no lo hay, se degrada a revisión sin capturas; nunca se bloquea.
+- **Estimación.** Los rangos visibles son aproximaciones deterministas por stack y tamaño de especificación; no incluyen la duración desconocida de una espera de cuota.

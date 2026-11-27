@@ -476,6 +476,7 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         params = nucleo.intencion.intencion_desde_cache.call_args.args[2]
         self.assertEqual(params["contenido_md"], "C:/planes/cumbre.md")
 
+
     def test_el_paso_de_escribir_codigo_lleva_la_especificacion(self):
         nucleo = self.nucleo()
         intencion = SimpleNamespace(id="i-2", params_planos=lambda: {
@@ -499,6 +500,37 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         self.assertNotIn("contenido_md", params, "sin especificación no se inventa una")
         nucleo._armar_ventana_bg.assert_called_once()
         self.assertFalse(nucleo._command_lock.locked())
+
+
+class PruebaDecisionCuotaCoder(unittest.TestCase):
+    """Las respuestas a la cuota se consumen sin llegar al router normal."""
+
+    def nucleo(self):
+        nucleo = DarkNucleo.__new__(DarkNucleo)
+        nucleo._cuota_coder_lock = threading.Lock()
+        nucleo.speak = Mock()
+        evento = threading.Event()
+        nucleo._cuota_coder_pendiente = {"evento": evento, "decision": None}
+        return nucleo, evento
+
+    def test_local_despierta_al_worker_con_la_opcion_elegida(self):
+        nucleo, evento = self.nucleo()
+        self.assertTrue(nucleo._procesar_decision_cuota_coder("seguir con modelo local"))
+        self.assertTrue(evento.is_set())
+        self.assertEqual(nucleo._cuota_coder_pendiente["decision"], "modelo_local")
+
+    def test_esperar_seguir_con_el_reset_del_proveedor(self):
+        nucleo, evento = self.nucleo()
+        self.assertTrue(nucleo._procesar_decision_cuota_coder("esperar al reinicio"))
+        self.assertTrue(evento.is_set())
+        self.assertEqual(nucleo._cuota_coder_pendiente["decision"], "esperar_reinicio")
+
+    def test_pago_no_se_ofrece_sin_tarifa_y_no_resuelve_la_pausa(self):
+        nucleo, evento = self.nucleo()
+        self.assertTrue(nucleo._procesar_decision_cuota_coder("usar clave de pago"))
+        self.assertFalse(evento.is_set())
+        self.assertIsNone(nucleo._cuota_coder_pendiente["decision"])
+        self.assertIn("tarifa declarada", nucleo.speak.call_args.args[0])
 
 
 if __name__ == "__main__":

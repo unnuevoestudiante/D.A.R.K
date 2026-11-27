@@ -1251,6 +1251,7 @@ class EspecialistaCodigo:
                  preparar_modelo=None, liberar_modelo=None,
                  chat_provider=None, cliente_manager=None, avisar_espera=None,
                  confirmar_instalacion=None,
+                 decidir_cuota_diaria=None, informar_progreso=None,
                  **_kwargs):
         self._http = http_session or requests.Session()
         self._chat_provider = chat_provider or crear_proveedor_chat(
@@ -1258,6 +1259,12 @@ class EspecialistaCodigo:
         self._manager = cliente_manager or crear_cliente_manager(
             session=self._http)
         self._confirmar_instalacion = confirmar_instalacion
+        self._decidir_cuota_diaria = decidir_cuota_diaria
+        self._informar_progreso_cb = informar_progreso
+        self._estado_proyecto_activo = None
+        self._ruta_estado_proyecto_activo = None
+        self._fase_proyecto = ""
+        self._forzar_modelo_local = False
         self._psutil = psutil_module
         self._llm_lock = llm_lock if llm_lock is not None else threading.Lock()
         self._liberar_whisper = liberar_whisper
@@ -1543,6 +1550,58 @@ class EspecialistaCodigo:
         self._modelos_usados.clear()
         for modelo in modelos:
             self._descargar_modelo(modelo)
+        self._forzar_modelo_local = False
+
+    def _informar_progreso(self, paso, total, etiqueta):
+        """Publica una etapa del trabajo sin dejar que un fallo del overlay lo pare."""
+        if not callable(self._informar_progreso_cb):
+            return
+        try:
+            self._informar_progreso_cb(paso, total, etiqueta)
+        except Exception as error:
+            print(f"[Código] no pude actualizar el progreso: {error}")
+
+    def _guardar_estado_proyecto_activo(self, **cambios):
+        """Actualiza el manifiesto del proyecto mientras se construye o se pausa."""
+        if self._estado_proyecto_activo is None:
+            return
+        self._estado_proyecto_activo.update(cambios)
+        self._estado_proyecto_activo["actualizado"] = datetime.datetime.now().isoformat()
+        try:
+            self._escribir_json_atomico(
+                self._ruta_estado_proyecto_activo, self._estado_proyecto_activo)
+        except OSError as error:
+            print(f"[Código] no pude guardar el estado del proyecto: {error}")
+
+    def _resolver_cuota_diaria(self, error, usuario, sistema, extension, max_tokens):
+        """Guarda la pausa y ofrece las salidas que el sistema puede ejecutar."""
+        pausa = {
+            "proveedor": getattr(error, "proveedor", ""),
+            "fase": self._fase_proyecto,
+            "opciones": ["modelo_local", "esperar_reinicio"],
+        }
+        self._guardar_estado_proyecto_activo(
+            estado="pausado_cuota_diaria", pausa_cuota=pausa)
+        self._informar_progreso(
+            1, 4, "Cuota diaria agotada · esperando su decisión")
+        if not callable(self._decidir_cuota_diaria):
+            return None
+        decision = self._decidir_cuota_diaria(pausa)
+        if decision == "modelo_local":
+            self._forzar_modelo_local = True
+            self._guardar_estado_proyecto_activo(
+                estado="en_progreso", decision_cuota="modelo_local")
+            ok, texto = self._llamar_ollama(
+                self.coder_model, sistema, usuario, 8192,
+                max_tokens=max_tokens, timeout=600)
+            return (ok, sin_razonamiento(texto))
+        if decision == "esperar_reinicio":
+            self._guardar_estado_proyecto_activo(
+                estado="esperando_reinicio_cuota", decision_cuota="esperar_reinicio")
+            self._informar_progreso(
+                1, 4, "Esperando el reinicio de la cuota diaria")
+            return "esperar"
+        return None
 
     def _llamar_ollama(self, modelo, system, user, num_ctx,
                         max_tokens=1500, temperature=0.3, timeout=600):
@@ -1612,12 +1671,17 @@ class EspecialistaCodigo:
         """Modelo de nube del proyecto, en modo paciente.
 
         Un límite por minuto se espera y el trabajo sigue con el mismo modelo.
-        Solo lo que esperar no arregla (cuota del día, clave inválida, sin
-        configuración) devuelve False, y el llamador sigue con el modelo local.
+        La cuota diaria pausa el proyecto, guarda su fase y pide una decisión;
+        las claves rechazadas y la falta de configuración mantienen el respaldo
+        local que ya tenía el llamador.
         """
         proveedor = self._proveedor_de_trabajo()
         if proveedor is None:
             return False, "la función de código está en «solo local»"
+        if self._forzar_modelo_local:
+            return self._llamar_ollama(
+                self.coder_model, system, user, 8192,
+                max_tokens=max_tokens, timeout=600)
         try:
             resultado = proveedor.complete_paciente(
                 ChatRequest(model="", messages=[
@@ -1626,6 +1690,40 @@ class EspecialistaCodigo:
                 ], options={"max_output_tokens": max_tokens}),
                 al_esperar=self._al_esperar_cuota)
         except Exception as e:
+            if getattr(e, "diario", False):
+                decision = self._resolver_cuota_diaria(
+                    e, user, system, extension, max_tokens)
+                if isinstance(decision, tuple):
+                    return decision
+                if decision == "esperar":
+                    solicitud = ChatRequest(model="", messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ], options={"max_output_tokens": max_tokens})
+                    for _intento in range(2):
+                        try:
+                            resultado = proveedor.complete_paciente(
+                                solicitud, al_esperar=self._al_esperar_cuota)
+                            break
+                        except Exception as espera_error:
+                            if not getattr(espera_error, "diario", False):
+                                self._guardar_estado_proyecto_activo(
+                                    estado="pausado_cuota_diaria",
+                                    error_cuota=getattr(espera_error, "motivo", str(espera_error)))
+                                return False, (f"cuota diaria: "
+                                               f"{getattr(espera_error, 'motivo', espera_error)}")
+                            self._informar_progreso(
+                                1, 4, "La cuota sigue activa · esperando el siguiente reinicio")
+                    else:
+                        self._guardar_estado_proyecto_activo(
+                            estado="pausado_cuota_diaria",
+                            error_cuota="la cuota seguía activa tras el reinicio esperado")
+                        return False, "la cuota seguía activa después del reinicio esperado"
+                    self._guardar_estado_proyecto_activo(
+                        estado="en_progreso", decision_cuota="esperar_reinicio")
+                    return True, sin_razonamiento(resultado.content)
+                return False, ("cuota diaria agotada; trabajo pausado en "
+                               f"{self._ruta_estado_proyecto_activo or 'el estado del proyecto'}")
             return False, f"online falló: {getattr(e, 'motivo', e)}"
         texto = sin_razonamiento(resultado.content)
         if not texto.strip():
@@ -3152,6 +3250,31 @@ class EspecialistaCodigo:
         except OSError as error:
             print(f"[Código] no pude guardar la variedad de mundos: {error}")
 
+    @staticmethod
+    def _estimacion_trabajo(esp):
+        """Da un rango prudente que cuenta con hasta tres revisiones."""
+        claves = ("vision", "usuarios", "pantallas", "datos", "funcionalidades",
+                  "visual", "stack", "criterios", "alcance")
+        secciones = sum(bool(esp.seccion(clave)) for clave in claves)
+        minimo, maximo = ((5, 10) if esp.stack() == "react" else
+                          (3, 8) if esp.stack() == "inmersivo" else (2, 5))
+        extra = max(0, secciones - 5)
+        return minimo + extra // 2, maximo + extra
+
+    @staticmethod
+    def _resumen_supuestos(esp):
+        supuestos = tuple(getattr(esp, "supuestos", lambda: ())())
+        if not supuestos:
+            return "No hubo supuestos marcados en el plan aprobado."
+        texto = "; ".join(supuestos[:3])
+        return "Supuse: " + texto + ("; y otros." if len(supuestos) > 3 else ".")
+
+    @staticmethod
+    def _resumen_pendientes(pendientes):
+        limpios = list(dict.fromkeys(str(p).strip() for p in pendientes if str(p).strip()))
+        return ("Quedó pendiente: " + "; ".join(limpios[:3]) + "."
+                if limpios else "No quedaron hallazgos pendientes.")
+
     def _componer_mundo(self, esp, huella=None, hallazgos_revision=()):
         """Pide el JSON del mundo; si el contrato encuentra errores, se los devuelve una vez."""
         plan = "\n\n".join(
@@ -3370,26 +3493,43 @@ class EspecialistaCodigo:
         estado_path = os.path.join(carpeta, ".dark_project.json")
         estado = {"version": 1, "nombre_proyecto": nombre, "huella": huella, "tipo": "inmersivo",
                   "especificacion": ruta_especificacion, "estado": "en_progreso",
-                  "actualizado": datetime.datetime.now().isoformat()}
+                  "actualizado": datetime.datetime.now().isoformat(),
+                  "supuestos": list(esp.supuestos())}
         self._escribir_json_atomico(estado_path, estado)
         self.ultima_carpeta_proyecto = carpeta
+        self._estado_proyecto_activo = estado
+        self._ruta_estado_proyecto_activo = estado_path
+        minimo, maximo = self._estimacion_trabajo(esp)
+        self._fase_proyecto = "composición"
+        self._informar_progreso(0, 4, f"Plan aprobado · estimación {minimo}–{maximo} min")
         self._buscador_imagenes.reiniciar()
         try:
+            self._fase_proyecto = "composición"
+            self._informar_progreso(1, 4, "Componiendo la web")
             mundo, errores = self._componer_mundo(esp, huella)
             if mundo is None:
+                if estado.get("estado") == "pausado_cuota_diaria":
+                    return (f"El trabajo de «{esp.titulo}» quedó pausado por la cuota diaria. "
+                            "Su estado se guardó en .dark_project.json.")
                 estado.update(estado="fallido", errores=list(errores))
                 return {"ok": False, "mensaje": "No pude componer el mundo de la web.",
                         "error": "; ".join(errores)}
             avisos_estilo = list(errores)
             self._anotar_variedad(huella, mundo)
+            self._fase_proyecto = "ensamblado"
+            self._informar_progreso(2, 4, "Construyendo la web")
             indice, avisos_fotos = self._ensamblar_inmersivo(carpeta, mundo)
             revision = {"revisado": False, "aprobado": None, "hallazgos": [],
                         "errores_consola": [], "capturas": []}
             for ronda in range(3):
+                self._fase_proyecto = "revisión"
+                self._informar_progreso(3, 4, f"Revisando la web · ronda {ronda + 1} de 3")
                 revision = self._revisar_visualmente(esp, indice)
                 if not revision.get("hallazgos") or ronda == 2:
                     break
                 try:
+                    self._fase_proyecto = "corrección"
+                    self._informar_progreso(3, 4, f"Corrigiendo la web · ronda {ronda + 1} de 3")
                     mundo_corregido, errores_correccion = self._componer_mundo(
                         esp, huella, hallazgos_revision=revision["hallazgos"])
                     if mundo_corregido is None:
@@ -3398,6 +3538,9 @@ class EspecialistaCodigo:
                         carpeta, mundo_corregido)
                 except Exception as error:
                     print(f"[Código] no pude aplicar la corrección visual: {error}")
+                    if estado.get("estado") == "pausado_cuota_diaria":
+                        return (f"El trabajo de «{esp.titulo}» quedó pausado por la cuota diaria. "
+                                "Su estado se guardó en .dark_project.json.")
                     revision["hallazgos"].append(
                         "no pude aplicar la corrección sugerida por la revisión")
                     break
@@ -3410,21 +3553,25 @@ class EspecialistaCodigo:
                           avisos_de_estilo=[e.removeprefix(ESTILO) for e in avisos_estilo],
                           avisos_de_fotos=avisos_fotos, semilla=mundo["semilla"],
                           revision_visual=revision)
+            self._informar_progreso(4, 4, "Web lista")
             aviso = (f" Revisa el texto: {avisos_estilo[0].removeprefix(ESTILO)}."
                      if avisos_estilo else "")
             if avisos_fotos:
                 aviso += f" Ojo: {avisos_fotos[0]}."
-            if revision.get("hallazgos"):
-                aviso += f" La revisión dejó pendiente: {revision['hallazgos'][0]}."
             if not revision.get("revisado") and revision.get("motivo_sin_revisar"):
                 aviso += f" No pude completar la revisión visual: {revision['motivo_sin_revisar']}."
             return (f"Web «{mundo['titulo']}» creada en {carpeta}: "
-                    f"{len(mundo['estaciones'])} estaciones. Ábrela con doble clic en {indice}."
+                    f"{len(mundo['estaciones'])} estaciones. Ábrala con doble clic en {indice}. "
+                    f"{self._resumen_supuestos(esp)} "
+                    f"{self._resumen_pendientes(revision.get('hallazgos', []))}"
                     + aviso)
         finally:
             estado["actualizado"] = datetime.datetime.now().isoformat()
             self._escribir_json_atomico(estado_path, estado)
             self._liberar_coder()
+            self._estado_proyecto_activo = None
+            self._ruta_estado_proyecto_activo = None
+            self._fase_proyecto = ""
 
     def _revisar_visualmente(self, esp, indice_html):
         """Captura y critica la web ya escrita. Nunca rompe la entrega si algo falla."""
@@ -3617,12 +3764,22 @@ class EspecialistaCodigo:
         estado_path = os.path.join(carpeta, ".dark_project.json")
         estado = {"version": 1, "nombre_proyecto": nombre, "huella": huella, "tipo": "app_react",
                   "especificacion": ruta_especificacion, "estado": "en_progreso",
-                  "actualizado": datetime.datetime.now().isoformat()}
+                  "actualizado": datetime.datetime.now().isoformat(),
+                  "supuestos": list(esp.supuestos())}
         self._escribir_json_atomico(estado_path, estado)
         self.ultima_carpeta_proyecto = carpeta
+        self._estado_proyecto_activo = estado
+        self._ruta_estado_proyecto_activo = estado_path
+        minimo, maximo = self._estimacion_trabajo(esp)
+        self._fase_proyecto = "composición"
+        self._informar_progreso(0, 4, f"Plan aprobado · estimación {minimo}–{maximo} min")
         try:
+            self._informar_progreso(1, 4, "Componiendo la app")
             app, errores = self._componer_app(esp)
             if app is None:
+                if estado.get("estado") == "pausado_cuota_diaria":
+                    return (f"El trabajo de «{esp.titulo}» quedó pausado por la cuota diaria. "
+                            "Su estado se guardó en .dark_project.json.")
                 estado.update(estado="fallido", errores=list(errores))
                 return {"ok": False, "mensaje": "No pude componer la app.",
                         "error": "; ".join(errores)}
@@ -3634,13 +3791,16 @@ class EspecialistaCodigo:
                         f"{len(app['secciones'])} pantallas. "
                         "Necesito confirmación para instalar las dependencias y compilarla.")
 
-            def instalar_y_verificar():
+            def ejecutar_instalacion_confirmada():
+                nonlocal app
                 puede, motivo = self._presupuesto_para_build()
                 if not puede:
                     estado.update(estado="pendiente_build", motivo_build=motivo)
                     self._escribir_json_atomico(estado_path, estado)
                     return f"La app quedó preparada en {carpeta}, pero pospuse la compilación: {motivo}."
                 estado.update(estado="instalando_dependencias")
+                self._fase_proyecto = "instalación"
+                self._informar_progreso(2, 4, "Instalando dependencias aprobadas")
                 self._escribir_json_atomico(estado_path, estado)
                 instalacion = self._comando_npm(carpeta, "instalar", 300)
                 if not instalacion["ok"]:
@@ -3652,6 +3812,8 @@ class EspecialistaCodigo:
                 hallazgos = []
                 revision = {"revisado": False, "aprobado": None, "hallazgos": []}
                 for ronda in range(3):
+                    self._fase_proyecto = "compilación"
+                    self._informar_progreso(3, 4, f"Construyendo la app · ronda {ronda + 1} de 3")
                     estado.update(estado="construyendo", ronda=ronda + 1)
                     self._escribir_json_atomico(estado_path, estado)
                     shutil.rmtree(os.path.join(carpeta, "dist"), ignore_errors=True)
@@ -3659,12 +3821,16 @@ class EspecialistaCodigo:
                     errores_build = [] if compilacion["ok"] else [
                         "falló npm run build: " + compilacion["error"]]
                     revision = self._revisar_app_compilada(esp, carpeta, errores_build)
+                    self._fase_proyecto = "revisión"
+                    self._informar_progreso(3, 4, f"Revisando la app · ronda {ronda + 1} de 3")
                     estado.update(estado="revisando", revision_visual=revision)
                     self._escribir_json_atomico(estado_path, estado)
                     hallazgos = revision.get("hallazgos", [])
                     if not hallazgos or ronda == 2:
                         break
                     try:
+                        self._fase_proyecto = "corrección"
+                        self._informar_progreso(3, 4, f"Corrigiendo la app · ronda {ronda + 1} de 3")
                         corregida, errores = self._componer_app(
                             esp, hallazgos_revision=hallazgos)
                         if corregida is None:
@@ -3672,6 +3838,9 @@ class EspecialistaCodigo:
                         self._ensamblar_app_react(carpeta, corregida, nombre_npm)
                     except Exception as error:
                         print(f"[Código] no pude aplicar la corrección de la app: {error}")
+                        if estado.get("estado") == "pausado_cuota_diaria":
+                            return (f"El trabajo de «{esp.titulo}» quedó pausado por la cuota diaria. "
+                                    "Su estado se guardó en .dark_project.json.")
                         hallazgos.append("no pude aplicar la corrección sugerida por la revisión")
                         break
                     app = corregida
@@ -3681,15 +3850,39 @@ class EspecialistaCodigo:
                               revision_visual=revision,
                               pendientes=list(dict.fromkeys(hallazgos)))
                 self._escribir_json_atomico(estado_path, estado)
-                pendiente = (" Quedaron pendientes: " + "; ".join(hallazgos[:3])
-                             if hallazgos else " La compilación y la revisión no dejaron hallazgos.")
+                self._informar_progreso(4, 4, "App lista")
+                pendiente = " " + self._resumen_pendientes(hallazgos)
                 if not revision.get("revisado"):
                     motivo = revision.get("motivo_sin_revisar") or "revisión visual incompleta"
                     pendiente += f" No pude completar la revisión visual: {motivo}."
+                indice = os.path.join(carpeta, "dist", "index.html")
+                abierta = False
+                try:
+                    abrir = getattr(os, "startfile", None)
+                    if callable(abrir):
+                        abrir(indice)
+                        abierta = True
+                except OSError as error:
+                    print(f"[Código] no pude abrir la app al terminar: {error}")
+                apertura = (" La abrí en el navegador." if abierta else
+                            f" Puede abrirla desde {indice}.")
                 return (f"App «{app['titulo']}» construida en {carpeta}: "
-                        f"{len(app['secciones'])} pantallas. Puede abrirla desde "
-                        f"{os.path.join(carpeta, 'dist', 'index.html')}."
-                        + pendiente)
+                        f"{len(app['secciones'])} pantallas, navegación "
+                        f"{app['navegacion']} y fondo 3D "
+                        f"{'activo' if app['fondo3d'] else 'desactivado'}. "
+                        f"{self._resumen_supuestos(esp)}{apertura}{pendiente}")
+
+            def instalar_y_verificar():
+                # La confirmación llega después de que generar_app_react haya
+                # terminado; se vuelve a enlazar el manifiesto durante este callback.
+                self._estado_proyecto_activo = estado
+                self._ruta_estado_proyecto_activo = estado_path
+                try:
+                    return ejecutar_instalacion_confirmada()
+                finally:
+                    self._estado_proyecto_activo = None
+                    self._ruta_estado_proyecto_activo = None
+                    self._fase_proyecto = ""
 
             estado.update(estado="esperando_confirmacion_instalacion")
             return self._confirmar_instalacion(instalar_y_verificar)
@@ -3697,6 +3890,9 @@ class EspecialistaCodigo:
             estado["actualizado"] = datetime.datetime.now().isoformat()
             self._escribir_json_atomico(estado_path, estado)
             self._liberar_coder()
+            self._estado_proyecto_activo = None
+            self._ruta_estado_proyecto_activo = None
+            self._fase_proyecto = ""
 
     def tool_crear_recurso(self, ruta, tipo, contenido=""):
         return self.crear_recurso(ruta, tipo, contenido)

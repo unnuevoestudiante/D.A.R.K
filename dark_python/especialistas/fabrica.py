@@ -53,6 +53,8 @@ def crear_especialista_codigo(
     liberar_modelo: Callable,
     avisar_espera: Optional[Callable[[str], None]] = None,
     confirmar_instalacion: Optional[Callable] = None,
+    decidir_cuota_diaria: Optional[Callable] = None,
+    informar_progreso: Optional[Callable] = None,
 ) -> PuertoCodigo:
     """Archivos y generación de código.
 
@@ -76,6 +78,8 @@ def crear_especialista_codigo(
         liberar_modelo=liberar_modelo,
         avisar_espera=avisar_espera,
         confirmar_instalacion=confirmar_instalacion,
+        decidir_cuota_diaria=decidir_cuota_diaria,
+        informar_progreso=informar_progreso,
     )
 
 

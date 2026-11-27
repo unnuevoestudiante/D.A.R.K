@@ -1,5 +1,6 @@
 """Pruebas del paso de contenido investigado al generador de código."""
 import json
+import os
 import re
 import sys
 import tempfile
@@ -132,11 +133,79 @@ class PruebasCoderPaciente(unittest.TestCase):
         self.assertEqual(solicitud.messages[0], {"role": "system", "content": "sistema"})
         self.assertEqual(solicitud.options["max_output_tokens"], 900)
 
-    def test_lo_que_esperar_no_arregla_cae_al_local(self):
+    def test_la_cuota_diaria_no_cae_al_local_sin_consultar(self):
         trabajo = _TrabajoFalso(error=ErrorRemoto("429 diario", diario=True))
         ok, motivo = self.coder(trabajo)._llamar_online("haz", "s", "html")
         self.assertFalse(ok)
-        self.assertIn("429 diario", motivo)
+        self.assertIn("pausado", motivo)
+
+    def test_cuota_diaria_guarda_el_proyecto_y_espera_una_decision(self):
+        with tempfile.TemporaryDirectory(dir=RAIZ) as temporal:
+            trabajo = _TrabajoFalso(error=ErrorRemoto(
+                "429 diario", proveedor="groq", diario=True, agotado=3600))
+            coder = self.coder(trabajo)
+            coder._estado_proyecto_activo = {"estado": "en_progreso"}
+            coder._ruta_estado_proyecto_activo = str(Path(temporal) / ".dark_project.json")
+            coder._fase_proyecto = "composición"
+            coder._decidir_cuota_diaria = Mock(return_value=None)
+            progreso = []
+            coder._informar_progreso_cb = lambda *args: progreso.append(args)
+
+            ok, motivo = coder._llamar_online("pedido", "sistema", "json")
+
+            estado = json.loads(Path(coder._ruta_estado_proyecto_activo).read_text(encoding="utf-8"))
+            self.assertFalse(ok)
+            self.assertIn("pausado", motivo)
+            self.assertEqual(estado["estado"], "pausado_cuota_diaria")
+            self.assertEqual(estado["pausa_cuota"]["fase"], "composición")
+            self.assertEqual(estado["pausa_cuota"]["proveedor"], "groq")
+            self.assertEqual(estado["pausa_cuota"]["opciones"],
+                             ["modelo_local", "esperar_reinicio"])
+            self.assertIn("esperando su decisión", progreso[-1][2])
+
+    def test_elegir_modelo_local_repite_la_llamada_y_guarda_la_decision(self):
+        with tempfile.TemporaryDirectory(dir=RAIZ) as temporal:
+            trabajo = _TrabajoFalso(error=ErrorRemoto(
+                "429 diario", proveedor="groq", diario=True))
+            coder = self.coder(trabajo)
+            coder._estado_proyecto_activo = {"estado": "en_progreso"}
+            coder._ruta_estado_proyecto_activo = str(Path(temporal) / ".dark_project.json")
+            coder._decidir_cuota_diaria = Mock(return_value="modelo_local")
+            coder._llamar_ollama = Mock(return_value=(True, "<think>oculto</think>JSON"))
+
+            self.assertEqual(coder._llamar_online("pedido", "sistema", "json"),
+                             (True, "JSON"))
+            coder._llamar_ollama.assert_called_once_with(
+                coder.coder_model, "sistema", "pedido", 8192,
+                max_tokens=4000, timeout=600)
+            estado = json.loads(Path(coder._ruta_estado_proyecto_activo).read_text(encoding="utf-8"))
+            self.assertEqual(estado["decision_cuota"], "modelo_local")
+            self.assertEqual(estado["estado"], "en_progreso")
+
+    def test_esperar_reintenta_la_misma_solicitud_y_reanuda_el_proyecto(self):
+        class TrabajoConReinicio:
+            def __init__(self):
+                self.solicitudes = []
+
+            def complete_paciente(self, solicitud, **_opciones):
+                self.solicitudes.append(solicitud)
+                if len(self.solicitudes) == 1:
+                    raise ErrorRemoto("429 diario", proveedor="groq", diario=True)
+                return ChatResult(content="respuesta tras el reinicio")
+
+        with tempfile.TemporaryDirectory(dir=RAIZ) as temporal:
+            trabajo = TrabajoConReinicio()
+            coder = self.coder(trabajo)
+            coder._estado_proyecto_activo = {"estado": "en_progreso"}
+            coder._ruta_estado_proyecto_activo = str(Path(temporal) / ".dark_project.json")
+            coder._decidir_cuota_diaria = Mock(return_value="esperar_reinicio")
+
+            self.assertEqual(coder._llamar_online("pedido", "sistema", "json"),
+                             (True, "respuesta tras el reinicio"))
+            self.assertEqual(trabajo.solicitudes[0], trabajo.solicitudes[1])
+            estado = json.loads(Path(coder._ruta_estado_proyecto_activo).read_text(encoding="utf-8"))
+            self.assertEqual(estado["estado"], "en_progreso")
+            self.assertEqual(estado["decision_cuota"], "esperar_reinicio")
 
     def test_solo_local_no_sube_nada_a_la_nube(self):
         coder = EspecialistaCodigo(chat_provider=Mock(nube_de_trabajo=Mock(return_value=False)))
@@ -451,7 +520,7 @@ class PruebasFotosYVariedad(PruebasWebInmersiva):
             "revisado": True, "motivo_sin_revisar": None, "aprobado": False,
             "hallazgos": ["el título tapa la foto"], "errores_consola": [], "capturas": ["x.png"]})
         mensaje = self.generar(coder)
-        self.assertIn("La revisión dejó pendiente: el título tapa la foto", mensaje)
+        self.assertIn("Quedó pendiente: el título tapa la foto", mensaje)
         self.assertEqual(coder._revisar_visualmente.call_count, 3)
         estado = json.loads((Path(coder.ultima_carpeta_proyecto) / ".dark_project.json")
                             .read_text(encoding="utf-8"))
@@ -466,7 +535,7 @@ class PruebasFotosYVariedad(PruebasWebInmersiva):
             "hallazgos": ["el contraste es bajo"], "errores_consola": [], "capturas": []})
         mensaje = self.generar(coder)
         self.assertIn("Revisa el texto", mensaje)
-        self.assertIn("La revisión dejó pendiente: el contraste es bajo", mensaje)
+        self.assertIn("Quedó pendiente: el contraste es bajo", mensaje)
 
 
 SPEC_REACT = """# Especificación: Bitácora
@@ -562,6 +631,8 @@ class PruebasAppReact(unittest.TestCase):
         app = json.loads((src / "app.json").read_text(encoding="utf-8"))
         self.assertEqual(app["navegacion"], "superior")
         self.assertEqual(len(app["secciones"][0]["bloques"]), 3)
+        vite = (carpeta / "vite.config.ts").read_text(encoding="utf-8")
+        self.assertIn('base: "./"', vite)
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
         self.assertEqual((estado["estado"], estado["tipo"]),
                          ("pendiente_confirmacion_instalacion", "app_react"))
@@ -575,6 +646,35 @@ class PruebasAppReact(unittest.TestCase):
         coder._comando_npm = Mock()
         coder._confirmar_instalacion.assert_called_once()
         coder._comando_npm.assert_not_called()
+
+    def test_entrega_de_app_muestra_etapas_abre_y_resume_sus_supuestos(self):
+        self.spec.write_text(SPEC_REACT.replace(
+            "Sincronizar en la nube.",
+            "Sincronizar en la nube. [supuesto: no habrá cuentas de usuario]."),
+            encoding="utf-8")
+        coder = self.coder(APP_JSON)
+        progreso = []
+        coder._informar_progreso_cb = lambda *args: progreso.append(args)
+        coder._confirmar_instalacion = lambda ejecutar: ejecutar()
+        coder._presupuesto_para_build = Mock(return_value=(True, ""))
+        coder._comando_npm = Mock(return_value={"ok": True, "error": ""})
+        coder._revisar_app_compilada = Mock(return_value={
+            "revisado": True, "aprobado": True, "hallazgos": []})
+
+        with patch.object(os, "startfile", create=True) as abrir:
+            mensaje = self.generar(coder)
+
+        etiquetas = [evento[2] for evento in progreso]
+        self.assertTrue(any("estimación" in etiqueta for etiqueta in etiquetas))
+        self.assertTrue(any("Construyendo la app · ronda 1 de 3" in etiqueta
+                            for etiqueta in etiquetas))
+        self.assertTrue(any("Revisando la app · ronda 1 de 3" in etiqueta
+                            for etiqueta in etiquetas))
+        self.assertIn("no habrá cuentas de usuario", mensaje)
+        self.assertIn("No quedaron hallazgos pendientes", mensaje)
+        abrir.assert_called_once()
+        abrir.assert_called_once_with(str(Path(coder.ultima_carpeta_proyecto) /
+                                          "dist" / "index.html"))
 
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', APP_JSON)

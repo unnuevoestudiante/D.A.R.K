@@ -882,6 +882,8 @@ class DarkNucleo:
         self._tarea_bg_cancel = threading.Event()
         self.confirmaciones = AlmacenConfirmacion()
         self._cambio_contrasena_pendiente = False
+        self._cuota_coder_lock = threading.Lock()
+        self._cuota_coder_pendiente = None
 
         # NUEVO: preservar args reales de cada tarea para poder reanudar
         # sin tener que replanificar con el LLM.
@@ -904,6 +906,8 @@ class DarkNucleo:
             liberar_modelo=self._liberar_modelo_de_trabajo,
             avisar_espera=lambda frase: self._decir_filler(frase, delay=0),
             confirmar_instalacion=self._confirmar_instalacion_app,
+            decidir_cuota_diaria=self._decidir_cuota_diaria_coder,
+            informar_progreso=self._informar_progreso_coder,
         )
         self.esp_comunicacion = esp_fabrica.crear_especialista_comunicacion(
             http_session=self._http,
@@ -3367,6 +3371,77 @@ class DarkNucleo:
             accion="instalar_dependencias_app",
             argumentos={},
         )
+
+    def _informar_progreso_coder(self, paso, total, etiqueta):
+        """Reutiliza el indicador de trabajo largo del overlay para el Coder."""
+        if (getattr(self, "_modo_bloqueado", False)
+                or getattr(self, "_silenciar_local", None)
+                and getattr(self._silenciar_local, "activo", False)
+                or getattr(self.overlay, "oculto", False)):
+            return
+        try:
+            self.overlay.progress(paso, total, etiqueta)
+        except Exception as error:
+            print(f"[Código] no pude mostrar el progreso: {error}")
+
+    def _decidir_cuota_diaria_coder(self, pausa):
+        """Pausa el worker hasta que la persona elija local, esperar o cancelar."""
+        evento = threading.Event()
+        pendiente = {"evento": evento, "decision": None}
+        with self._cuota_coder_lock:
+            anterior = self._cuota_coder_pendiente
+            self._cuota_coder_pendiente = pendiente
+        if anterior is not None:
+            anterior["decision"] = "cancelar"
+            anterior["evento"].set()
+        proveedor = pausa.get("proveedor") or "el proveedor actual"
+        self.speak(
+            f"Se agotó la cuota diaria de {proveedor}. El proyecto quedó guardado. "
+            "Diga «local» para seguir con el modelo local, «esperar» para continuar "
+            "cuando se reinicie la cuota, o «cancelar» para dejarlo pausado. "
+            "No hay una clave de pago con tarifa declarada para estimar un costo."
+        )
+        try:
+            evento.wait(timeout=120)
+            return pendiente["decision"]
+        finally:
+            with self._cuota_coder_lock:
+                if self._cuota_coder_pendiente is pendiente:
+                    self._cuota_coder_pendiente = None
+
+    def _procesar_decision_cuota_coder(self, texto):
+        """Interpreta solo las opciones de cuota mientras el Coder está pausado."""
+        normalizado = self._texto_sin_acentos(texto)
+        lock = getattr(self, "_cuota_coder_lock", None)
+        if lock is None:
+            return False
+        with lock:
+            pendiente = self._cuota_coder_pendiente
+            if pendiente is None:
+                return False
+            if re.search(r"\b(?:local|modelo local|ollama)\b", normalizado):
+                decision = "modelo_local"
+            elif re.search(r"\b(?:esperar|reinicio|cuota)\b", normalizado):
+                decision = "esperar_reinicio"
+            elif re.search(r"\b(?:cancelar|cancela|dejarlo pausado)\b", normalizado):
+                decision = "cancelar"
+            elif re.search(r"\b(?:pago|pagada|clave de pago)\b", normalizado):
+                self.speak(
+                    "No puedo ofrecer esa salida: no hay un proveedor configurado "
+                    "con tarifa declarada para calcular el costo. Diga «local», "
+                    "«esperar» o «cancelar»."
+                )
+                return True
+            else:
+                return False
+            pendiente["decision"] = decision
+            pendiente["evento"].set()
+        self.speak({
+            "modelo_local": "De acuerdo, continuaré con el modelo local.",
+            "esperar_reinicio": "De acuerdo, esperaré el reinicio de la cuota.",
+            "cancelar": "De acuerdo, el proyecto seguirá pausado.",
+        }[decision])
+        return True
 
     def _resumir_log_terminal(self, operacion, returncode, log_etiquetado):
         """Resume salida saneada como datos no confiables, nunca instrucciones."""
@@ -7674,6 +7749,8 @@ class DarkNucleo:
                 return True
             if self._es_comando_terminal_destructivo(text):
                 self.speak(self._frase_comando_bloqueado())
+                return True
+            if self._procesar_decision_cuota_coder(text):
                 return True
             intencion_precalculada = None
             coincidencia_negacion = None

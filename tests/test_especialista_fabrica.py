@@ -287,7 +287,8 @@ class PruebaReenvio(unittest.TestCase):
             http_session="S", chat_provider="P", cliente_manager="M", llm_lock="L",
             liberar_whisper="lw", recargar_whisper="rw",
             preparar_modelo="pm", liberar_modelo="lm", avisar_espera="ae",
-            confirmar_instalacion=None),
+            confirmar_instalacion=None, decidir_cuota_diaria=None,
+            informar_progreso=None),
         "crear_especialista_comunicacion": dict(
             http_session="S", vlc_instance="V", apps_registry_path="r",
             apps_cache_path="c", speak_cb="s", on_reproduccion_cb="o",
