@@ -2530,10 +2530,10 @@ class EspecialistaCodigo:
                                "archivo_estilos": pantalla["archivo_estilos"],
                                "selector_css": pantalla["selector_css"]})
             ficha = objeto.get("ficha", {})
-            for clave, dato in [("ficha", ficha), *[
-                    (f"satelite-{i}", satelite)
+            for clave, ruta, dato in [("ficha", "ficha", ficha), *[
+                    (f"satelite-{i}", f"satelites/{i}", satelite)
                     for i, satelite in enumerate(objeto.get("satelites", []))], *[
-                    (f"foto-{i}", foto)
+                    (f"foto-{i}", f"fotos/{i}", foto)
                     for i, foto in enumerate(objeto.get("fotos", []))]]:
                 if not isinstance(dato, dict) or not dato.get("titulo"):
                     continue
@@ -2541,7 +2541,7 @@ class EspecialistaCodigo:
                                "alias": [dato.get("breve", "")],
                                "pantalla": pantalla["nombre"], "tipo": clave,
                                "componente": "contenido de estación", "archivo": "index.html",
-                               "ruta_json": f"/estaciones/{indice}/objeto/{clave}",
+                               "ruta_json": f"/estaciones/{indice}/objeto/{ruta}",
                                "archivo_estilos": pantalla["archivo_estilos"],
                                "selector_css": pantalla["selector_css"]})
         return {"version": 1, "pantallas": pantallas, "piezas": piezas,

@@ -735,6 +735,24 @@ class PruebasAppReact(unittest.TestCase):
             str(self.raiz), objeto, "mueva el teseracto")
         self.assertEqual(relativo, "index.html")
 
+    def test_mapa_inmersivo_apunta_a_ficha_satelites_y_fotos(self):
+        mundo = {"estaciones": [{
+            "indice": "01 · Inicio", "titulo": "Inicio",
+            "objeto": {
+                "tipo": "hipercubo",
+                "ficha": {"titulo": "La estructura"},
+                "satelites": [{"titulo": "La órbita"}],
+                "fotos": [{"titulo": "El reflejo"}],
+            },
+        }]}
+
+        mapa = EspecialistaCodigo._mapa_mundo(mundo)
+        rutas = {pieza["tipo"]: pieza["ruta_json"] for pieza in mapa["piezas"]}
+
+        self.assertEqual(rutas["ficha"], "/estaciones/0/objeto/ficha")
+        self.assertEqual(rutas["satelite-0"], "/estaciones/0/objeto/satelites/0")
+        self.assertEqual(rutas["foto-0"], "/estaciones/0/objeto/fotos/0")
+
     def test_cambio_puntual_unico_se_compila_y_actualiza_el_mapa(self):
         coder = self.coder(json.dumps({
             "buscar": "Ideas para el viaje", "reemplazar": "Ideas para el fin de semana",
