@@ -36,6 +36,52 @@ const JS_ASENTAR_ANIMACIONES = `
   });
 `;
 
+const JS_COMPROBACIONES = `
+  (() => {
+    const hallazgos = [];
+    const relacion = (fg, bg) => {
+      const rgb = (s) => (s.match(/[\\d.]+/g) || []).slice(0, 3).map(Number);
+      const a = rgb(fg), b = rgb(bg);
+      if (a.length < 3 || b.length < 3) return null;
+      const lum = (c) => c.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; })
+        .reduce((s, v, i) => s + v * [.2126, .7152, .0722][i], 0);
+      const x = lum(a), y = lum(b);
+      return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+    };
+    const fondoOpaco = (e) => {
+      for (let actual = e; actual; actual = actual.parentElement) {
+        const color = getComputedStyle(actual).backgroundColor;
+        const valores = color.match(/[\\d.]+/g) || [];
+        if (valores.length < 4 || Number(valores[3]) > 0) return color;
+      }
+      return 'rgb(255, 255, 255)';
+    };
+    if (document.documentElement.scrollWidth > innerWidth + 1)
+      hallazgos.push('desbordamiento horizontal');
+    const rotas = [...document.images].filter(i => i.complete && i.naturalWidth === 0);
+    if (rotas.length) hallazgos.push(rotas.length + ' imagen(es) rota(s)');
+    const fuera = [...document.querySelectorAll('body *')].filter(e => {
+      const r = e.getBoundingClientRect(), estilo = getComputedStyle(e);
+      return r.width > 0 && r.height > 0 &&
+        (r.right < -1 || r.left > innerWidth + 1 ||
+          ((estilo.position === 'fixed' || estilo.position === 'sticky') &&
+            (r.bottom < -1 || r.top > innerHeight + 1)));
+    });
+    if (fuera.length) hallazgos.push(fuera.length + ' elemento(s) fuera del ancho visible');
+    let bajoContraste = 0;
+    for (const e of document.querySelectorAll('body *')) {
+      if (!e.textContent.trim() || e.children.length > 0) continue;
+      const s = getComputedStyle(e), ratio = relacion(s.color, fondoOpaco(e));
+      const grande = parseFloat(s.fontSize) >= 24 ||
+        (s.fontWeight >= 600 && parseFloat(s.fontSize) >= 18.7);
+      if (ratio !== null && ratio < (grande ? 3 : 4.5) && s.fontSize !== '0px') bajoContraste++;
+    }
+    if (bajoContraste) hallazgos.push(bajoContraste + ' elemento(s) de texto con contraste menor a 4.5:1');
+    return { hallazgos, desbordamiento_horizontal: document.documentElement.scrollWidth > innerWidth + 1,
+      imagenes_rotas: rotas.length, elementos_fuera: fuera.length, textos_bajo_contraste: bajoContraste };
+  })()
+`;
+
 async function capturarUna(spec, esperaMs) {
   const consola = [];
   const win = new BrowserWindow({
@@ -48,10 +94,12 @@ async function capturarUna(spec, esperaMs) {
     if (evento.level === "error") consola.push({ nivel: "error", mensaje: evento.message });
   });
   let error = null;
+  let comprobaciones = {};
   try {
     await win.loadURL(spec.url);
     await new Promise((resuelve) => setTimeout(resuelve, esperaMs));
     await win.webContents.executeJavaScript(JS_ASENTAR_ANIMACIONES).catch(() => {});
+    comprobaciones = await win.webContents.executeJavaScript(JS_COMPROBACIONES);
     // Una ventana oculta no repinta sola: lo que haya cambiado por JS no llega
     // a los píxeles hasta que algo fuerza un cuadro nuevo. `capturePage()` es
     // justo lo que fuerza ese cuadro, así que la primera llamada se descarta y
@@ -65,7 +113,7 @@ async function capturarUna(spec, esperaMs) {
   } finally {
     win.destroy();
   }
-  return { salida: spec.salida, ok: !error, consola, error };
+  return { salida: spec.salida, ok: !error, consola, comprobaciones, error };
 }
 
 function fallar(e) {

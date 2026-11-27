@@ -267,7 +267,7 @@ class PruebasWebInmersiva(unittest.TestCase):
         self.assertEqual((estado["estado"], estado["tipo"]), ("completo", "inmersivo"))
         self.assertEqual(estado["objetos"], ["nebulosa", "cristal", "ninguno"])
         self.assertEqual(estado["revision_visual"], self.SIN_REVISION, "sin Electron, no se revisó")
-        self.assertNotIn("revisión visual", mensaje, "sin revisión, el mensaje no la menciona")
+        self.assertIn("No pude completar la revisión visual", mensaje)
 
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', MUNDO_JSON)
@@ -446,25 +446,27 @@ class PruebasFotosYVariedad(PruebasWebInmersiva):
             self.assertIn(f"{tipo} ({' | '.join(variantes)})", _FORMA_MUNDO)
 
     def test_un_hallazgo_de_la_revision_visual_se_dice_en_el_mensaje(self):
-        coder = self.coder(MUNDO_JSON)
+        coder = self.coder(MUNDO_JSON, MUNDO_JSON, MUNDO_JSON)
         coder._revisar_visualmente = Mock(return_value={
             "revisado": True, "motivo_sin_revisar": None, "aprobado": False,
             "hallazgos": ["el título tapa la foto"], "errores_consola": [], "capturas": ["x.png"]})
         mensaje = self.generar(coder)
-        self.assertIn("La revisión visual encontró algo: el título tapa la foto", mensaje)
+        self.assertIn("La revisión dejó pendiente: el título tapa la foto", mensaje)
+        self.assertEqual(coder._revisar_visualmente.call_count, 3)
         estado = json.loads((Path(coder.ultima_carpeta_proyecto) / ".dark_project.json")
                             .read_text(encoding="utf-8"))
         self.assertTrue(estado["revision_visual"]["revisado"])
 
     def test_un_hallazgo_de_la_revision_visual_no_tapa_el_aviso_de_estilo(self):
         con_relleno = MUNDO_JSON.replace("Amanecer en la cumbre.", "Bienvenido a la cumbre.")
-        coder = self.coder(con_relleno, con_relleno, con_relleno)
+        coder = self.coder(con_relleno, con_relleno, con_relleno,
+                           MUNDO_JSON, MUNDO_JSON, MUNDO_JSON)
         coder._revisar_visualmente = Mock(return_value={
             "revisado": True, "motivo_sin_revisar": None, "aprobado": False,
             "hallazgos": ["el contraste es bajo"], "errores_consola": [], "capturas": []})
         mensaje = self.generar(coder)
         self.assertIn("Revisa el texto", mensaje)
-        self.assertIn("La revisión visual encontró algo: el contraste es bajo", mensaje)
+        self.assertIn("La revisión dejó pendiente: el contraste es bajo", mensaje)
 
 
 SPEC_REACT = """# Especificación: Bitácora
@@ -537,7 +539,7 @@ class PruebasAppReact(unittest.TestCase):
         coder = self.coder(APP_JSON)
         mensaje = self.generar(coder)
         self.assertIn("1 pantallas", mensaje)
-        self.assertIn("npm install", mensaje)
+        self.assertIn("Necesito confirmación", mensaje)
         carpeta = Path(coder.ultima_carpeta_proyecto)
         paquete = json.loads((carpeta / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(paquete["name"], "bitacora")
@@ -561,11 +563,22 @@ class PruebasAppReact(unittest.TestCase):
         self.assertEqual(app["navegacion"], "superior")
         self.assertEqual(len(app["secciones"][0]["bloques"]), 3)
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
-        self.assertEqual((estado["estado"], estado["tipo"]), ("completo", "app_react"))
+        self.assertEqual((estado["estado"], estado["tipo"]),
+                         ("pendiente_confirmacion_instalacion", "app_react"))
+
+    def test_instalar_y_compilar_queda_detras_de_confirmar_accion(self):
+        coder = self.coder(APP_JSON)
+        coder._confirmar_instalacion = Mock(return_value="¿Autoriza instalar?")
+        self.assertEqual(self.generar(coder), "¿Autoriza instalar?")
+        ejecutar = coder._confirmar_instalacion.call_args.args[0]
+        self.assertTrue(callable(ejecutar))
+        coder._comando_npm = Mock()
+        coder._confirmar_instalacion.assert_called_once()
+        coder._comando_npm.assert_not_called()
 
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', APP_JSON)
-        self.assertIn("1 pantallas", self.generar(coder))
+        self.assertIn("Necesito confirmación", self.generar(coder))
         segundo = coder._llamar_online.call_args_list[1].args[0]
         self.assertIn("Tenía estos errores", segundo)
         self.assertIn("lista de 1 a 8 pantallas", segundo)
@@ -625,6 +638,47 @@ class PruebasRevisionVisual(unittest.TestCase):
                 resultado = coder._revisar_visualmente(esp, str(self.raiz / "index.html"))
         self.assertFalse(resultado["revisado"])
         self.assertIn("Electron reventó", resultado["motivo_sin_revisar"])
+
+    def test_revision_conserva_fallos_automaticos_sin_modelo_de_vision(self):
+        from especialistas import revisor_visual
+        capturas = [
+            revisor_visual.Captura(
+                ancho=1440, ruta="escritorio.png",
+                comprobaciones={"hallazgos": ["desbordamiento horizontal"]}),
+            revisor_visual.Captura(ancho=390, ruta="movil.png"),
+        ]
+        with patch("especialistas.revisor_visual.capturar_pantallas",
+                   return_value=(capturas, None)), \
+                patch("especialistas.revisor_visual.criticar_captura",
+                      return_value=(False, None, [])):
+            resultado = revisor_visual.revisar_url(
+                "http://localhost", str(self.raiz), "sobria", "sin desbordes",
+                errores_build=["falló la compilación"])
+        self.assertFalse(resultado["revisado"])
+        self.assertIn("falló la compilación", resultado["hallazgos"])
+        self.assertIn("desbordamiento horizontal", resultado["hallazgos"])
+        self.assertEqual(len(resultado["capturas"]), 2)
+
+    def test_revision_critica_escritorio_y_movil(self):
+        from especialistas import revisor_visual
+        capturas = [
+            revisor_visual.Captura(ancho=1440, ruta="escritorio.png"),
+            revisor_visual.Captura(ancho=390, ruta="movil.png"),
+        ]
+        with patch("especialistas.revisor_visual.capturar_pantallas",
+                   return_value=(capturas, None)), \
+                patch("especialistas.revisor_visual.criticar_captura",
+                      side_effect=[(True, True, []), (True, False, ["texto cortado"])]) as criticar:
+            resultado = revisor_visual.revisar_url(
+                "http://localhost", str(self.raiz), "sobria", "se lee en móvil")
+        self.assertEqual(criticar.call_count, 2)
+        self.assertFalse(resultado["aprobado"])
+        self.assertIn("390px: texto cortado", resultado["hallazgos"])
+
+    def test_comando_npm_rechaza_acciones_fuera_de_la_lista(self):
+        coder = EspecialistaCodigo(chat_provider=Mock())
+        with self.assertRaises(ValueError):
+            coder._comando_npm(str(self.raiz), "ejecutar_script_del_modelo", 1)
 
 
 if __name__ == "__main__":

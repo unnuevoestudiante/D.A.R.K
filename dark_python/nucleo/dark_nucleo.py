@@ -903,6 +903,7 @@ class DarkNucleo:
             preparar_modelo=self._preparar_modelo_de_trabajo,
             liberar_modelo=self._liberar_modelo_de_trabajo,
             avisar_espera=lambda frase: self._decir_filler(frase, delay=0),
+            confirmar_instalacion=self._confirmar_instalacion_app,
         )
         self.esp_comunicacion = esp_fabrica.crear_especialista_comunicacion(
             http_session=self._http,
@@ -3347,6 +3348,25 @@ class DarkNucleo:
         except Exception as error:
             print(f"[Intención] uso fallback de confirmación natural: {error}")
             return f"Señor, ¿está seguro de que desea {verbo}?"
+
+    def _confirmar_instalacion_app(self, ejecutar):
+        """Pide permiso antes de que npm descargue dependencias del kit fijo."""
+        try:
+            pregunta = self.cerebro.responder(
+                "confirmar_accion", extra=False,
+                accion="instalar las dependencias fijadas de la app React")
+        except Exception as error:
+            print(f"[Código] confirmación de instalación no disponible: {error}")
+            pregunta = "Señor, ¿autoriza instalar las dependencias de esta app?"
+        return self.confirmaciones.solicitar(
+            ejecutar=ejecutar,
+            rechazar=lambda: "Entendido, no instalé las dependencias.",
+            al_descartar=lambda: None,
+            pregunta=pregunta,
+            origen="codigo",
+            accion="instalar_dependencias_app",
+            argumentos={},
+        )
 
     def _resumir_log_terminal(self, operacion, returncode, log_etiquetado):
         """Resume salida saneada como datos no confiables, nunca instrucciones."""

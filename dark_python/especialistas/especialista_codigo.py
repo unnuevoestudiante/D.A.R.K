@@ -39,12 +39,15 @@ import json
 import math
 import time
 import shutil
+import subprocess
 import datetime
 import hashlib
 import tempfile
 import threading
 import html as html_lib
 import unicodedata
+import urllib.error
+import urllib.request
 from urllib.parse import urlparse, unquote
 from typing import Optional
 
@@ -79,6 +82,16 @@ _MAX_TOKENS_POR_LENGUAJE = {
     "java": 2500,
     "default": 2000,
 }
+
+# Invocaciones cerradas del package.json del kit. Ningún dato del modelo llega
+# a subprocess: el proyecto solo se instala después de la confirmación humana.
+_COMANDOS_NPM_PERMITIDOS = {
+    "instalar": ("install", "--ignore-scripts", "--no-audit", "--no-fund"),
+    "compilar": ("run", "build"),
+    "previsualizar": ("run", "preview", "--", "--host", "127.0.0.1",
+                      "--port", "4173", "--strictPort"),
+}
+_PRESUPUESTO_BUILD_MINIMO_MB = 2048
 
 _RUTAS_BLOQUEADAS = (
     os.environ.get("WINDIR", "C:\\Windows"),
@@ -1237,12 +1250,14 @@ class EspecialistaCodigo:
                  llm_lock=None, liberar_whisper=None, recargar_whisper=None,
                  preparar_modelo=None, liberar_modelo=None,
                  chat_provider=None, cliente_manager=None, avisar_espera=None,
+                 confirmar_instalacion=None,
                  **_kwargs):
         self._http = http_session or requests.Session()
         self._chat_provider = chat_provider or crear_proveedor_chat(
             session=self._http)
         self._manager = cliente_manager or crear_cliente_manager(
             session=self._http)
+        self._confirmar_instalacion = confirmar_instalacion
         self._psutil = psutil_module
         self._llm_lock = llm_lock if llm_lock is not None else threading.Lock()
         self._liberar_whisper = liberar_whisper
@@ -3137,7 +3152,7 @@ class EspecialistaCodigo:
         except OSError as error:
             print(f"[Código] no pude guardar la variedad de mundos: {error}")
 
-    def _componer_mundo(self, esp, huella=None):
+    def _componer_mundo(self, esp, huella=None, hallazgos_revision=()):
         """Pide el JSON del mundo; si el contrato encuentra errores, se los devuelve una vez."""
         plan = "\n\n".join(
             f"{s.titulo}:\n{esp.sin_marcas(s.clave)}"
@@ -3155,6 +3170,9 @@ class EspecialistaCodigo:
             "Compón el mundo de esta web. Responde SOLO con el JSON, con esta forma:\n"
             f"{_FORMA_MUNDO}{variedad_previa}"
         )
+        if hallazgos_revision:
+            pedido += ("\n\nLa revisión anterior encontró estos problemas. Corrige el JSON "
+                       "completo para resolverlos:\n- " + "\n- ".join(hallazgos_revision))
         mundo, errores = None, ("sin respuesta del modelo",)
         original = pedido
         for _intento in range(3):
@@ -3362,19 +3380,38 @@ class EspecialistaCodigo:
                 estado.update(estado="fallido", errores=list(errores))
                 return {"ok": False, "mensaje": "No pude componer el mundo de la web.",
                         "error": "; ".join(errores)}
+            avisos_estilo = list(errores)
             self._anotar_variedad(huella, mundo)
             indice, avisos_fotos = self._ensamblar_inmersivo(carpeta, mundo)
-            revision = self._revisar_visualmente(esp, indice)
+            revision = {"revisado": False, "aprobado": None, "hallazgos": [],
+                        "errores_consola": [], "capturas": []}
+            for ronda in range(3):
+                revision = self._revisar_visualmente(esp, indice)
+                if not revision.get("hallazgos") or ronda == 2:
+                    break
+                mundo_corregido, errores_correccion = self._componer_mundo(
+                    esp, huella, hallazgos_revision=revision["hallazgos"])
+                if mundo_corregido is None:
+                    revision["hallazgos"].append(
+                        "no pude aplicar la corrección sugerida por la revisión")
+                    break
+                mundo = mundo_corregido
+                avisos_estilo.extend(errores_correccion)
+                indice, avisos_fotos_nuevos = self._ensamblar_inmersivo(carpeta, mundo)
+                avisos_fotos = avisos_fotos_nuevos
             estado.update(estado="completo", estaciones=len(mundo["estaciones"]),
                           objetos=[e["objeto"]["tipo"] for e in mundo["estaciones"]],
-                          avisos_de_estilo=[e.removeprefix(ESTILO) for e in errores],
+                          avisos_de_estilo=[e.removeprefix(ESTILO) for e in avisos_estilo],
                           avisos_de_fotos=avisos_fotos, semilla=mundo["semilla"],
                           revision_visual=revision)
-            aviso = (f" Revisa el texto: {errores[0].removeprefix(ESTILO)}." if errores else "")
+            aviso = (f" Revisa el texto: {avisos_estilo[0].removeprefix(ESTILO)}."
+                     if avisos_estilo else "")
             if avisos_fotos:
                 aviso += f" Ojo: {avisos_fotos[0]}."
-            if revision["revisado"] and not revision["aprobado"]:
-                aviso += f" La revisión visual encontró algo: {revision['hallazgos'][0]}."
+            if revision.get("hallazgos"):
+                aviso += f" La revisión dejó pendiente: {revision['hallazgos'][0]}."
+            if not revision.get("revisado") and revision.get("motivo_sin_revisar"):
+                aviso += f" No pude completar la revisión visual: {revision['motivo_sin_revisar']}."
             return (f"Web «{mundo['titulo']}» creada en {carpeta}: "
                     f"{len(mundo['estaciones'])} estaciones. Ábrela con doble clic en {indice}."
                     + aviso)
@@ -3403,7 +3440,7 @@ class EspecialistaCodigo:
     # proyecto React+Vite+TS real. Mismo patrón que la web inmersiva.
     # =================================================================
 
-    def _componer_app(self, esp):
+    def _componer_app(self, esp, hallazgos_revision=()):
         """Pide el JSON de la app; si el contrato encuentra errores, se los devuelve una vez."""
         plan = "\n\n".join(
             f"{s.titulo}:\n{esp.sin_marcas(s.clave)}"
@@ -3413,6 +3450,9 @@ class EspecialistaCodigo:
             "Compón la app. Responde SOLO con el JSON, con esta forma:\n"
             f"{_FORMA_APP}"
         )
+        if hallazgos_revision:
+            pedido += ("\n\nLa revisión anterior encontró estos problemas. Corrige el JSON "
+                       "completo para resolverlos:\n- " + "\n- ".join(hallazgos_revision))
         app, errores = None, ("sin respuesta del modelo",)
         original = pedido
         for _intento in range(3):
@@ -3471,8 +3511,98 @@ class EspecialistaCodigo:
                 open(os.path.join(_KIT, "fuentes", "LICENCIAS.txt"), encoding="utf-8") as b:
             self._escribir_texto_atomico(os.path.join(carpeta, "LICENCIAS.txt"), a.read() + "\n\n" + b.read())
 
+    def _comando_npm(self, carpeta, clave, timeout):
+        """Ejecuta solo una de las acciones npm declaradas arriba, sin shell libre."""
+        argumentos = _COMANDOS_NPM_PERMITIDOS.get(clave)
+        if argumentos is None:
+            raise ValueError("acción npm fuera de la lista permitida")
+        ejecutable = (shutil.which("npm.cmd") or shutil.which("npm")
+                      if os.name == "nt" else shutil.which("npm"))
+        if not ejecutable:
+            return {"ok": False, "error": "npm no está instalado"}
+        try:
+            proceso = subprocess.run(
+                [ejecutable, *argumentos], cwd=carpeta, shell=False,
+                capture_output=True, text=True, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return {"ok": False, "error": str(error)}
+        salida = (proceso.stdout or "") + "\n" + (proceso.stderr or "")
+        return {"ok": proceso.returncode == 0,
+                "error": "" if proceso.returncode == 0 else salida[-4000:],
+                "codigo": proceso.returncode}
+
+    def _presupuesto_para_build(self):
+        try:
+            estado = self._manager.estado(timeout=2)
+            tareas = self._manager.listar(timeout=2)
+        except Exception:
+            return False, "no pude consultar el presupuesto del Gestor de Recursos"
+        if not estado.respondio:
+            return False, "el Gestor de Recursos no respondió; omití la instalación"
+        if tareas is None:
+            return False, "el Task Manager no respondió; pospuse la instalación"
+        if any(tarea.viva for tarea in tareas):
+            return False, "hay otra tarea activa en el Task Manager; pospuse la instalación"
+        libre = min(estado.ram_disponible_mb, estado.presupuesto_restante_mb)
+        if libre < _PRESUPUESTO_BUILD_MINIMO_MB:
+            return False, (f"el presupuesto seguro disponible es {libre} MB; "
+                           "pospuse la instalación para no presionar al equipo")
+        return True, ""
+
+    def _revisar_app_compilada(self, esp, carpeta, errores_build=()):
+        proceso = None
+        revision = {"revisado": False, "aprobado": None, "hallazgos": [],
+                    "errores_consola": [], "errores_build": list(errores_build),
+                    "capturas": []}
+        try:
+            if not os.path.isfile(os.path.join(carpeta, "dist", "index.html")):
+                revision["motivo_sin_revisar"] = "no existe la compilación para previsualizar"
+                revision["hallazgos"].extend(errores_build)
+                return revision
+            revision["hallazgos"].extend(errores_build)
+            ejecutable = (shutil.which("npm.cmd") or shutil.which("npm")
+                          if os.name == "nt" else shutil.which("npm"))
+            if not ejecutable:
+                revision["motivo_sin_revisar"] = "npm no está instalado"
+                return revision
+            proceso = subprocess.Popen(
+                [ejecutable, *_COMANDOS_NPM_PERMITIDOS["previsualizar"]],
+                cwd=carpeta, shell=False, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            # El servidor vive solo durante la captura. Se usa el puerto fijo 4173
+            # declarado en la lista blanca, nunca un puerto o comando del modelo.
+            import time as _time
+            url = "http://127.0.0.1:4173/"
+            for _ in range(60):
+                try:
+                    with urllib.request.urlopen(url, timeout=1):
+                        break
+                except (OSError, urllib.error.URLError):
+                    if proceso.poll() is not None:
+                        break
+                    _time.sleep(0.25)
+            else:
+                revision["motivo_sin_revisar"] = "el servidor de previsualización no respondió"
+                revision["hallazgos"].append(revision["motivo_sin_revisar"])
+                return revision
+            revision = revisor_visual.revisar_url(
+                url, os.path.join(carpeta, ".revision"), esp.sin_marcas("visual"),
+                esp.sin_marcas("criterios"), session=self._http,
+                errores_build=errores_build)
+        except Exception as error:
+            print(f"[Código] revisión de app no disponible: {error}")
+            revision["motivo_sin_revisar"] = str(error)
+        finally:
+            if proceso is not None:
+                proceso.terminate()
+                try:
+                    proceso.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proceso.kill()
+        return revision
+
     def generar_app_react(self, esp, ruta_especificacion, ruta_destino):
-        """Del plan aprobado a un proyecto React+Vite+TS (falta `npm install`)."""
+        """Compone la app y pide permiso antes de instalar su kit de dependencias."""
         self._modelos_usados.clear()
         nombre = re.sub(r"[^a-z0-9]+", "_", unicodedata.normalize("NFKD", esp.titulo)
                         .encode("ascii", "ignore").decode().lower()).strip("_") or "app"
@@ -3492,14 +3622,66 @@ class EspecialistaCodigo:
                         "error": "; ".join(errores)}
             nombre_npm = re.sub(r"[^a-z0-9-]+", "-", nombre.replace("_", "-")).strip("-") or "app"
             self._ensamblar_app_react(carpeta, app, nombre_npm)
-            estado.update(estado="completo", pantallas=len(app["secciones"]),
-                          navegacion=app["navegacion"], fondo3d=app["fondo3d"],
-                          avisos_de_estilo=[e.removeprefix(ESTILO) for e in errores])
-            aviso = (f" Revisa el texto: {errores[0].removeprefix(ESTILO)}." if errores else "")
-            return (f"App «{app['titulo']}» creada en {carpeta}: {len(app['secciones'])} pantallas. "
-                    f"Para verla: npm install && npm run dev dentro de esa carpeta "
-                    "(aún no la compilo ni la reviso yo mismo, eso llega en la Fase 4)."
-                    + aviso)
+            if self._confirmar_instalacion is None:
+                estado.update(estado="pendiente_confirmacion_instalacion")
+                return (f"App «{app['titulo']}» preparada en {carpeta}: "
+                        f"{len(app['secciones'])} pantallas. "
+                        "Necesito confirmación para instalar las dependencias y compilarla.")
+
+            def instalar_y_verificar():
+                puede, motivo = self._presupuesto_para_build()
+                if not puede:
+                    estado.update(estado="pendiente_build", motivo_build=motivo)
+                    self._escribir_json_atomico(estado_path, estado)
+                    return f"La app quedó preparada en {carpeta}, pero pospuse la compilación: {motivo}."
+                estado.update(estado="instalando_dependencias")
+                self._escribir_json_atomico(estado_path, estado)
+                instalacion = self._comando_npm(carpeta, "instalar", 300)
+                if not instalacion["ok"]:
+                    estado.update(estado="build_fallido", error_build=instalacion["error"])
+                    self._escribir_json_atomico(estado_path, estado)
+                    return (f"La app quedó en {carpeta}, pero npm no pudo instalar sus "
+                            f"dependencias: {instalacion['error']}")
+
+                hallazgos = []
+                revision = {"revisado": False, "aprobado": None, "hallazgos": []}
+                for ronda in range(3):
+                    estado.update(estado="construyendo", ronda=ronda + 1)
+                    self._escribir_json_atomico(estado_path, estado)
+                    shutil.rmtree(os.path.join(carpeta, "dist"), ignore_errors=True)
+                    compilacion = self._comando_npm(carpeta, "compilar", 240)
+                    errores_build = [] if compilacion["ok"] else [
+                        "falló npm run build: " + compilacion["error"]]
+                    revision = self._revisar_app_compilada(esp, carpeta, errores_build)
+                    estado.update(estado="revisando", revision_visual=revision)
+                    self._escribir_json_atomico(estado_path, estado)
+                    hallazgos = revision.get("hallazgos", [])
+                    if not hallazgos or ronda == 2:
+                        break
+                    corregida, errores = self._componer_app(esp, hallazgos_revision=hallazgos)
+                    if corregida is None:
+                        hallazgos.append("no pude aplicar la corrección sugerida por la revisión")
+                        break
+                    app = corregida
+                    self._ensamblar_app_react(carpeta, app, nombre_npm)
+
+                estado.update(estado="completo", pantallas=len(app["secciones"]),
+                              navegacion=app["navegacion"], fondo3d=app["fondo3d"],
+                              revision_visual=revision,
+                              pendientes=list(dict.fromkeys(hallazgos)))
+                self._escribir_json_atomico(estado_path, estado)
+                pendiente = (" Quedaron pendientes: " + "; ".join(hallazgos[:3])
+                             if hallazgos else " La compilación y la revisión no dejaron hallazgos.")
+                if not revision.get("revisado"):
+                    motivo = revision.get("motivo_sin_revisar") or "revisión visual incompleta"
+                    pendiente += f" No pude completar la revisión visual: {motivo}."
+                return (f"App «{app['titulo']}» construida en {carpeta}: "
+                        f"{len(app['secciones'])} pantallas. Puede abrirla desde "
+                        f"{os.path.join(carpeta, 'dist', 'index.html')}."
+                        + pendiente)
+
+            estado.update(estado="esperando_confirmacion_instalacion")
+            return self._confirmar_instalacion(instalar_y_verificar)
         finally:
             estado["actualizado"] = datetime.datetime.now().isoformat()
             self._escribir_json_atomico(estado_path, estado)

@@ -21,6 +21,12 @@ SCRIPT_CAPTURA = os.path.join(_AQUI, "kit", "revisor", "capturar.js")
 ELECTRON_BIN = os.environ.get("DARK_ELECTRON_BIN") or os.path.join(
     _RAIZ_REPO, "dark_electron", "node_modules", "electron", "dist",
     "electron.exe" if os.name == "nt" else "electron")
+if not os.environ.get("DARK_ELECTRON_BIN"):
+    _candidato_instalado = os.path.join(
+        _RAIZ_REPO, "electron", "runtime",
+        "electron.exe" if os.name == "nt" else "electron")
+    if os.path.isfile(_candidato_instalado):
+        ELECTRON_BIN = _candidato_instalado
 
 ANCHOS_POR_DEFECTO: Tuple[Tuple[int, int], ...] = ((1440, 900), (390, 844))
 TIMEOUT_CAPTURA_SEGUNDOS = 45
@@ -35,6 +41,7 @@ class Captura:
     ruta: str
     ok: bool = True
     errores_consola: List[str] = field(default_factory=list)
+    comprobaciones: dict = field(default_factory=dict)
     error: Optional[str] = None
 
 
@@ -80,6 +87,7 @@ def capturar_pantallas(url: str, carpeta_salida: str,
         capturas.append(Captura(
             ancho=ancho, ruta=resultado["salida"], ok=resultado["ok"],
             errores_consola=[c["mensaje"] for c in resultado.get("consola", [])],
+            comprobaciones=resultado.get("comprobaciones", {}),
             error=resultado.get("error")))
     return capturas, None
 
@@ -135,7 +143,7 @@ def criticar_captura(captura: Captura, direccion_visual: str, criterios_aceptaci
 
 
 def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_aceptacion: str,
-                session=None, por_funcion=None, log=print) -> dict:
+                session=None, por_funcion=None, log=print, errores_build=None) -> dict:
     """Captura y critica una URL ya generada. Nunca lanza: todo fallo queda en el resultado.
 
     Forma del resultado: {"revisado": bool, "motivo_sin_revisar": str|None,
@@ -143,7 +151,8 @@ def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_
     "capturas": ["ruta.png", ...]}.
     """
     resultado = {"revisado": False, "motivo_sin_revisar": None, "aprobado": None,
-                "hallazgos": [], "errores_consola": [], "capturas": []}
+                "hallazgos": [], "errores_consola": [], "comprobaciones": {},
+                "errores_build": list(errores_build or []), "capturas": []}
     try:
         capturas, error = capturar_pantallas(url, carpeta_salida, log=log)
     except Exception as error:  # una revisión que falla no puede tirar la entrega
@@ -155,22 +164,42 @@ def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_
         return resultado
     resultado["capturas"] = [c.ruta for c in capturas if c.ok]
     resultado["errores_consola"] = sorted({m for c in capturas for m in c.errores_consola})
-    principal = next((c for c in capturas if c.ok), None)
-    if principal is None:
+    resultado["hallazgos"].extend(
+        f"{c.ancho}px: falló la captura ({c.error or 'error desconocido'})"
+        for c in capturas if not c.ok)
+    resultado["comprobaciones"] = {
+        str(c.ancho): getattr(c, "comprobaciones", {})
+        for c in capturas if c.ok
+    }
+    resultado["hallazgos"].extend(resultado["errores_build"])
+    resultado["hallazgos"].extend(resultado["errores_consola"])
+    for nombre, detalle in resultado["comprobaciones"].items():
+        if detalle.get("hallazgos"):
+            resultado["hallazgos"].extend(detalle["hallazgos"])
+    utilizables = [c for c in capturas if c.ok]
+    if not utilizables:
         resultado["motivo_sin_revisar"] = "ninguna captura salió bien"
         return resultado
-    try:
-        hubo_critica, aprobado, hallazgos = criticar_captura(
-            principal, direccion_visual, criterios_aceptacion,
-            session=session, por_funcion=por_funcion, log=log)
-    except Exception as error:
-        log(f"[Revisor] error inesperado criticando: {error}")
-        resultado["motivo_sin_revisar"] = str(error)
-        return resultado
-    if not hubo_critica:
+    criticas = []
+    for captura in utilizables:
+        try:
+            hubo_critica, aprobado, hallazgos = criticar_captura(
+                captura, direccion_visual, criterios_aceptacion,
+                session=session, por_funcion=por_funcion, log=log)
+        except Exception as error:
+            log(f"[Revisor] error inesperado criticando: {error}")
+            resultado["motivo_sin_revisar"] = str(error)
+            return resultado
+        if hubo_critica:
+            criticas.append((captura.ancho, aprobado, hallazgos))
+    if not criticas:
         resultado["motivo_sin_revisar"] = "sin modelo de visión disponible"
         return resultado
-    resultado["revisado"] = True
-    resultado["aprobado"] = aprobado
-    resultado["hallazgos"] = hallazgos
+    resultado["revisado"] = all(c.ok for c in capturas) and len(criticas) == len(utilizables)
+    resultado["aprobado"] = all(aprobado for _, aprobado, _ in criticas)
+    for ancho, _, hallazgos in criticas:
+        resultado["hallazgos"].extend(f"{ancho}px: {h}" for h in hallazgos)
+    resultado["hallazgos"] = list(dict.fromkeys(resultado["hallazgos"]))
+    if resultado["hallazgos"]:
+        resultado["aprobado"] = False
     return resultado
