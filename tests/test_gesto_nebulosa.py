@@ -185,11 +185,18 @@ class PruebaBaseIntacta(unittest.TestCase):
         overlay = fuente("components", "DarkOverlay.tsx")
         self.assertIn("tumble={giroDe(gestos.estado, entityId)}", overlay)
         for entidad in ("CyberReactorCore.tsx", "QuantumOrbCore.tsx"):
+            fuente_entidad = fuente("components", "interfaces", entidad)
+            self.assertIn("useGiroEntidad(active,", fuente_entidad)
             self.assertIn(
-                '"--entity-tumble"',
-                fuente("components", "interfaces", entidad),
-                f"{entidad} dejó de girar con la mano",
+                "tumble={tumbleAngle}",
+                fuente_entidad,
+                f"{entidad} dejó de pasar el giro a su figura",
             )
+        self.assertIn(
+            '"--entity-tumble": `${tumble}rad`',
+            fuente("components", "interfaces", "FiguraConstelacion.tsx"),
+            "la figura común dejó de aplicar el giro de la mano",
+        )
         self.assertIn(
             "const giro4d = typeof tumble",
             fuente("components", "TesseractCore.tsx"),

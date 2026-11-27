@@ -453,15 +453,17 @@ class TestLaPoliticaDelEspecialistaCodigo(unittest.TestCase):
         self.assertEqual(cliente.llamadas, [])
 
     def test_los_dos_puertos_del_Manager_no_viven_en_los_migrados(self):
-        """Un `5050` queda en dos prosas de docstring, y está bien: explican **dónde**
-        vive ahora el HTTP. Lo que no puede volver es una URL —ni `http://`, ni
-        `localhost`, ni la constante que la escribía—: desde la C1 estos tres módulos no
-        saben qué puerto escucha el Manager."""
+        """Las prosas pueden nombrar los puertos, pero no fijar sus URLs.
+
+        Otros HTTP legítimos siguen aquí: el espacio de nombres SVG y el servidor
+        local de previsualización de las apps no son llamadas al Manager.
+        """
         for rel in ("especialistas/especialista_codigo.py",
                     "especialistas/especialista_tareas.py",
                     "herramientas/internas/model_broker.py"):
             fuente = _fuente(rel)
-            for texto in ("http://", "localhost", "MANAGER_URL", "TASK_MANAGER_URL"):
+            for texto in ("localhost", ":5050", ":5051", "MANAGER_URL",
+                          "TASK_MANAGER_URL"):
                 self.assertNotIn(texto, fuente, f"{rel} vuelve a escribir {texto}")
 
 

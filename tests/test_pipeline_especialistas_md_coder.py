@@ -303,26 +303,51 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
             self.assertFalse(EspecialistaTareas._es_aprobacion(frase), frase)
 
 
-class PruebaEspecialistaCodigoFases(unittest.TestCase):
-    def test_sanear_plan_admite_hasta_8_archivos_y_fases(self):
-        """Verifica que el sanador de Coder acepte hasta 8 archivos multipágina con fases."""
+class PruebaEspecialistaCodigoPlan(unittest.TestCase):
+    def test_sanear_plan_admite_hasta_4_archivos_sin_fases(self):
+        """El plan genérico conserva cuatro rutas válidas y no arrastra fases."""
         plan_bruto = {
-            "nombre_proyecto": "tienda_completa",
+            "nombre_proyecto": "Tienda Completa",
             "archivos": [
-                {"path": "index.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec1"}]},
-                {"path": "tienda.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec2"}]},
-                {"path": "producto.html", "lenguaje": "html", "fase": 1, "secciones": [{"id": "sec3"}]},
-                {"path": "carrito.html", "lenguaje": "html", "fase": 2, "secciones": [{"id": "sec4"}]},
-                {"path": "js/app.js", "lenguaje": "js", "fase": 2, "secciones": [{"id": "sec5"}]},
-                {"path": "css/styles.css", "lenguaje": "css", "fase": 3, "secciones": [{"id": "sec6"}]},
-            ]
+                {"path": "index.html", "lenguaje": "html", "fase": 1,
+                 "secciones": [{"id": "Inicio"}]},
+                {"path": "tienda.html", "lenguaje": "html", "fase": 1,
+                 "secciones": [{"id": "Catálogo"}]},
+                {"path": "js/app.js", "lenguaje": "js", "fase": 2,
+                 "secciones": [{"id": "Carrito"}]},
+                {"path": "css/styles.css", "lenguaje": "css", "fase": 3,
+                 "secciones": [{"id": "Estilos"}]},
+                {"path": "carrito.html", "lenguaje": "html", "fase": 3,
+                 "secciones": [{"id": "Compra"}]},
+            ],
         }
+
         saneado = EspecialistaCodigo._sanear_plan(plan_bruto)
-        self.assertIsNotNone(saneado)
-        self.assertEqual(len(saneado["archivos"]), 6)
-        self.assertEqual(saneado["archivos"][0]["fase"], 1)
-        self.assertEqual(saneado["archivos"][3]["fase"], 2)
-        self.assertEqual(saneado["archivos"][5]["fase"], 3)
+
+        self.assertEqual(saneado["nombre_proyecto"], "tienda_completa")
+        self.assertEqual(len(saneado["archivos"]), 4)
+        self.assertEqual(
+            [archivo["path"] for archivo in saneado["archivos"]],
+            ["index.html", "tienda.html", "js/app.js", "css/styles.css"],
+        )
+        self.assertEqual(saneado["archivos"][0]["secciones"],
+                         [{"id": "inicio", "descripcion": "inicio", "md_heading": ""}])
+        self.assertTrue(all("fase" not in archivo for archivo in saneado["archivos"]))
+
+    def test_sanear_plan_descarta_rutas_que_escapan_del_proyecto(self):
+        plan_bruto = {
+            "archivos": [
+                {"path": "../fuera.html"},
+                {"path": "/absoluto.html"},
+                {"path": "C:/fuera.html"},
+                {"path": "seguro/index.html"},
+            ],
+        }
+
+        saneado = EspecialistaCodigo._sanear_plan(plan_bruto)
+
+        self.assertEqual([archivo["path"] for archivo in saneado["archivos"]],
+                         ["seguro/index.html"])
 
 
 if __name__ == "__main__":

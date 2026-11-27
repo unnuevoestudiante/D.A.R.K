@@ -46,6 +46,8 @@ class PruebasPipelineCoder(unittest.TestCase):
             ruta_md.write_text(texto_fuente, encoding="utf-8")
             coder = EspecialistaCodigo()
             coder._planificar_proyecto = Mock(return_value=self._plan())
+            coder._generar_seccion = Mock(side_effect=AssertionError(
+                "el proyecto genérico ya no concatena secciones"))
             prompts = []
 
             def generar_online(prompt, _sistema, _lenguaje, max_tokens=4000):
@@ -67,6 +69,8 @@ class PruebasPipelineCoder(unittest.TestCase):
 
             self.assertIn("Proyecto 'biografia_web' generado", resultado)
             self.assertEqual(len(prompts), 1)
+            self.assertIn("Genera el archivo COMPLETO index.html", prompts[0])
+            self.assertIn("Entrega el código final ensamblado", prompts[0])
             self.assertIn("Einstein nació en Ulm en 1879", prompts[0])
             self.assertIn("Desarrolló la relatividad especial", prompts[0])
             self.assertTrue((raiz / "salida" / "biografia_web" / "index.html").is_file())
@@ -362,22 +366,28 @@ class PruebasWebInmersiva(unittest.TestCase):
         self.assertFalse(resultado["ok"])
         self.assertFalse((Path(coder.ultima_carpeta_proyecto) / "index.html").exists())
 
-    def test_un_plan_de_otro_stack_sigue_el_camino_de_siempre_como_encargo(self):
-        self.spec.write_text(SPEC_INMERSIVA.replace(
-            "Inmersivo: un mundo 3D recorrido con el scroll.", "Vanilla, sin framework."), encoding="utf-8")
-        coder = EspecialistaCodigo(chat_provider=Mock())
-        coder.generar_web_inmersiva = Mock()
-        coder.generar_app_react = Mock()
-        coder.generar_proyecto_completo = Mock(return_value="hecho")
-        coder._es_proyecto = Mock(return_value=True)
-        # El camino de siempre imprime «→», que una consola cp1252 no sabe pintar.
-        with patch("builtins.print"):
-            coder.tool_escribir_codigo(tarea="Construye «Cumbre»", ruta_destino=str(self.raiz),
-                                       contenido_md=str(self.spec))
-        coder.generar_web_inmersiva.assert_not_called()
-        coder.generar_app_react.assert_not_called()
-        self.assertIsNone(coder.generar_proyecto_completo.call_args.kwargs["contenido_md_path"],
-                          "una especificación no es contenido para volcar en secciones")
+    def test_un_plan_vanilla_o_python_sigue_el_camino_generico_como_encargo(self):
+        for stack in ("Vanilla, sin framework.", "Python, sin framework."):
+            with self.subTest(stack=stack):
+                self.spec.write_text(SPEC_INMERSIVA.replace(
+                    "Inmersivo: un mundo 3D recorrido con el scroll.", stack),
+                    encoding="utf-8")
+                coder = EspecialistaCodigo(chat_provider=Mock())
+                coder.generar_web_inmersiva = Mock()
+                coder.generar_app_react = Mock()
+                coder.generar_proyecto_completo = Mock(return_value="hecho")
+                coder._es_proyecto = Mock(return_value=True)
+                # El camino de siempre imprime «→», que una consola cp1252 no sabe pintar.
+                with patch("builtins.print"):
+                    coder.tool_escribir_codigo(
+                        tarea="Construye «Cumbre»", ruta_destino=str(self.raiz),
+                        contenido_md=str(self.spec))
+                coder.generar_web_inmersiva.assert_not_called()
+                coder.generar_app_react.assert_not_called()
+                self.assertIsNone(
+                    coder.generar_proyecto_completo.call_args.kwargs["contenido_md_path"],
+                    "una especificación es un encargo, no un documento para volcar",
+                )
 
     def test_un_documento_de_contenido_no_se_confunde_con_una_especificacion(self):
         contenido = self.raiz / "contenido.md"

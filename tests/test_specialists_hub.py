@@ -13,15 +13,13 @@ class PruebaSpecialistsHub(unittest.TestCase):
         self.assertTrue(hub_path.exists(), "falta SpecialistsHub.tsx")
         contenido = hub_path.read_text(encoding="utf-8")
 
-        # Verifica la presencia de los 3 especialistas
-        self.assertIn('"coder"', contenido)
-        self.assertIn('"tareas"', contenido)
-        self.assertIn('"conversacional"', contenido)
-
-        # Verifica los roles y características
-        self.assertIn("Arquitectura & Desarrollo", contenido)
-        self.assertIn("Razonamiento Profundo", contenido)
-        self.assertIn("Comunicación & Asistencia", contenido)
+        # Verifica la presencia de los 3 especialistas y su identidad visual.
+        self.assertIn('id: "coder",\n    name: "Coder"', contenido)
+        self.assertIn('id: "tareas",\n    name: "Tareas"', contenido)
+        self.assertIn('id: "conversacional",\n    name: "Conversacional"', contenido)
+        self.assertIn("specialist-filter-coder", contenido)
+        self.assertIn("specialist-filter-tareas", contenido)
+        self.assertIn("specialist-filter-conversacional", contenido)
 
     def test_overlay_soporta_activacion_gestual_y_oculta_titulo(self):
         overlay = (SRC / "components" / "DarkOverlay.tsx").read_text(
@@ -31,8 +29,11 @@ class PruebaSpecialistsHub(unittest.TestCase):
         self.assertIn("specialistsHubActive", overlay)
         self.assertIn("activeSpecialist", overlay)
 
-        # Oculta el título D.A.R.K. al estar activo el menú
-        self.assertIn("{!specialistsHubActive && (", overlay)
+        # Oculta el título D.A.R.K. al activar el menú y durante su apertura.
+        self.assertIn(
+            '{!specialistsHubActive && transicion?.tipo !== "abriendo-hub" && (',
+            overlay,
+        )
 
         # Pasa el especialista a EntityComponent
         self.assertIn("specialist={activeSpecialist ?? undefined}", overlay)

@@ -244,21 +244,21 @@ class PruebaFabricaTTS(unittest.TestCase):
         return patch.dict(sys.modules, modulos)
 
     def test_sin_variable_toca_wyoming(self):
-        with self._motores():
+        with patch("voz.config.piper_disponible", return_value=True), self._motores():
             motor = api.crear_tts(respaldo="R", log=lambda *_a: None)
         self.assertIsInstance(motor, MotorFalso)
         self.assertEqual(motor.kwargs["respaldo"], "R")
 
     def test_el_alias_piper_es_wyoming(self):
         os.environ["DARK_TTS_PROVIDER"] = "piper"
-        with self._motores():
+        with patch("voz.config.piper_disponible", return_value=True), self._motores():
             self.assertIsInstance(api.crear_tts(log=lambda *_a: None),
                                   MotorFalso)
 
     def test_un_desconocido_sin_pedir_vuelve_al_defecto_sin_gritar(self):
         mensajes = []
         os.environ["DARK_TTS_PROVIDER"] = "cualquier-cosa"
-        with self._motores():
+        with patch("voz.config.piper_disponible", return_value=True), self._motores():
             motor = api.crear_tts(log=mensajes.append)
         self.assertIsInstance(motor, MotorFalso)
         self.assertTrue(any("desconocido" in m for m in mensajes))

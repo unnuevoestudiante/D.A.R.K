@@ -72,7 +72,7 @@ CLIENTE_REL = "proveedores/manager/cliente.py"
 #: Los cuatro consumidores, todos con sus llamadas ya dentro del cliente: la lista de
 #: sitios crudos se vació con la Fase C2.
 CONSUMIDORES = (NUCLEO_REL, TAREAS_REL, CODIGO_REL, BROKER_REL)
-#: Donde hoy se declara una `requests.Session()` (defecto 5: cinco declaraciones, tres
+#: Donde hoy se declara una `requests.Session()` (defecto 5: seis declaraciones, tres
 #: de ellas solo como respaldo cuando nadie inyecta la sesión del Núcleo).
 SESIONES = (NUCLEO_REL, TAREAS_REL, CODIGO_REL, BROKER_REL,
             "especialistas/especialista_comunicacion.py")
@@ -684,9 +684,9 @@ class TestDefectosEscritos(unittest.TestCase):
                           f"un poller dejó de llamarse {nombre}: no se puede esperar por "
                           "él ni distinguirlo en un volcado de hilos")
 
-    def test_cinco_sesiones_para_los_mismos_dos_puertos(self):
+    def test_seis_sesiones_para_los_mismos_dos_puertos(self):
         total = sum(_fuente(rel).count("requests.Session()") for rel in SESIONES)
-        self.assertEqual(total, 5,
+        self.assertEqual(total, 6,
                          "el número de sesiones cambió: el contrato dice otra cosa")
 
     def test_el_contrato_ya_tiene_sus_cuatro_consumidores(self):
