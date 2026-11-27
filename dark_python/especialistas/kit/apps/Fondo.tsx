@@ -10,8 +10,8 @@ import "./Fondo.css";
  * antes de pasar aquí.
  */
 
-const COLOR_PARTICULA: Record<string, number> = { tecnico: 0x5ee6ff, sobrio: 0x2f4ad0, calido: 0xc4623a };
-const COLOR_ESCENA: Record<string, number> = { tecnico: 0x07090c, sobrio: 0xf1efe9, calido: 0xf0e7d6 };
+const COLOR_PARTICULA: Record<string, number> = { tecnica: 0x5ee6ff, sobria: 0x2f4ad0, calida: 0xc4623a };
+const COLOR_ESCENA: Record<string, number> = { tecnica: 0x07090c, sobria: 0xf1efe9, calida: 0xf0e7d6 };
 
 export default function Fondo({ personalidad }: { personalidad: string }) {
   const lienzoRef = useRef<HTMLCanvasElement>(null);
@@ -30,7 +30,7 @@ export default function Fondo({ personalidad }: { personalidad: string }) {
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor(COLOR_ESCENA[personalidad] ?? COLOR_ESCENA.tecnico, 1);
+    renderer.setClearColor(COLOR_ESCENA[personalidad] ?? COLOR_ESCENA.tecnica, 1);
 
     const escena = new THREE.Scene();
     const camara = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 40);
@@ -47,7 +47,7 @@ export default function Fondo({ personalidad }: { personalidad: string }) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(posiciones, 3));
     const mat = new THREE.PointsMaterial({
-      color: COLOR_PARTICULA[personalidad] ?? COLOR_PARTICULA.tecnico, size: 0.05,
+      color: COLOR_PARTICULA[personalidad] ?? COLOR_PARTICULA.tecnica, size: 0.05,
       transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     const puntos = new THREE.Points(geo, mat);

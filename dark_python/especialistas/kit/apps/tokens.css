@@ -1,7 +1,7 @@
 /* Tokens del kit de apps de D.A.R.K. Tres personalidades, nada más: no hay
    paleta libre por proyecto (a diferencia de la web inmersiva) porque estos
    valores ya están probados. `<body data-p="...">` elige una. */
-:root, [data-p="tecnico"] {
+:root, [data-p="tecnica"] {
   --fg: #dfe7ee; --muted: #6f7c88; --line: #1a2129;
   --accent: #5ee6ff; --accent-fg: #021014; --negativo: #ff8a7a;
   --font-ui: "Space Grotesk", system-ui, sans-serif;
@@ -10,7 +10,7 @@
   --particula: #5ee6ff; --escena: #07090c;
   --fondo-estatico: radial-gradient(circle at 30% 20%, #0d1826, #05070a 70%);
 }
-[data-p="sobrio"] {
+[data-p="sobria"] {
   --fg: #1b1d1f; --muted: #7a7d80; --line: #e2e0db;
   --accent: #2f4ad0; --accent-fg: #ffffff; --negativo: #b4432f;
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
@@ -19,7 +19,7 @@
   --particula: #2f4ad0; --escena: #f1efe9;
   --fondo-estatico: radial-gradient(circle at 70% 10%, #eef0f7, #e4e2dc 70%);
 }
-[data-p="calido"] {
+[data-p="calida"] {
   --fg: #2b2420; --muted: #8b7d70; --line: #e4d8c6;
   --accent: #c4623a; --accent-fg: #fff8f0; --negativo: #b04a35;
   --font-ui: "Figtree", system-ui, sans-serif;

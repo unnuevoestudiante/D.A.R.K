@@ -1089,6 +1089,25 @@ class EspecialistaTareas:
             pedidas = "\n".join(
                 f"## {numero[c]}. {s.titulo}: {s.proposito}"
                 for c in lote for s in SECCIONES_ESPECIFICACION if s.clave == c)
+            propuesta_interfaz = ""
+            if self.pide_app(plan["pedido"]):
+                propuestas = []
+                if "pantallas" in lote:
+                    propuestas.append(
+                        "En Pantallas y flujo añade, fuera de la lista de pantallas, una línea "
+                        "«Propuesta de navegación: superior|lateral — motivo»; elige según "
+                        "las pantallas y el uso.")
+                if "visual" in lote:
+                    propuestas.append(
+                        "En Dirección visual añade «Personalidad del kit propuesta: "
+                        "tecnica|sobria|calida — motivo» y «Fondo 3D propuesto: "
+                        "sí|no — motivo»; decide por el tema y la densidad de datos.")
+                if propuestas:
+                    propuesta_interfaz = (
+                        "\nPropuestas para una app (el coder puede corregirlas): "
+                        + " ".join(propuestas)
+                        + " Si la persona ya eligió una opción, respétela y no la marques "
+                        "como supuesto; si la decides tú, marca esa línea [supuesto: motivo].")
             que = ("Devuelve SOLO las secciones que cambian con este pedido (como mucho "
                    "tres), completas y con su título «## n. Título»; no repitas las demás."
                    if solo_cambios else
@@ -1105,7 +1124,7 @@ class EspecialistaTareas:
                 "y no hay formularios ni menús: el contacto es un enlace. Si el tema se puede "
                 "fotografiar (un lugar, comida, un producto, viajes, arquitectura), una "
                 "estación lleva fotos reales: dilo en su punto («con fotos de…»). "
-                f"{regla} "
+                f"{regla}{propuesta_interfaz} "
                 "Responde solo con el Markdown de esas secciones."
             )
             texto = self._pensar(prompt, max_tokens=self.MAX_TOKENS_POR_LOTE)

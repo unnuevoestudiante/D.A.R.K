@@ -1232,7 +1232,23 @@ _FORMA_APP = """{
         "items": [{"titulo": "...", "detalle": "...", "nota": "fecha o cifra corta"}]},
        {"tipo": "formulario", "boton_abrir": "texto del botón que abre el formulario",
         "campos": [{"etiqueta": "...", "tipo": "texto | area"}]},
-       {"tipo": "texto", "texto": "dos o tres frases"}
+       {"tipo": "texto", "texto": "dos o tres frases"},
+       {"tipo": "tabla", "columnas": [{"id": "fecha", "titulo": "Fecha"},
+        {"id": "tarea", "titulo": "Tarea"}],
+        "filas": [{"fecha": "27 nov", "tarea": "Enviar informe"}],
+        "vacio": "Todavía no hay filas."},
+       {"tipo": "grafico", "visualizacion": "barras | linea | anillo",
+        "titulo": "Gasto mensual", "datos": [{"etiqueta": "Enero", "valor": 120},
+        {"etiqueta": "Febrero", "valor": 95}]},
+       {"tipo": "progreso", "etiqueta": "Lectura", "valor": 32,
+        "total": 50, "unidad": "páginas"},
+       {"tipo": "agenda", "eventos": [{"fecha": "2026-11-27", "hora": "15:30",
+        "titulo": "Revisión", "detalle": "Presentar el borrador"}],
+        "vacio": "No hay eventos programados."},
+       {"tipo": "kanban", "columnas": [{"id": "pendiente", "titulo": "Pendiente"},
+        {"id": "hecho", "titulo": "Hecho"}],
+        "tarjetas": [{"id": "t1", "titulo": "Preparar borrador",
+        "detalle": "", "columna": "pendiente"}]}
      ]}
   ]
 }
@@ -1241,6 +1257,12 @@ Catálogo de bloques (elige los que pida cada pantalla, en el orden en que se le
 - lista: filas de ejemplo con datos reales del tema; «vacio» es lo que se lee sin filas.
 - formulario: un botón que abre campos para añadir una fila a la lista de la misma pantalla.
 - texto: dos o tres frases, para lo que no es una lista ni un número.
+- tabla: de 2 a 6 columnas y hasta 20 filas; cada fila usa exactamente los id de sus columnas.
+- grafico: barras, línea o anillo; de 2 a 12 etiquetas con valores numéricos finitos.
+- progreso: avance numérico entre cero y su total, que debe ser mayor que cero.
+- agenda: hasta 20 eventos con fecha real AAAA-MM-DD y hora opcional HH:MM.
+- kanban: de 2 a 4 columnas y hasta 30 tarjetas, cada una asociada a una columna existente.
+  Se puede cambiar de columna mientras la app está abierta; el cambio vive en memoria.
 Navegación: superior si son pocas pantallas, lateral si son muchas (el kit decide el corte si no estás seguro).
 Fondo 3D: una app seria o muy densa en datos puede no llevarlo (fondo3d: false); por defecto sí."""
 

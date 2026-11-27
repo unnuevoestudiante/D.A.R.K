@@ -1,5 +1,5 @@
 D.A.R.K. — Documento maestro de especificaciones
-Versión: 0.71 · Última actualización: 2026-11-27
+Versión: 0.72 · Última actualización: 2026-11-27
 
 Este es el documento único donde se va registrando cómo funciona cada parte de D.A.R.K. Se actualiza con el tiempo: cada vez que se define o se cambia algo, se edita la parte correspondiente (o se agrega una parte nueva al final) y se anota en el registro de cambios.
 
@@ -1728,3 +1728,4 @@ Versión	Fecha	Cambio
 0.68	2026-11-26	Parte 11, Coder v2 (Bloque A): las apps React pasan por una instalación npm aprobada con confirmar_accion, comandos cerrados del kit, --ignore-scripts y revisión del presupuesto de RAM. El revisor captura escritorio y móvil, registra consola/build y comprueba desbordamiento, contraste e imágenes rotas; si hay hallazgos, web inmersiva y app reciben hasta tres rondas de corrección. En modo instalado se busca Electron en electron/runtime/electron.exe, el mismo destino que arma el instalador y usa DarkSupervisor. Las pruebas nuevas cubren degradación sin visión, crítica en ambos anchos y rechazo de comandos fuera de lista. La compilación end-to-end queda por confirmar en un entorno con Python 3.12, npm y Manager disponibles.
 0.70	2026-11-27	Parte 11, Coder v2 (Bloque B): guarda la fase del proyecto ante 429 diario y permite seguir en Ollama o esperar el reinicio; informa las etapas y el rango estimado en el overlay, abre la app React compilada y resume su contenido, supuestos y pendientes. No hay tarifa de proveedor declarada para ofrecer una ruta de pago calculable.
 0.71	2026-11-27	Parte 11, Coder v2 (Bloque C2): cada app registra personalidad, navegación y uso del fondo 3D en `~/.dark_cache/apps_variedad.json`; el pedido del coder incluye las firmas de otros proyectos recientes para sugerir variedad. Se excluye la huella del mismo proyecto y se conservan hasta 24 firmas.
+0.72	2026-11-27	Parte 11, Coder v2 (Bloque C1 y C3): Tareas propone navegación, personalidad y fondo 3D dentro de las nueve secciones existentes; Coder puede corregir esos campos y valida el JSON. El catálogo suma tabla, gráfico, progreso, agenda y kanban, con estructura validada y renderizadores fijos del kit. Kanban mueve tarjetas en memoria, decisión aprobada por la persona.

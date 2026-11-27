@@ -502,6 +502,47 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         self.assertFalse(nucleo._command_lock.locked())
 
 
+class PruebaPropuestaInterfazTareas(unittest.TestCase):
+    """Tareas concreta las tres decisiones de apariencia dentro de sus nueve secciones."""
+
+    def test_el_plan_de_app_propone_navegacion_personalidad_y_fondo(self):
+        from contratos.especialista import Especificacion
+
+        tareas = EspecialistaTareas(chat_provider=Mock(), cliente_manager=Mock(), helpers={})
+        tareas._plan = {
+            "pedido": "hazme una app para organizar mis gastos",
+            "especificacion": Especificacion(titulo="Gastos"),
+        }
+        tareas._pensar = Mock(return_value=(
+            "# Especificación: Gastos\n"
+            "## 3. Pantallas y flujo\n\n"
+            "- Resumen\n"
+            "Propuesta de navegación: superior — una pantalla. "
+            "[supuesto: una vista principal]\n\n"
+            "## 6. Dirección visual\n\n"
+            "- Personalidad del kit propuesta: sobria — cifras claras. "
+            "[supuesto: uso financiero]\n"
+            "- Fondo 3D propuesto: no — priorizar lectura. "
+            "[supuesto: panel denso]"
+        ))
+
+        self.assertTrue(tareas._redactar("Completa el plan.", ["pantallas", "visual"],
+                                         completar=True))
+
+        pedido = tareas._pensar.call_args.args[0]
+        self.assertIn("Propuesta de navegación: superior|lateral", pedido)
+        self.assertIn("Personalidad del kit propuesta: tecnica|sobria|calida", pedido)
+        self.assertIn("Fondo 3D propuesto: sí|no", pedido)
+        self.assertIn("el coder puede corregirlas", pedido)
+        especificacion = tareas._plan["especificacion"]
+        self.assertIn("Propuesta de navegación", especificacion.seccion("pantallas"))
+        resumen = tareas._resumen(especificacion)
+        self.assertIn("1 pantallas: Resumen", resumen)
+        self.assertNotIn("Propuesta de navegación", resumen)
+        self.assertIn("Personalidad del kit propuesta", especificacion.seccion("visual"))
+        self.assertIn("Fondo 3D propuesto", especificacion.seccion("visual"))
+
+
 class PruebaDecisionCuotaCoder(unittest.TestCase):
     """Las respuestas a la cuota se consumen sin llegar al router normal."""
 

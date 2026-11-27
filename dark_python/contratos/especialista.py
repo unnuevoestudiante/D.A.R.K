@@ -920,7 +920,10 @@ def validar_mundo(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
 # =============================================================================
 
 NAVEGACIONES: Tuple[str, ...] = ("lateral", "superior")
-BLOQUES_APP: Tuple[str, ...] = ("estadisticas", "lista", "formulario", "texto")
+BLOQUES_APP: Tuple[str, ...] = (
+    "estadisticas", "lista", "formulario", "texto",
+    "tabla", "grafico", "progreso", "agenda", "kanban",
+)
 _MAX_SECCIONES_SUPERIOR = 5  # a partir de aquí, Tareas y el coder prefieren barra lateral
 
 
@@ -987,6 +990,172 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                 "detalle": _texto(valor.get("detalle"), _LARGOS["breve"]),
                 "nota": _texto(valor.get("nota"), 24)}
 
+    def numero_valido(valor: Any) -> bool:
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+            return False
+        try:
+            convertido = float(valor)
+            return convertido == convertido and convertido not in (float("inf"), float("-inf"))
+        except (OverflowError, ValueError):
+            return False
+
+    def fecha_valida(valor: Any) -> bool:
+        if not isinstance(valor, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+            return False
+        anio, mes, dia = (int(parte) for parte in valor.split("-"))
+        if anio < 1 or not 1 <= mes <= 12:
+            return False
+        dias_mes = (31, 29 if anio % 4 == 0 and (anio % 100 != 0 or anio % 400 == 0) else 28,
+                    31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        return 1 <= dia <= dias_mes[mes - 1]
+
+    def texto_corto(valor: Any, limite: int) -> str:
+        return _texto(str(valor) if isinstance(valor, (str, int, float)) else "", limite)
+
+    def columnas_de(valor: Any, donde: str, minimo: int, maximo: int) -> List[dict]:
+        if not isinstance(valor, list) or not minimo <= len(valor) <= maximo:
+            errores.append(f"{donde}: necesita de {minimo} a {maximo} columnas")
+            return []
+        columnas, ids = [], set()
+        for indice, cruda in enumerate(valor[:maximo], 1):
+            if not isinstance(cruda, dict) or not cruda.get("id") or not cruda.get("titulo"):
+                errores.append(f"{donde}, columna {indice}: necesita «id» y «titulo»")
+                continue
+            id_original = str(cruda["id"])
+            identificador = re.sub(r"[^a-z0-9]+", "-", _normal(id_original)).strip("-")
+            titulo = _texto(cruda["titulo"], _LARGOS["ficha_titulo"])
+            if id_original != identificador or identificador in ids:
+                errores.append(f"{donde}, columna {indice}: «id» debe ser un slug único en minúsculas")
+                continue
+            ids.add(identificador)
+            columnas.append({"id": identificador, "titulo": titulo})
+        return columnas
+
+    def validar_tabla(cruda: dict, donde: str) -> Optional[dict]:
+        columnas = columnas_de(cruda.get("columnas"), donde, 2, 6)
+        filas_crudas = cruda.get("filas")
+        if not isinstance(filas_crudas, list) or len(filas_crudas) > 20:
+            errores.append(f"{donde}: «filas» debe tener de 0 a 20 elementos")
+            filas_crudas = []
+        filas = []
+        ids = {c["id"] for c in columnas}
+        for indice, fila in enumerate(filas_crudas, 1):
+            if not isinstance(fila, dict) or set(fila) != ids:
+                errores.append(f"{donde}, fila {indice}: debe tener exactamente las columnas declaradas")
+                continue
+            normalizada = {}
+            valida = True
+            for columna in columnas:
+                valor = fila[columna["id"]]
+                if isinstance(valor, bool) or not isinstance(valor, (str, int, float)):
+                    errores.append(f"{donde}, fila {indice}: cada celda debe ser texto o número")
+                    valida = False
+                    break
+                if isinstance(valor, float) and not numero_valido(valor):
+                    errores.append(f"{donde}, fila {indice}: cada número debe ser finito")
+                    valida = False
+                    break
+                normalizada[columna["id"]] = texto_corto(valor, _LARGOS["breve"])
+            if valida:
+                filas.append(normalizada)
+        return {"tipo": "tabla", "columnas": columnas, "filas": filas,
+                "vacio": _texto(cruda.get("vacio"), _LARGOS["breve"])
+                or "Todavía no hay filas."} if columnas else None
+
+    def validar_grafico(cruda: dict, donde: str) -> Optional[dict]:
+        visualizacion = cruda.get("visualizacion")
+        if visualizacion not in ("barras", "linea", "anillo"):
+            errores.append(f"{donde}: «visualizacion» debe ser barras, linea o anillo")
+            return None
+        puntos_crudos = cruda.get("datos")
+        if not isinstance(puntos_crudos, list) or not 2 <= len(puntos_crudos) <= 12:
+            errores.append(f"{donde}: «datos» debe tener de 2 a 12 puntos")
+            return None
+        puntos = []
+        for indice, punto in enumerate(puntos_crudos, 1):
+            if (not isinstance(punto, dict) or not punto.get("etiqueta")
+                    or not numero_valido(punto.get("valor"))):
+                errores.append(f"{donde}, punto {indice}: necesita «etiqueta» y un valor numérico finito")
+                continue
+            valor = punto["valor"]
+            if visualizacion == "anillo" and valor < 0:
+                errores.append(f"{donde}: los valores del gráfico de anillo no pueden ser negativos")
+                continue
+            puntos.append({"etiqueta": _texto(punto["etiqueta"], _LARGOS["ficha_titulo"]),
+                           "valor": valor})
+        if visualizacion == "anillo" and puntos and sum(p["valor"] for p in puntos) <= 0:
+            errores.append(f"{donde}: el gráfico de anillo necesita un valor mayor que cero")
+        if len(puntos) != len(puntos_crudos):
+            return None
+        return {"tipo": "grafico", "visualizacion": visualizacion,
+                "titulo": _texto(cruda.get("titulo"), _LARGOS["ficha_titulo"]),
+                "datos": puntos}
+
+    def validar_progreso(cruda: dict, donde: str) -> Optional[dict]:
+        valor, total = cruda.get("valor"), cruda.get("total")
+        if (not cruda.get("etiqueta") or not numero_valido(valor) or not numero_valido(total)
+                or total <= 0 or valor < 0 or valor > total):
+            errores.append(f"{donde}: necesita etiqueta y valores con 0 ≤ valor ≤ total, total > 0")
+            return None
+        return {"tipo": "progreso", "etiqueta": _texto(cruda["etiqueta"], _LARGOS["ficha_titulo"]),
+                "valor": valor, "total": total,
+                "unidad": _texto(cruda.get("unidad"), 16)}
+
+    def validar_agenda(cruda: dict, donde: str) -> Optional[dict]:
+        eventos_crudos = cruda.get("eventos")
+        if not isinstance(eventos_crudos, list) or len(eventos_crudos) > 20:
+            errores.append(f"{donde}: «eventos» debe tener de 0 a 20 elementos")
+            return None
+        eventos = []
+        for indice, evento in enumerate(eventos_crudos, 1):
+            if not isinstance(evento, dict) or not evento.get("titulo"):
+                errores.append(f"{donde}, evento {indice}: necesita «titulo»")
+                continue
+            fecha = evento.get("fecha")
+            if not fecha_valida(fecha):
+                errores.append(f"{donde}, evento {indice}: «fecha» debe ser una fecha real AAAA-MM-DD")
+                continue
+            hora = str(evento.get("hora") or "")
+            if hora and (not re.fullmatch(r"\d{2}:\d{2}", hora)
+                         or int(hora[:2]) > 23 or int(hora[3:]) > 59):
+                errores.append(f"{donde}, evento {indice}: «hora» debe tener formato HH:MM")
+                continue
+            eventos.append({"fecha": fecha, "hora": hora,
+                            "titulo": _texto(evento["titulo"], _LARGOS["ficha_titulo"]),
+                            "detalle": _texto(evento.get("detalle"), _LARGOS["breve"])})
+        if len(eventos) != len(eventos_crudos):
+            return None
+        eventos.sort(key=lambda e: (e["fecha"], e["hora"]))
+        return {"tipo": "agenda", "eventos": eventos,
+                "vacio": _texto(cruda.get("vacio"), _LARGOS["breve"])
+                or "No hay eventos programados."}
+
+    def validar_kanban(cruda: dict, donde: str) -> Optional[dict]:
+        columnas = columnas_de(cruda.get("columnas"), donde, 2, 4)
+        tarjetas_crudas = cruda.get("tarjetas")
+        if not isinstance(tarjetas_crudas, list) or len(tarjetas_crudas) > 30:
+            errores.append(f"{donde}: «tarjetas» debe tener de 0 a 30 elementos")
+            return None
+        columnas_validas = {c["id"] for c in columnas}
+        tarjetas, ids = [], set()
+        for indice, tarjeta in enumerate(tarjetas_crudas, 1):
+            if (not isinstance(tarjeta, dict) or not tarjeta.get("id")
+                    or not tarjeta.get("titulo") or tarjeta.get("columna") not in columnas_validas):
+                errores.append(f"{donde}, tarjeta {indice}: necesita id, título y una columna existente")
+                continue
+            identificador = re.sub(r"[^a-z0-9]+", "-", _normal(str(tarjeta["id"]))).strip("-")
+            if not identificador or identificador in ids:
+                errores.append(f"{donde}, tarjeta {indice}: «id» debe ser único y válido")
+                continue
+            ids.add(identificador)
+            tarjetas.append({"id": identificador,
+                             "titulo": _texto(tarjeta["titulo"], _LARGOS["ficha_titulo"]),
+                             "detalle": _texto(tarjeta.get("detalle"), _LARGOS["breve"]),
+                             "columna": tarjeta["columna"]})
+        if len(tarjetas) != len(tarjetas_crudas):
+            return None
+        return {"tipo": "kanban", "columnas": columnas, "tarjetas": tarjetas}
+
     app["secciones"] = []
     for i, s in enumerate(secciones[:8]):
         donde = f"sección {i + 1}"
@@ -1028,6 +1197,26 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                 if not bloque["texto"]:
                     errores.append(f"{dondeb}: «texto» necesita contenido")
                     continue
+            elif tipo == "tabla":
+                bloque = validar_tabla(b, dondeb)
+                if bloque is None:
+                    continue
+            elif tipo == "grafico":
+                bloque = validar_grafico(b, dondeb)
+                if bloque is None:
+                    continue
+            elif tipo == "progreso":
+                bloque = validar_progreso(b, dondeb)
+                if bloque is None:
+                    continue
+            elif tipo == "agenda":
+                bloque = validar_agenda(b, dondeb)
+                if bloque is None:
+                    continue
+            elif tipo == "kanban":
+                bloque = validar_kanban(b, dondeb)
+                if bloque is None:
+                    continue
             seccion["bloques"].append(bloque)
         app["secciones"].append(seccion)
 
@@ -1041,6 +1230,31 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                     yield f"sección «{s['titulo']}», texto", b["texto"]
                 if b["tipo"] == "lista":
                     yield f"sección «{s['titulo']}», vacío", b["vacio"]
+                if b["tipo"] == "tabla":
+                    yield f"sección «{s['titulo']}», vacío de tabla", b["vacio"]
+                    for columna in b["columnas"]:
+                        yield f"sección «{s['titulo']}», columna", columna["titulo"]
+                    for fila in b["filas"]:
+                        for valor in fila.values():
+                            yield f"sección «{s['titulo']}», celda", valor
+                if b["tipo"] == "grafico":
+                    yield f"sección «{s['titulo']}», título de gráfico", b["titulo"]
+                    for punto in b["datos"]:
+                        yield f"sección «{s['titulo']}», etiqueta de gráfico", punto["etiqueta"]
+                if b["tipo"] == "progreso":
+                    yield f"sección «{s['titulo']}», progreso", b["etiqueta"]
+                    yield f"sección «{s['titulo']}», unidad de progreso", b["unidad"]
+                if b["tipo"] == "agenda":
+                    yield f"sección «{s['titulo']}», vacío de agenda", b["vacio"]
+                    for evento in b["eventos"]:
+                        yield f"sección «{s['titulo']}», evento", evento["titulo"]
+                        yield f"sección «{s['titulo']}», detalle de evento", evento["detalle"]
+                if b["tipo"] == "kanban":
+                    for columna in b["columnas"]:
+                        yield f"sección «{s['titulo']}», columna kanban", columna["titulo"]
+                    for tarjeta in b["tarjetas"]:
+                        yield f"sección «{s['titulo']}», tarjeta", tarjeta["titulo"]
+                        yield f"sección «{s['titulo']}», detalle de tarjeta", tarjeta["detalle"]
     for donde, texto in textos(app):
         if not texto:
             continue

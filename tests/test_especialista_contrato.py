@@ -739,6 +739,50 @@ class PruebaAppReact(unittest.TestCase):
         _, errores = esp.validar_app(crudo)
         self.assertTrue(any("necesita al menos un chip" in e for e in errores))
 
+    def test_catalogo_nuevo_de_bloques_normaliza_tabla_grafico_progreso_agenda_y_kanban(self):
+        bloques = [
+            {"tipo": "tabla", "columnas": [
+                {"id": "fecha", "titulo": "Fecha"}, {"id": "tarea", "titulo": "Tarea"}],
+             "filas": [{"fecha": "27 nov", "tarea": "Enviar informe"}]},
+            {"tipo": "grafico", "visualizacion": "barras", "titulo": "Gasto mensual",
+             "datos": [{"etiqueta": "Enero", "valor": 120},
+                       {"etiqueta": "Febrero", "valor": 95}]},
+            {"tipo": "progreso", "etiqueta": "Lectura", "valor": 32,
+             "total": 50, "unidad": "páginas"},
+            {"tipo": "agenda", "eventos": [{"fecha": "2026-11-27", "hora": "15:30",
+             "titulo": "Revisión", "detalle": "Presentar el borrador"}]},
+            {"tipo": "kanban", "columnas": [
+                {"id": "pendiente", "titulo": "Pendiente"}, {"id": "hecho", "titulo": "Hecho"}],
+             "tarjetas": [{"id": "t1", "titulo": "Preparar borrador",
+                           "columna": "pendiente"}]},
+        ]
+        app, errores = esp.validar_app(app_valida(secciones=[
+            {"titulo": "Resumen", "bloques": bloques}]))
+        self.assertEqual(errores, ())
+        self.assertEqual([b["tipo"] for b in app["secciones"][0]["bloques"]],
+                         ["tabla", "grafico", "progreso", "agenda", "kanban"])
+        self.assertEqual(app["secciones"][0]["bloques"][1]["datos"][0]["valor"], 120)
+        self.assertEqual(app["secciones"][0]["bloques"][3]["eventos"][0]["hora"], "15:30")
+        self.assertEqual(app["secciones"][0]["bloques"][4]["tarjetas"][0]["columna"], "pendiente")
+
+    def test_bloques_nuevos_rechazan_estructuras_fuera_de_su_contrato(self):
+        casos = (
+            ({"tipo": "tabla", "columnas": [{"id": "fecha", "titulo": "Fecha"},
+              {"id": "tarea", "titulo": "Tarea"}], "filas": [{"fecha": "hoy"}]}, "exactamente"),
+            ({"tipo": "grafico", "visualizacion": "anillo", "datos": [
+              {"etiqueta": "A", "valor": -1}, {"etiqueta": "B", "valor": 2}]}, "no pueden ser negativos"),
+            ({"tipo": "progreso", "etiqueta": "Lectura", "valor": 51, "total": 50}, "0 ≤ valor ≤ total"),
+            ({"tipo": "agenda", "eventos": [{"fecha": "2026-02-30", "titulo": "Cierre"}]}, "fecha real"),
+            ({"tipo": "kanban", "columnas": [
+              {"id": "pendiente", "titulo": "Pendiente"}, {"id": "hecho", "titulo": "Hecho"}],
+              "tarjetas": [{"id": "t1", "titulo": "A", "columna": "perdido"}]}, "columna existente"),
+        )
+        for bloque, esperado in casos:
+            with self.subTest(tipo=bloque["tipo"]):
+                _, errores = esp.validar_app(app_valida(secciones=[
+                    {"titulo": "Resumen", "bloques": [bloque]}]))
+                self.assertTrue(any(esperado in error for error in errores), errores)
+
     def test_emojis_y_relleno_son_errores_de_estilo(self):
         crudo = app_valida()
         crudo["secciones"][0]["bloques"] = [{"tipo": "texto", "texto": "Bienvenido a tu app 🚀"}]

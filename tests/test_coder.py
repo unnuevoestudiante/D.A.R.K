@@ -623,6 +623,15 @@ class PruebasAppReact(unittest.TestCase):
         kit = src / "kit"
         for nombre in ("Fondo.tsx", "Fondo.css", "Cascaron.tsx", "Cascaron.css", "tokens.css", "fuentes.css"):
             self.assertTrue((kit / nombre).is_file(), nombre)
+        tokens = (kit / "tokens.css").read_text(encoding="utf-8")
+        self.assertIn('[data-p="tecnica"]', tokens)
+        self.assertIn('[data-p="sobria"]', tokens)
+        self.assertIn('[data-p="calida"]', tokens)
+        fondo = (kit / "Fondo.tsx").read_text(encoding="utf-8")
+        self.assertIn("tecnica: 0x5ee6ff, sobria: 0x2f4ad0, calida: 0xc4623a", fondo)
+        cascaron = (kit / "Cascaron.tsx").read_text(encoding="utf-8")
+        for tipo in ("tabla", "grafico", "progreso", "agenda", "kanban"):
+            self.assertIn(f'b.tipo === "{tipo}"', cascaron)
         fuentes = sorted(p.name for p in (kit / "fuentes").iterdir())
         self.assertTrue(fuentes and all(n.startswith("space-grotesk") or n.startswith("jetbrains")
                                         for n in fuentes), "solo viajan las fuentes de la personalidad elegida")
