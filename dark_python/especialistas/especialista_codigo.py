@@ -1277,6 +1277,8 @@ class EspecialistaCodigo:
         # entre proyectos distintos (sí puede repetirse al rehacer el mismo).
         self._ruta_variedad = os.path.join(
             os.path.expanduser("~"), ".dark_cache", "inmersivo_variedad.json")
+        self._ruta_variedad_apps = os.path.join(
+            os.path.expanduser("~"), ".dark_cache", "apps_variedad.json")
         # Motor de nube del proyecto en curso: uno solo de principio a fin.
         self._trabajo = None
         self._al_esperar_cuota = aviso_de_espera(avisar_espera, "Código")
@@ -3250,6 +3252,34 @@ class EspecialistaCodigo:
         except OSError as error:
             print(f"[Código] no pude guardar la variedad de mundos: {error}")
 
+    def _leer_variedad_apps(self, excluir_huella=None):
+        """Firmas de otras apps recientes; rehacer el mismo plan no cuenta como repetición."""
+        try:
+            with open(self._ruta_variedad_apps, "r", encoding="utf-8") as fuente:
+                entradas = json.load(fuente)
+        except (OSError, ValueError):
+            return []
+        if not isinstance(entradas, list):
+            return []
+        return [e for e in entradas if isinstance(e, dict)
+                and e.get("huella") != excluir_huella and isinstance(e.get("firma"), str)]
+
+    @staticmethod
+    def _firma_variedad_app(app):
+        """La combinación de decisiones visuales que ya permite el kit de apps."""
+        fondo = "con 3D" if app.get("fondo3d") else "sin 3D"
+        return f"{app['personalidad']}:{app['navegacion']}:{fondo}"
+
+    def _anotar_variedad_app(self, huella, app):
+        """Guarda la presentación elegida; una regeneración sustituye la firma anterior."""
+        entradas = [e for e in self._leer_variedad_apps() if e.get("huella") != huella]
+        entradas.append({"huella": huella, "firma": self._firma_variedad_app(app)})
+        entradas = entradas[-self._VARIEDAD_MAX_PROYECTOS:]
+        try:
+            self._escribir_json_atomico(self._ruta_variedad_apps, entradas)
+        except OSError as error:
+            print(f"[Código] no pude guardar la variedad de apps: {error}")
+
     @staticmethod
     def _estimacion_trabajo(esp):
         """Da un rango prudente que cuenta con hasta tres revisiones."""
@@ -3593,15 +3623,22 @@ class EspecialistaCodigo:
     # proyecto React+Vite+TS real. Mismo patrón que la web inmersiva.
     # =================================================================
 
-    def _componer_app(self, esp, hallazgos_revision=()):
+    def _componer_app(self, esp, hallazgos_revision=(), huella=None):
         """Pide el JSON de la app; si el contrato encuentra errores, se los devuelve una vez."""
         plan = "\n\n".join(
             f"{s.titulo}:\n{esp.sin_marcas(s.clave)}"
             for s in SECCIONES_ESPECIFICACION if esp.seccion(s.clave))
+        firmas = sorted({e["firma"] for e in self._leer_variedad_apps(huella)})
+        variedad_previa = ""
+        if firmas:
+            variedad_previa = (
+                "\n\nCombinaciones de presentación usadas en otras apps recientes de D.A.R.K.; "
+                "si el tema lo permite, elige una combinación distinta:\n- "
+                + "\n- ".join(firmas))
         pedido = (
             f"Plan aprobado de «{esp.titulo}»:\n\n{plan}\n\n"
             "Compón la app. Responde SOLO con el JSON, con esta forma:\n"
-            f"{_FORMA_APP}"
+            f"{_FORMA_APP}{variedad_previa}"
         )
         if hallazgos_revision:
             pedido += ("\n\nLa revisión anterior encontró estos problemas. Corrige el JSON "
@@ -3775,7 +3812,7 @@ class EspecialistaCodigo:
         self._informar_progreso(0, 4, f"Plan aprobado · estimación {minimo}–{maximo} min")
         try:
             self._informar_progreso(1, 4, "Componiendo la app")
-            app, errores = self._componer_app(esp)
+            app, errores = self._componer_app(esp, huella=huella)
             if app is None:
                 if estado.get("estado") == "pausado_cuota_diaria":
                     return (f"El trabajo de «{esp.titulo}» quedó pausado por la cuota diaria. "
@@ -3785,6 +3822,7 @@ class EspecialistaCodigo:
                         "error": "; ".join(errores)}
             nombre_npm = re.sub(r"[^a-z0-9-]+", "-", nombre.replace("_", "-")).strip("-") or "app"
             self._ensamblar_app_react(carpeta, app, nombre_npm)
+            self._anotar_variedad_app(huella, app)
             if self._confirmar_instalacion is None:
                 estado.update(estado="pendiente_confirmacion_instalacion")
                 return (f"App «{app['titulo']}» preparada en {carpeta}: "
@@ -3832,10 +3870,11 @@ class EspecialistaCodigo:
                         self._fase_proyecto = "corrección"
                         self._informar_progreso(3, 4, f"Corrigiendo la app · ronda {ronda + 1} de 3")
                         corregida, errores = self._componer_app(
-                            esp, hallazgos_revision=hallazgos)
+                            esp, hallazgos_revision=hallazgos, huella=huella)
                         if corregida is None:
                             raise RuntimeError("el modelo no devolvió una corrección válida")
                         self._ensamblar_app_react(carpeta, corregida, nombre_npm)
+                        self._anotar_variedad_app(huella, corregida)
                     except Exception as error:
                         print(f"[Código] no pude aplicar la corrección de la app: {error}")
                         if estado.get("estado") == "pausado_cuota_diaria":

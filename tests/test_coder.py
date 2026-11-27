@@ -598,6 +598,7 @@ class PruebasAppReact(unittest.TestCase):
         cola = list(respuestas)
         coder._llamar_online = Mock(side_effect=lambda *a, **k: (True, cola.pop(0)))
         coder._liberar_coder = Mock()
+        coder._ruta_variedad_apps = str(self.raiz / "apps_variedad.json")
         return coder
 
     def generar(self, coder):
@@ -631,11 +632,34 @@ class PruebasAppReact(unittest.TestCase):
         app = json.loads((src / "app.json").read_text(encoding="utf-8"))
         self.assertEqual(app["navegacion"], "superior")
         self.assertEqual(len(app["secciones"][0]["bloques"]), 3)
+        variedad = json.loads((self.raiz / "apps_variedad.json").read_text(encoding="utf-8"))
+        self.assertEqual(variedad[0]["firma"], "tecnica:superior:con 3D")
         vite = (carpeta / "vite.config.ts").read_text(encoding="utf-8")
         self.assertIn('base: "./"', vite)
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
         self.assertEqual((estado["estado"], estado["tipo"]),
                          ("pendiente_confirmacion_instalacion", "app_react"))
+
+    def test_una_app_distinta_recibe_las_combinaciones_anteriores(self):
+        from contratos.especialista import leer_especificacion
+        coder = self.coder(APP_JSON)
+        coder._anotar_variedad_app("huella-anterior", json.loads(APP_JSON))
+
+        coder._componer_app(leer_especificacion(SPEC_REACT), huella="huella-nueva")
+
+        pedido = coder._llamar_online.call_args.args[0]
+        self.assertIn("Combinaciones de presentación usadas en otras apps", pedido)
+        self.assertIn("tecnica:superior:con 3D", pedido)
+
+    def test_la_misma_app_puede_repetir_su_combinacion(self):
+        from contratos.especialista import leer_especificacion
+        coder = self.coder(APP_JSON)
+        coder._anotar_variedad_app("misma-huella", json.loads(APP_JSON))
+
+        coder._componer_app(leer_especificacion(SPEC_REACT), huella="misma-huella")
+
+        pedido = coder._llamar_online.call_args.args[0]
+        self.assertNotIn("Combinaciones de presentación usadas en otras apps", pedido)
 
     def test_instalar_y_compilar_queda_detras_de_confirmar_accion(self):
         coder = self.coder(APP_JSON)
