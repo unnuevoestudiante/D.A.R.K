@@ -237,12 +237,13 @@ function Pantalla({ seccion }: { seccion: Seccion }) {
     indiceLista >= 0 ? (seccion.bloques[indiceLista] as { items: ItemLista[] }).items : []);
 
   return (
-    <main className="contenido">
+    <main className="contenido" data-pantalla={seccion.id}>
       <div className="fila-titulo">
         <h1>{seccion.titulo}</h1>
         {indiceLista >= 0 && <span className="cuenta num">{items.length}</span>}
       </div>
       {seccion.bloques.map((b, i) => {
+        const contenido = (() => {
         if (b.tipo === "estadisticas") return <Estadisticas key={i} chips={b.chips} />;
         if (b.tipo === "texto") return <p key={i} className="texto-libre">{b.texto}</p>;
         if (b.tipo === "lista") return <Lista key={i} items={items} vacio={b.vacio} />;
@@ -260,6 +261,10 @@ function Pantalla({ seccion }: { seccion: Seccion }) {
         if (b.tipo === "agenda") return <Agenda key={i} bloque={b} />;
         if (b.tipo === "kanban") return <Tablero key={i} bloque={b} />;
         return null;
+        })();
+        return <div key={i} className="bloque-app" data-bloque={`${seccion.id}-${i}`}>
+          {contenido}
+        </div>;
       })}
     </main>
   );

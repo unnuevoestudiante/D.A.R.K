@@ -1218,6 +1218,25 @@ _SYSTEM_APP = (
     "Respondes SOLO con JSON válido, sin texto antes ni después."
 )
 
+_SYSTEM_RESOLVER_PIEZA = (
+    "Usted ayuda a localizar una pieza en un mapa de proyecto. No modifica nada. "
+    "Elija un identificador únicamente si la petición identifica una sola pieza "
+    "con suficiente claridad. Si hay varias posibles o ninguna, devuelva destino "
+    "null y formule una pregunta breve, formal y concreta. Responda solo con "
+    'JSON: {"destino":"id o null","pregunta":"..."}.'
+)
+
+_SYSTEM_PARCHE_PUNTUAL = (
+    "Usted modifica una pieza ya existente de un proyecto. Recibe una petición, "
+    "un mapa y el contenido de UN archivo permitido. Devuelva el parche mínimo "
+    "con el fragmento exacto que se reemplaza y su reemplazo. No cambie otras "
+    "piezas, no añada dependencias, comandos, instalación, telemetría ni llamadas "
+    "de red. Si no puede aislar un cambio pequeño y verificable, devuelva buscar "
+    "y reemplazar vacíos y escriba una pregunta formal. Responda solo con JSON: "
+    '{"buscar":"fragmento exacto","reemplazar":"fragmento nuevo",'
+    '"pregunta":""}.'
+)
+
 _FORMA_APP = """{
   "titulo": "nombre de la app (corto)",
   "descripcion": "una frase para el buscador",
@@ -1301,6 +1320,8 @@ class EspecialistaCodigo:
             os.path.expanduser("~"), ".dark_cache", "inmersivo_variedad.json")
         self._ruta_variedad_apps = os.path.join(
             os.path.expanduser("~"), ".dark_cache", "apps_variedad.json")
+        self._ruta_ultimo_proyecto = os.path.join(
+            os.path.expanduser("~"), ".dark_cache", "coder_ultimo_proyecto.json")
         # Motor de nube del proyecto en curso: uno solo de principio a fin.
         self._trabajo = None
         self._al_esperar_cuota = aviso_de_espera(avisar_espera, "Código")
@@ -2423,6 +2444,463 @@ class EspecialistaCodigo:
                           sort_keys=True)
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _normalizar_nombre_pieza(texto):
+        return re.sub(
+            r"\s+", " ", unicodedata.normalize("NFKD", str(texto or ""))
+            .encode("ascii", "ignore").decode().lower()).strip()
+
+    @staticmethod
+    def _nombres_bloque_app(bloque):
+        """Nombres visibles por los que una persona puede identificar el bloque."""
+        tipo = bloque.get("tipo", "")
+        nombres = []
+        if tipo == "estadisticas":
+            nombres.extend(c.get("etiqueta", "") for c in bloque.get("chips", []))
+        elif tipo == "lista":
+            nombres.extend(i.get("titulo", "") for i in bloque.get("items", []))
+        elif tipo == "formulario":
+            nombres.append(bloque.get("boton_abrir", ""))
+            nombres.extend(c.get("etiqueta", "") for c in bloque.get("campos", []))
+        elif tipo == "texto":
+            nombres.append(str(bloque.get("texto", ""))[:72])
+        elif tipo == "tabla":
+            nombres.extend(c.get("titulo", "") for c in bloque.get("columnas", []))
+        elif tipo == "grafico":
+            nombres.append(bloque.get("titulo", ""))
+            nombres.extend(d.get("etiqueta", "") for d in bloque.get("datos", []))
+        elif tipo == "progreso":
+            nombres.append(bloque.get("etiqueta", ""))
+        elif tipo == "agenda":
+            nombres.extend(e.get("titulo", "") for e in bloque.get("eventos", []))
+        elif tipo == "kanban":
+            nombres.extend(c.get("titulo", "") for c in bloque.get("columnas", []))
+            nombres.extend(t.get("titulo", "") for t in bloque.get("tarjetas", []))
+        return list(dict.fromkeys(n.strip() for n in nombres if isinstance(n, str) and n.strip()))
+
+    @classmethod
+    def _mapa_app(cls, app):
+        pantallas, piezas = [], []
+        for indice, seccion in enumerate(app.get("secciones", [])):
+            pantalla = {
+                "id": seccion["id"], "nombre": seccion["titulo"],
+                "archivo": "src/app.json", "componente": "Pantalla",
+                "ruta_json": f"/secciones/{indice}",
+                "selector_css": f'main.contenido[data-pantalla="{seccion["id"]}"]',
+                "archivo_estilos": "src/kit/Cascaron.css",
+            }
+            pantallas.append(pantalla)
+            for orden, bloque in enumerate(seccion.get("bloques", [])):
+                nombres = cls._nombres_bloque_app(bloque)
+                piezas.append({
+                    "id": f"{seccion['id']}:bloque:{orden}",
+                    "nombre": nombres[0] if nombres else f"{bloque['tipo']} {orden + 1}",
+                    "alias": nombres,
+                    "pantalla": seccion["titulo"], "tipo": bloque["tipo"],
+                    "componente": bloque["tipo"].title(),
+                    "archivo": "src/app.json",
+                    "ruta_json": f"/secciones/{indice}/bloques/{orden}",
+                    "selector_css": (f'main.contenido[data-pantalla="{seccion["id"]}"] '
+                                     f'[data-bloque="{seccion["id"]}-{orden}"]'),
+                    "archivo_estilos": "src/kit/Cascaron.css",
+                })
+        return {"version": 1, "pantallas": pantallas, "piezas": piezas,
+                "archivos": ["src/app.json", "src/App.tsx", "src/kit/Cascaron.tsx",
+                             "src/kit/Cascaron.css", "src/kit/tokens.css"]}
+
+    @staticmethod
+    def _mapa_mundo(mundo):
+        pantallas, piezas = [], []
+        for indice, estacion in enumerate(mundo.get("estaciones", [])):
+            ident = f"estacion-{indice + 1}"
+            nombres = [estacion.get("indice", ""), estacion.get("titulo", "")]
+            pantalla = {"id": ident, "nombre": estacion.get("titulo", ident),
+                        "alias": [n for n in nombres if n], "archivo": "index.html",
+                        "componente": "section.estacion", "ruta_json": f"/estaciones/{indice}",
+                        "archivo_estilos": "kit/inmersivo.css",
+                        "selector_css": f"section.estacion:nth-of-type({indice + 1})"}
+            pantallas.append(pantalla)
+            objeto = estacion.get("objeto", {})
+            if objeto.get("tipo"):
+                piezas.append({"id": f"{ident}:objeto", "nombre": objeto["tipo"],
+                               "alias": [objeto.get("variante", ""), estacion.get("titulo", "")],
+                               "pantalla": pantalla["nombre"], "tipo": "objeto 3D",
+                               "componente": "escena 3D", "archivo": "index.html",
+                               "ruta_json": f"/estaciones/{indice}/objeto",
+                               "archivo_estilos": pantalla["archivo_estilos"],
+                               "selector_css": pantalla["selector_css"]})
+            ficha = objeto.get("ficha", {})
+            for clave, dato in [("ficha", ficha), *[
+                    (f"satelite-{i}", satelite)
+                    for i, satelite in enumerate(objeto.get("satelites", []))], *[
+                    (f"foto-{i}", foto)
+                    for i, foto in enumerate(objeto.get("fotos", []))]]:
+                if not isinstance(dato, dict) or not dato.get("titulo"):
+                    continue
+                piezas.append({"id": f"{ident}:{clave}", "nombre": dato["titulo"],
+                               "alias": [dato.get("breve", "")],
+                               "pantalla": pantalla["nombre"], "tipo": clave,
+                               "componente": "contenido de estación", "archivo": "index.html",
+                               "ruta_json": f"/estaciones/{indice}/objeto/{clave}",
+                               "archivo_estilos": pantalla["archivo_estilos"],
+                               "selector_css": pantalla["selector_css"]})
+        return {"version": 1, "pantallas": pantallas, "piezas": piezas,
+                "archivos": ["index.html", "kit/inmersivo.css"]}
+
+    @classmethod
+    def _mapa_archivos_proyecto(cls, carpeta, archivos):
+        """Anota etiquetas y símbolos visibles de las fuentes del proyecto."""
+        pantallas, piezas, rutas = [], [], []
+        patron_simbolo = re.compile(
+            r"(?:function|class|def|const|let|var)\s+([A-Za-z_$][\w$]*)")
+        patron_etiqueta = re.compile(
+            r"<(?:button|a|h[1-6]|label|section|article)\b[^>]*>\s*([^<{]{2,90})")
+        patron_atributo = re.compile(
+            r"\b(?:id|aria-label|name)=[\"']([^\"']{2,80})[\"']")
+        for relativo in archivos if isinstance(archivos, list) else []:
+            if not isinstance(relativo, str) or not relativo.strip():
+                continue
+            normal = relativo.replace("\\", "/").lstrip("./")
+            if (os.path.isabs(normal) or normal.startswith("/") or ".." in normal.split("/")
+                    or "node_modules" in normal.lower().split("/")
+                    or os.path.basename(normal).lower() in {
+                        "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"}):
+                continue
+            absoluto = os.path.abspath(os.path.join(carpeta, normal))
+            try:
+                if os.path.commonpath((os.path.abspath(carpeta), absoluto)) != os.path.abspath(carpeta):
+                    continue
+                with open(absoluto, "r", encoding="utf-8", errors="replace") as fuente:
+                    contenido = fuente.read(250_000)
+            except (OSError, ValueError):
+                continue
+            rutas.append(normal)
+            extension = os.path.splitext(normal)[1].lower()
+            nombres = set(patron_simbolo.findall(contenido))
+            nombre_archivo = os.path.splitext(os.path.basename(normal))[0]
+            piezas.append({"id": f"{normal}#archivo", "nombre": nombre_archivo,
+                           "alias": [os.path.basename(normal)], "tipo": "archivo",
+                           "archivo": normal})
+            if extension in (".html", ".htm", ".tsx", ".jsx", ".vue", ".svelte"):
+                nombres.update(t.strip() for t in patron_etiqueta.findall(contenido))
+                nombres.update(patron_atributo.findall(contenido))
+            for nombre in sorted(n for n in nombres if n and not n.startswith("_")):
+                piezas.append({"id": f"{normal}#{len(piezas)}", "nombre": nombre,
+                               "alias": [nombre], "tipo": "símbolo", "archivo": normal})
+            if extension in (".html", ".htm"):
+                for indice, nombre in enumerate(re.findall(
+                        r"<section\b[^>]*\bid=[\"']([^\"']+)", contenido, re.IGNORECASE)):
+                    pantallas.append({"id": f"{normal}#seccion:{indice}",
+                                      "nombre": nombre, "archivo": normal,
+                                      "componente": "section"})
+        return {"version": 1, "pantallas": pantallas, "piezas": piezas,
+                "archivos": rutas}
+
+    def _registrar_ultimo_proyecto(self, carpeta):
+        carpeta = os.path.abspath(carpeta)
+        self.ultima_carpeta_proyecto = carpeta
+        try:
+            self._escribir_json_atomico(
+                self._ruta_ultimo_proyecto, {"carpeta": carpeta})
+        except OSError as error:
+            print(f"[Código] no pude recordar el último proyecto: {error}")
+
+    def _carpeta_proyecto_reciente(self):
+        """Lee el último destino y comprueba su manifiesto antes de confiar en él."""
+        candidatos = [getattr(self, "ultima_carpeta_proyecto", None)]
+        try:
+            with open(self._ruta_ultimo_proyecto, "r", encoding="utf-8") as fuente:
+                candidato = json.load(fuente).get("carpeta")
+            candidatos.append(candidato)
+        except (OSError, ValueError, AttributeError):
+            pass
+        for carpeta in candidatos:
+            if not isinstance(carpeta, str):
+                continue
+            absoluto = os.path.abspath(carpeta)
+            manifiesto = os.path.join(absoluto, ".dark_project.json")
+            if not self._ruta_permitida(absoluto) or not os.path.isfile(manifiesto):
+                continue
+            try:
+                with open(manifiesto, "r", encoding="utf-8") as fuente:
+                    estado = json.load(fuente)
+            except (OSError, ValueError):
+                continue
+            if estado.get("estado") == "completo":
+                return absoluto, estado, manifiesto
+        return None, None, None
+
+    @staticmethod
+    def _destinos_mapa(mapa):
+        return [d for d in (mapa.get("pantallas", []) + mapa.get("piezas", []))
+                if isinstance(d, dict) and d.get("id") and d.get("nombre")]
+
+    def _resolver_destino_edicion(self, pedido, mapa, estado):
+        destinos = self._destinos_mapa(mapa)
+        normal = self._normalizar_nombre_pieza(pedido)
+        exactos = []
+        for destino in destinos:
+            nombres = [destino.get("nombre", ""), *destino.get("alias", [])]
+            if any((nombre := self._normalizar_nombre_pieza(n))
+                   and f" {nombre} " in f" {normal} " for n in nombres):
+                exactos.append(destino)
+        if len(exactos) == 1:
+            return exactos[0], pedido, ""
+
+        candidatos = exactos or destinos
+        if candidatos:
+            carga = [{k: d.get(k) for k in ("id", "nombre", "alias", "pantalla", "tipo", "componente")
+                      if d.get(k) is not None} for d in candidatos[:80]]
+            prompt = (f"Petición de cambio: {pedido}\n"
+                      f"Piezas disponibles en el mapa:\n{json.dumps(carga, ensure_ascii=False)}")
+            try:
+                ok, texto = self._llamar_online(
+                    prompt, _SYSTEM_RESOLVER_PIEZA, "json", max_tokens=180)
+                salida = self._leer_json_incrustado(texto) if ok else None
+                if isinstance(salida, dict):
+                    elegido = next((d for d in candidatos if d["id"] == salida.get("destino")), None)
+                    if elegido is not None:
+                        return elegido, pedido, ""
+                    if salida.get("destino") is None:
+                        pregunta = self._pregunta_destino(pedido, candidatos)
+                        estado["pendiente_edicion"] = {
+                            "pedido": pedido,
+                            "candidatos": [
+                                {"id": d["id"], "nombre": d["nombre"]}
+                                for d in candidatos[:12]],
+                        }
+                        return None, pedido, pregunta
+            except Exception as error:
+                print(f"[Código] no pude resolver el destino del cambio: {error}")
+
+        pregunta = self._pregunta_destino(pedido, candidatos)
+        estado["pendiente_edicion"] = {
+            "pedido": pedido,
+            "candidatos": [{"id": d["id"], "nombre": d["nombre"]}
+                           for d in candidatos[:12]],
+        }
+        return None, pedido, pregunta
+
+    @staticmethod
+    def _pregunta_destino(pedido, candidatos):
+        if len(candidatos) > 1:
+            nombres = list(dict.fromkeys(d.get("nombre", "la pieza") for d in candidatos[:3]))
+            opciones = " o ".join(f"«{nombre}»" for nombre in nombres)
+            return f"Encontré varias piezas posibles para «{pedido[:70]}»: {opciones}. ¿Cuál desea cambiar?"
+        return (f"No encuentro con seguridad qué pieza quiere cambiar con «{pedido[:70]}». "
+                "¿Qué pantalla o elemento concreto debo buscar?")
+
+    @staticmethod
+    def _archivo_edicion(carpeta, destino, pedido):
+        verbos_visuales = re.search(
+            r"\b(muev|coloc|aline|cent|separ|acerc|alej|tamañ|color|estil|margen|espaci)\w*\b",
+            pedido, re.IGNORECASE)
+        objeto_3d = destino.get("tipo") == "objeto 3D"
+        relativo = (destino.get("archivo_estilos") if verbos_visuales and not objeto_3d
+                    else destino.get("archivo")) or destino.get("archivo")
+        if not isinstance(relativo, str):
+            return None, None
+        relativo = relativo.replace("\\", "/").lstrip("./")
+        extension = os.path.splitext(relativo)[1].lower()
+        if (os.path.isabs(relativo) or relativo.startswith("/") or ".." in relativo.split("/")
+                or "node_modules" in relativo.lower().split("/")
+                or os.path.basename(relativo).lower() in {
+                    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"}
+                or extension not in {".html", ".htm", ".css", ".js", ".jsx", ".ts", ".tsx",
+                                     ".py", ".json", ".md", ".svg"}):
+            return None, None
+        absoluto = os.path.abspath(os.path.join(carpeta, relativo))
+        try:
+            dentro = os.path.commonpath((os.path.abspath(carpeta), absoluto)) == os.path.abspath(carpeta)
+        except ValueError:
+            return None, None
+        if not dentro:
+            return None, None
+        return relativo, absoluto
+
+    def _registrar_busqueda_edicion(self, estado, pedido, destino=None, resultado="sin_destino"):
+        anotaciones = estado.get("busquedas_edicion", [])
+        if not isinstance(anotaciones, list):
+            anotaciones = []
+        anotaciones.append({
+            "pedido": str(pedido)[:300],
+            "destino": destino.get("id") if isinstance(destino, dict) else None,
+            "resultado": resultado,
+            "actualizado": datetime.datetime.now().isoformat(),
+        })
+        estado["busquedas_edicion"] = anotaciones[-20:]
+
+    def modificar_ultimo_proyecto(self, pedido):
+        """Busca un cambio en el último mapa y verifica el parche antes de entregarlo."""
+        pedido = (pedido or "").strip()
+        if not pedido:
+            return "Dígame qué cambio desea hacer en el proyecto."
+        carpeta, estado, manifiesto = self._carpeta_proyecto_reciente()
+        if not carpeta:
+            return ("No encuentro un proyecto reciente con mapa para editar. "
+                    "Indíqueme cuál proyecto desea abrir primero.")
+        if not isinstance(estado.get("mapa"), dict):
+            estado["mapa"] = self._mapa_archivos_proyecto(
+                carpeta, estado.get("archivos", []))
+        mapa = estado["mapa"]
+
+        pendiente = estado.get("pendiente_edicion")
+        pedido_original = pedido
+        destino = None
+        if isinstance(pendiente, dict):
+            respuestas = [d for d in self._destinos_mapa(mapa)
+                          if any((nombre := self._normalizar_nombre_pieza(n))
+                                 and f" {nombre} " in f" {self._normalizar_nombre_pieza(pedido)} "
+                                 for n in [d.get("nombre", ""), *d.get("alias", [])])]
+            candidatos_pendientes = {d.get("id") for d in pendiente.get("candidatos", [])}
+            respuestas = [d for d in respuestas if d.get("id") in candidatos_pendientes]
+            if len(respuestas) == 1:
+                destino = respuestas[0]
+                pedido_original = f"{pendiente.get('pedido', '')}. Aclaración: la persona eligió «{destino['nombre']}»; {pedido}."
+                estado.pop("pendiente_edicion", None)
+
+        if destino is None:
+            destino, pedido_original, pregunta = self._resolver_destino_edicion(
+                pedido, mapa, estado)
+            if destino is None:
+                self._registrar_busqueda_edicion(estado, pedido, resultado="pregunta")
+                self._escribir_json_atomico(manifiesto, estado)
+                return pregunta
+
+        relativo, ruta = self._archivo_edicion(carpeta, destino, pedido_original)
+        if not ruta or not os.path.isfile(ruta):
+            self._registrar_busqueda_edicion(estado, pedido, destino, "archivo_no_encontrado")
+            estado.pop("pendiente_edicion", None)
+            self._escribir_json_atomico(manifiesto, estado)
+            return (f"El mapa señala «{destino.get('nombre')}» en un archivo que ya no existe. "
+                    "No he modificado el proyecto; revisaré el mapa antes de intentarlo de nuevo.")
+
+        try:
+            with open(ruta, "r", encoding="utf-8", errors="replace") as fuente:
+                contenido = fuente.read()
+        except OSError as error:
+            return f"No pude leer la pieza «{destino.get('nombre')}»: {error}"
+        if len(contenido) > 35_000:
+            return (f"La pieza «{destino.get('nombre')}» es demasiado extensa para una edición "
+                    "puntual segura. No he modificado el proyecto.")
+        prompt = (
+            f"Petición exacta: {pedido_original}\n"
+            f"Pieza elegida: {json.dumps(destino, ensure_ascii=False)}\n"
+            f"Archivo permitido: {relativo}\n"
+            "Devuelva un único parche mínimo que resuelva esa petición solo en esta pieza. "
+            "El campo buscar debe aparecer literalmente una sola vez en el archivo. "
+            "Si requiere tocar otra pieza o el objetivo no puede identificarse, pregunte "
+            "y deje buscar/reemplazar vacíos.\n"
+            f"Contenido actual:\n{contenido}"
+        )
+        try:
+            ok, texto = self._llamar_online(
+                prompt, _SYSTEM_PARCHE_PUNTUAL, "json", max_tokens=1000)
+        except Exception as error:
+            return f"No pude preparar el cambio puntual: {error}"
+        parche = self._leer_json_incrustado(texto) if ok else None
+        if not isinstance(parche, dict):
+            self._registrar_busqueda_edicion(estado, pedido, destino, "sin_parche_valido")
+            self._escribir_json_atomico(manifiesto, estado)
+            return "No pude preparar un parche puntual verificable. No he modificado el proyecto."
+        buscar, reemplazar = parche.get("buscar"), parche.get("reemplazar")
+        pregunta = str(parche.get("pregunta") or "").strip()
+        if not isinstance(buscar, str) or not buscar or not isinstance(reemplazar, str):
+            if pregunta:
+                estado["pendiente_edicion"] = {
+                    "pedido": pedido, "destino": destino.get("id"),
+                    "candidatos": [{"id": destino.get("id"),
+                                    "nombre": destino.get("nombre")}],
+                }
+                self._registrar_busqueda_edicion(
+                    estado, pedido, destino, "aclaracion_del_modelo")
+                self._escribir_json_atomico(manifiesto, estado)
+                return pregunta
+            return "No pude aislar el cambio en una sola pieza. No he modificado el proyecto."
+        coincidencias = contenido.count(buscar)
+        if coincidencias != 1:
+            self._registrar_busqueda_edicion(estado, pedido, destino, "fragmento_no_unico")
+            self._escribir_json_atomico(manifiesto, estado)
+            return (f"El fragmento de «{destino.get('nombre')}» aparece {coincidencias} veces. "
+                    "No he modificado el proyecto porque el destino no es único.")
+
+        nuevo = contenido.replace(buscar, reemplazar, 1)
+        if relativo == "src/app.json":
+            normalizado, errores_app = validar_app(self._leer_json_incrustado(nuevo))
+            if errores_app:
+                self._registrar_busqueda_edicion(estado, pedido, destino, "app_json_invalido")
+                self._escribir_json_atomico(manifiesto, estado)
+                return "El cambio no conserva el contrato de la app. No he modificado el proyecto."
+            nuevo = json.dumps(normalizado, ensure_ascii=False, indent=1)
+        respaldo = ruta + ".dark_bak"
+        try:
+            shutil.copy2(ruta, respaldo)
+            self._escribir_texto_atomico(ruta, nuevo)
+        except OSError as error:
+            return f"No pude guardar el cambio: {error}"
+
+        revision = None
+        if estado.get("tipo") == "app_react":
+            puede, motivo = self._presupuesto_para_build()
+            compilacion = (self._comando_npm(carpeta, "compilar", 240) if puede
+                           else {"ok": False, "error": motivo})
+            if not compilacion["ok"]:
+                shutil.copy2(respaldo, ruta)
+                try:
+                    os.remove(respaldo)
+                except OSError:
+                    pass
+                self._registrar_busqueda_edicion(estado, pedido, destino, "build_revertido")
+                self._escribir_json_atomico(manifiesto, estado)
+                return ("El cambio no pasó la compilación de React y lo restauré. "
+                        f"Motivo: {compilacion['error'][:240]}")
+            esp = self._es_especificacion(estado.get("especificacion"))
+            if esp is not None:
+                revision = self._revisar_app_compilada(esp, carpeta)
+        elif estado.get("tipo") == "inmersivo":
+            ruta_html = os.path.join(carpeta, "index.html")
+            esp = self._es_especificacion(estado.get("especificacion"))
+            if esp is not None:
+                revision = self._revisar_visualmente(esp, ruta_html)
+
+        if relativo == "src/app.json":
+            try:
+                with open(ruta, "r", encoding="utf-8") as fuente:
+                    estado["composicion"] = json.load(fuente)
+                estado["mapa"] = self._mapa_app(estado["composicion"])
+            except (OSError, ValueError):
+                pass
+        self._registrar_busqueda_edicion(estado, pedido, destino, "aplicado")
+        estado.pop("pendiente_edicion", None)
+        estado.setdefault("cambios_puntuales", []).append({
+            "peticion": pedido[:300], "pieza": destino.get("nombre"),
+            "archivo": relativo, "actualizado": datetime.datetime.now().isoformat(),
+            "revision": revision,
+        })
+        estado["cambios_puntuales"] = estado["cambios_puntuales"][-10:]
+        try:
+            self._escribir_json_atomico(manifiesto, estado)
+        except OSError as error:
+            shutil.copy2(respaldo, ruta)
+            return ("Apliqué el cambio, pero no pude guardar el mapa del proyecto; "
+                    f"restauré el archivo original. Motivo: {error}")
+        try:
+            os.remove(respaldo)
+        except OSError:
+            pass
+        if revision and revision.get("hallazgos"):
+            return (f"Apliqué el cambio en «{destino.get('nombre')}» ({relativo}). "
+                    "La revisión dejó pendientes: "
+                    + "; ".join(revision["hallazgos"][:3]))
+        if estado.get("tipo") == "app_react":
+            return (f"Apliqué el cambio en «{destino.get('nombre')}» ({relativo}) "
+                    "y React compiló correctamente.")
+        if revision and revision.get("revisado"):
+            return (f"Apliqué el cambio en «{destino.get('nombre')}» ({relativo}) "
+                    "y la revisión visual terminó.")
+        return (f"Apliqué el cambio en «{destino.get('nombre')}» ({relativo}) "
+                "y comprobé que el fragmento afectado era único.")
+
     def _carpeta_proyecto_aislada(self, destino, nombre, huella):
         """Reserva una carpeta nueva; solo reanuda una incompleta idéntica."""
         raiz = os.path.abspath(self._resolver_ruta(destino))
@@ -2539,10 +3017,14 @@ class EspecialistaCodigo:
         self._escribir_json_atomico(estado_path, {
             "version": 1, "nombre_proyecto": nombre_proyecto,
             "huella": huella, "estado": "completo",
+            "tipo": "codigo",
             "imagenes": self._buscador_imagenes.informe(),
             "actualizado": datetime.datetime.now().isoformat(),
             "archivos": [a["path"] for a in plan["archivos"]],
+            "mapa": self._mapa_archivos_proyecto(
+                carpeta, [a["path"] for a in plan["archivos"]]),
         })
+        self._registrar_ultimo_proyecto(carpeta)
         self._liberar_coder()
         return (f"Proyecto '{nombre_proyecto}' generado en {carpeta} "
                 f"({len(plan['archivos'])} archivos)." + resumen_img)
@@ -2615,6 +3097,16 @@ class EspecialistaCodigo:
                 print(f"[Código] imágenes: paso omitido por error: {error}")
 
         self.ultima_carpeta_proyecto = carpeta
+        estado_path = os.path.join(carpeta, ".dark_project.json")
+        archivos = [os.path.basename(ruta_abs)]
+        estado = {
+            "version": 1, "nombre_proyecto": nombre, "estado": "completo",
+            "tipo": "codigo", "actualizado": datetime.datetime.now().isoformat(),
+            "archivos": archivos,
+            "mapa": self._mapa_archivos_proyecto(carpeta, archivos),
+        }
+        self._escribir_json_atomico(estado_path, estado)
+        self._registrar_ultimo_proyecto(carpeta)
         self._liberar_coder()
         return f"Código guardado en {ruta_abs}." + resumen_img
 
@@ -3174,12 +3666,15 @@ class EspecialistaCodigo:
         archivos = ["index.html", "styles.css", "script.js"]
 
         def guardar_estado(estado):
-            self._escribir_json_atomico(estado_path, {
+            datos_estado = {
                 "version": 1, "nombre_proyecto": nombre, "huella": huella,
                 "estado": estado, "tipo": "catalogo",
                 "imagenes": self._buscador_imagenes.informe(),
                 "actualizado": datetime.datetime.now().isoformat(),
-                "archivos": archivos})
+                "archivos": archivos}
+            if estado == "completo":
+                datos_estado["mapa"] = self._mapa_archivos_proyecto(carpeta, archivos)
+            self._escribir_json_atomico(estado_path, datos_estado)
 
         guardar_estado("en_progreso")
         self.ultima_carpeta_proyecto = carpeta
@@ -3209,6 +3704,7 @@ class EspecialistaCodigo:
             guardar_estado("fallido")
             raise
         guardar_estado("completo")
+        self._registrar_ultimo_proyecto(carpeta)
         return (f"Catálogo '{meta['marca']}' generado en {carpeta} "
                 f"({len(productos)} productos en {len(meta['categorias'])} "
                 "categorías). Ábrelo con index.html."
@@ -3571,6 +4067,8 @@ class EspecialistaCodigo:
             self._fase_proyecto = "ensamblado"
             self._informar_progreso(2, 4, "Construyendo la web")
             indice, avisos_fotos = self._ensamblar_inmersivo(carpeta, mundo)
+            estado["archivos"] = ["index.html"]
+            estado["mapa"] = self._mapa_archivos_proyecto(carpeta, estado["archivos"])
             revision = {"revisado": False, "aprobado": None, "hallazgos": [],
                         "errores_consola": [], "capturas": []}
             for ronda in range(3):
@@ -3600,11 +4098,15 @@ class EspecialistaCodigo:
                 avisos_estilo.extend(errores_correccion)
                 indice = indice_corregido
                 avisos_fotos = avisos_fotos_nuevos
+            estado["composicion"] = mundo
+            estado["archivos"] = ["index.html", "kit/inmersivo.css"]
+            estado["mapa"] = self._mapa_mundo(mundo)
             estado.update(estado="completo", estaciones=len(mundo["estaciones"]),
                           objetos=[e["objeto"]["tipo"] for e in mundo["estaciones"]],
                           avisos_de_estilo=[e.removeprefix(ESTILO) for e in avisos_estilo],
                           avisos_de_fotos=avisos_fotos, semilla=mundo["semilla"],
                           revision_visual=revision)
+            self._registrar_ultimo_proyecto(carpeta)
             self._informar_progreso(4, 4, "Web lista")
             aviso = (f" Revisa el texto: {avisos_estilo[0].removeprefix(ESTILO)}."
                      if avisos_estilo else "")
@@ -3844,6 +4346,10 @@ class EspecialistaCodigo:
                         "error": "; ".join(errores)}
             nombre_npm = re.sub(r"[^a-z0-9-]+", "-", nombre.replace("_", "-")).strip("-") or "app"
             self._ensamblar_app_react(carpeta, app, nombre_npm)
+            estado["composicion"] = app
+            estado["mapa"] = self._mapa_app(app)
+            estado["archivos"] = ["src/app.json", "src/App.tsx", "src/kit/Cascaron.tsx",
+                                   "src/kit/Cascaron.css", "src/kit/tokens.css"]
             self._anotar_variedad_app(huella, app)
             if self._confirmar_instalacion is None:
                 estado.update(estado="pendiente_confirmacion_instalacion")
@@ -3907,10 +4413,12 @@ class EspecialistaCodigo:
                     app = corregida
 
                 estado.update(estado="completo", pantallas=len(app["secciones"]),
+                              composicion=app, mapa=self._mapa_app(app),
                               navegacion=app["navegacion"], fondo3d=app["fondo3d"],
                               revision_visual=revision,
                               pendientes=list(dict.fromkeys(hallazgos)))
                 self._escribir_json_atomico(estado_path, estado)
+                self._registrar_ultimo_proyecto(carpeta)
                 self._informar_progreso(4, 4, "App lista")
                 pendiente = " " + self._resumen_pendientes(hallazgos)
                 if not revision.get("revisado"):

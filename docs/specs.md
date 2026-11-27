@@ -1,5 +1,5 @@
 D.A.R.K. — Documento maestro de especificaciones
-Versión: 0.73 · Última actualización: 2026-11-27
+Versión: 0.74 · Última actualización: 2026-11-27
 
 Este es el documento único donde se va registrando cómo funciona cada parte de D.A.R.K. Se actualiza con el tiempo: cada vez que se define o se cambia algo, se edita la parte correspondiente (o se agrega una parte nueva al final) y se anota en el registro de cambios.
 
@@ -1729,4 +1729,5 @@ Versión	Fecha	Cambio
 0.70	2026-11-27	Parte 11, Coder v2 (Bloque B): guarda la fase del proyecto ante 429 diario y permite seguir en Ollama o esperar el reinicio; informa las etapas y el rango estimado en el overlay, abre la app React compilada y resume su contenido, supuestos y pendientes. No hay tarifa de proveedor declarada para ofrecer una ruta de pago calculable.
 0.71	2026-11-27	Parte 11, Coder v2 (Bloque C2): cada app registra personalidad, navegación y uso del fondo 3D en `~/.dark_cache/apps_variedad.json`; el pedido del coder incluye las firmas de otros proyectos recientes para sugerir variedad. Se excluye la huella del mismo proyecto y se conservan hasta 24 firmas.
 0.72	2026-11-27	Parte 11, Coder v2 (Bloque C1 y C3): Tareas propone navegación, personalidad y fondo 3D dentro de las nueve secciones existentes; Coder puede corregir esos campos y valida el JSON. El catálogo suma tabla, gráfico, progreso, agenda y kanban, con estructura validada y renderizadores fijos del kit. Kanban mueve tarjetas en memoria, decisión aprobada por la persona.
-0.73	2026-11-27	Parte 11, Coder v2 (Bloque D2, parcial): las preguntas de la especificación, la pregunta por defecto y el resumen de Tareas usan trato formal; se elimina el relleno «Déjame pensarlo» antes de redactar y se formalizan los avisos de espera y traspaso a Coder. El vocabulario propio de Tareas y su conexión al especialista enfocado quedan para aprobación de diseño.
+0.73	2026-11-27	Parte 11, Coder v2 (Bloque D2, parcial): las preguntas de la especificación, la pregunta por defecto y el resumen de Tareas usan trato formal; se elimina el relleno «Déjame pensarlo» antes de redactar y se formalizan los avisos de espera y traspaso a Coder.
+0.74	2026-11-27	Parte 11, Coder v2 (Bloque D): el overlay publica el especialista enfocado y el Núcleo mantiene disponibles las intenciones de sistema antes de enrutar el resto a Tareas o Coder. Tareas tiene frases formales por función y una voz proactiva de nube, filtrada por Guardia. Los proyectos completos guardan un mapa navegable; los cambios puntuales preguntan ante ambigüedad, validan el parche y revierten si falla la compilación React.

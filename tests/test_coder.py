@@ -599,6 +599,7 @@ class PruebasAppReact(unittest.TestCase):
         coder._llamar_online = Mock(side_effect=lambda *a, **k: (True, cola.pop(0)))
         coder._liberar_coder = Mock()
         coder._ruta_variedad_apps = str(self.raiz / "apps_variedad.json")
+        coder._ruta_ultimo_proyecto = str(self.raiz / "coder_ultimo_proyecto.json")
         return coder
 
     def generar(self, coder):
@@ -648,6 +649,13 @@ class PruebasAppReact(unittest.TestCase):
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
         self.assertEqual((estado["estado"], estado["tipo"]),
                          ("pendiente_confirmacion_instalacion", "app_react"))
+        self.assertEqual(estado["mapa"]["pantallas"][0]["nombre"], "Notas")
+        self.assertIn("Ideas para el viaje", estado["mapa"]["piezas"][1]["alias"])
+        self.assertEqual(estado["mapa"]["piezas"][1]["selector_css"],
+                         'main.contenido[data-pantalla="notas"] [data-bloque="notas-1"]')
+        cascaron = (carpeta / "src" / "kit" / "Cascaron.tsx").read_text(encoding="utf-8")
+        self.assertIn("data-pantalla={seccion.id}", cascaron)
+        self.assertIn("data-bloque={`${seccion.id}-${i}`}", cascaron)
 
     def test_una_app_distinta_recibe_las_combinaciones_anteriores(self):
         from contratos.especialista import leer_especificacion
@@ -679,6 +687,95 @@ class PruebasAppReact(unittest.TestCase):
         coder._comando_npm = Mock()
         coder._confirmar_instalacion.assert_called_once()
         coder._comando_npm.assert_not_called()
+
+    def _proyecto_app_completo(self, coder):
+        from contratos.especialista import validar_app
+        app, errores = validar_app(json.loads(APP_JSON))
+        self.assertFalse(errores)
+        carpeta = self.raiz / "proyecto"
+        (carpeta / "src").mkdir(parents=True)
+        (carpeta / "src" / "app.json").write_text(
+            json.dumps(app, ensure_ascii=False, indent=1), encoding="utf-8")
+        estado = {
+            "version": 1, "tipo": "app_react", "estado": "completo",
+            "especificacion": str(self.spec), "archivos": ["src/app.json"],
+            "mapa": coder._mapa_app(app),
+        }
+        (carpeta / ".dark_project.json").write_text(
+            json.dumps(estado, ensure_ascii=False), encoding="utf-8")
+        coder.ultima_carpeta_proyecto = str(carpeta)
+        return carpeta
+
+    def test_coder_pregunta_si_no_identifica_la_pieza_y_anota_la_busqueda(self):
+        coder = self.coder('{"destino": null, "pregunta": "¿Qué bloque?"}')
+        carpeta = self._proyecto_app_completo(coder)
+        ruta = carpeta / "src" / "app.json"
+        antes = ruta.read_text(encoding="utf-8")
+
+        salida = coder.modificar_ultimo_proyecto("cambie el indicador no existente")
+
+        self.assertIn("¿Cuál desea cambiar?", salida)
+        self.assertEqual(ruta.read_text(encoding="utf-8"), antes)
+        estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
+        self.assertEqual(estado["busquedas_edicion"][-1]["resultado"], "pregunta")
+        self.assertTrue(estado["pendiente_edicion"]["candidatos"])
+
+    def test_mapa_inmersivo_localiza_estaciones_y_objetos_3d(self):
+        mundo = {"estaciones": [{
+            "indice": "01 · Inicio", "titulo": "Inicio",
+            "objeto": {"tipo": "hipercubo", "variante": "teseracto",
+                       "ficha": {"titulo": "La estructura", "breve": "Geometría"}},
+        }]}
+        mapa = EspecialistaCodigo._mapa_mundo(mundo)
+        objeto = next(pieza for pieza in mapa["piezas"] if pieza["tipo"] == "objeto 3D")
+        self.assertEqual(mapa["pantallas"][0]["archivo"], "index.html")
+        self.assertIn("teseracto", objeto["alias"])
+        self.assertEqual(objeto["ruta_json"], "/estaciones/0/objeto")
+        relativo, _ = EspecialistaCodigo._archivo_edicion(
+            str(self.raiz), objeto, "mueva el teseracto")
+        self.assertEqual(relativo, "index.html")
+
+    def test_cambio_puntual_unico_se_compila_y_actualiza_el_mapa(self):
+        coder = self.coder(json.dumps({
+            "buscar": "Ideas para el viaje", "reemplazar": "Ideas para el fin de semana",
+            "pregunta": "",
+        }, ensure_ascii=False))
+        carpeta = self._proyecto_app_completo(coder)
+        coder._presupuesto_para_build = Mock(return_value=(True, ""))
+        coder._comando_npm = Mock(return_value={"ok": True, "error": ""})
+        coder._revisar_app_compilada = Mock(return_value={
+            "revisado": True, "aprobado": True, "hallazgos": []})
+
+        salida = coder.modificar_ultimo_proyecto("cambie Ideas para el viaje")
+
+        ruta = carpeta / "src" / "app.json"
+        app = json.loads(ruta.read_text(encoding="utf-8"))
+        self.assertEqual(app["secciones"][0]["bloques"][1]["items"][0]["titulo"],
+                         "Ideas para el fin de semana")
+        coder._comando_npm.assert_called_once_with(str(carpeta), "compilar", 240)
+        coder._revisar_app_compilada.assert_called_once()
+        self.assertIn("React compiló correctamente", salida)
+        estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
+        self.assertIn("Ideas para el fin de semana", estado["mapa"]["piezas"][1]["alias"])
+        self.assertEqual(estado["busquedas_edicion"][-1]["resultado"], "aplicado")
+        self.assertFalse(Path(str(ruta) + ".dark_bak").exists())
+
+    def test_cambio_puntual_restaura_el_archivo_si_falla_el_build(self):
+        coder = self.coder(json.dumps({
+            "buscar": "Ideas para el viaje", "reemplazar": "Ideas para el fin de semana",
+            "pregunta": "",
+        }, ensure_ascii=False))
+        carpeta = self._proyecto_app_completo(coder)
+        coder._presupuesto_para_build = Mock(return_value=(True, ""))
+        coder._comando_npm = Mock(return_value={"ok": False, "error": "TypeScript inválido"})
+        ruta = carpeta / "src" / "app.json"
+        antes = ruta.read_text(encoding="utf-8")
+
+        salida = coder.modificar_ultimo_proyecto("cambie Ideas para el viaje")
+
+        self.assertIn("lo restauré", salida)
+        self.assertEqual(ruta.read_text(encoding="utf-8"), antes)
+        self.assertFalse(Path(str(ruta) + ".dark_bak").exists())
 
     def test_entrega_de_app_muestra_etapas_abre_y_resume_sus_supuestos(self):
         self.spec.write_text(SPEC_REACT.replace(

@@ -23,6 +23,7 @@ nav.lateral a { padding: 9px 12px; border-radius: var(--radio); }
 nav.lateral a[aria-current] { background: var(--accent); color: var(--accent-fg); }
 
 main.contenido { padding: 24px 0 0; overflow: auto; min-height: 0; }
+.bloque-app { display: block; }
 [data-nav="lateral"] main.contenido { padding-left: 24px; }
 .fila-titulo { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
 .fila-titulo h1 { font: var(--peso-titulo) 24px var(--font-titulo); margin: 0; letter-spacing: -0.01em; }

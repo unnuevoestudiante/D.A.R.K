@@ -1,6 +1,6 @@
 # Plan: Coder v2 y flujo Tareas → Coder
 
-Estado: propuesta (25/11/2026). Es el paso previo a las automejoras de D.A.R.K. (UI generativa y capacidades nuevas).
+Estado: bloques A, B, C y D implementados; ejecución y revisión de integración registradas el 27/11/2026. Es el paso previo a las automejoras de D.A.R.K. (UI generativa y capacidades nuevas).
 
 ## Diagnóstico del estado actual
 
@@ -25,12 +25,10 @@ Estado: propuesta (25/11/2026). Es el paso previo a las automejoras de D.A.R.K. 
 
 Cada especialista tiene un **marco de pensamiento** propio: rol, pasos fijos, rúbrica de salida y lo que no le toca.
 
-- **Tareas, el planificador.** Detecta huecos en la especificación y pregunta solo por ellos. Prioriza (MVP o después), investiga cuando falta información y decide el stack con su motivo. No escribe código. **Hecho (27/11/2026):** las frases propias de Tareas y las preguntas de la especificación usan el trato formal; sus salidas manuales no necesitan que Guardia repare el tuteo. **Pendiente de aprobación:** un vocabulario propio por función y una voz proactiva que señale decisiones, explique trade-offs y cuestione supuestos débiles. Esto pertenece a la voz de Tareas, separada del prompt que redacta la especificación.
+- **Tareas, el planificador.** Detecta huecos en la especificación y pregunta solo por ellos. Prioriza (MVP o después), investiga cuando falta información y decide el stack con su motivo. No escribe código. **Hecho (27/11/2026):** las frases y preguntas usan trato formal; el Cerebro consulta el foco para elegir el vocabulario propio de Tareas. Tras una respuesta guiada, la nube puede señalar un trade-off o supuesto con evidencia y Guardia filtra la frase; si falla, se usa una pregunta local formal.
 - **Coder: arquitecto → implementador → revisor.** Tres pasadas con instrucciones distintas. El arquitecto traduce la especificación a una estructura de archivos y componentes; el implementador escribe archivos completos con la especificación y el kit a la vista; el revisor solo critica contra la rúbrica y los criterios de aceptación.
-- **Pendiente (26/11/2026, pedido del usuario): hablar con Coder directamente**, sin pasar por Tareas, para pedir un cambio puntual sobre el último proyecto («mueve este botón», «cambia este objeto») en vez de una especificación nueva. Para que esto funcione sin alucinar, Coder necesita:
-  - **Un mapa claro del último proyecto** (qué archivos tiene, qué componente es cada pantalla/bloque, dónde vive cada pieza nombrable) — hoy solo guarda `.dark_project.json` con metadatos de estado, no un mapa navegable del contenido.
-  - **Buscar y guardar lo que no sabe con certeza**, en vez de adivinar: si no encuentra la pieza que el usuario nombra, la busca en el proyecto (o pregunta) antes de tocar nada, y anota lo que aprendió para la próxima vez.
-  - Esto es una pieza de arquitectura nueva (el "mapa" y el canal de edición puntual), no una extensión trivial de `editar_archivo`/`aplicar_cambios`; falta diseñarla antes de construirla.
+- **Hecho (27/11/2026): especialistas enfocados.** El overlay envía el foco por el bridge; el Núcleo lo replica al Cerebro y enruta texto y voz a Tareas o Coder. Las intenciones de sistema se prueban primero, de modo que abrir aplicaciones, controlar música y otras acciones normales siguen disponibles con un especialista enfocado. Sin foco, el flujo anterior permanece.
+- **Hecho (27/11/2026): edición puntual con Coder.** El último proyecto completo conserva un mapa de archivos, pantallas, bloques y alias en `.dark_project.json`; en apps React también guarda la ruta JSON y el selector CSS de cada pieza. Coder resuelve el destino contra el mapa y, si no es único, pregunta y anota el intento. Para editar exige un fragmento exacto único; valida el contrato de apps y vuelve a compilar React antes de conservar el cambio. Un fallo de compilación restaura el archivo.
 
 ## La especificación: el contrato entre Tareas y Coder
 
