@@ -1,15 +1,15 @@
 # Plan: Coder v2 y flujo Tareas → Coder
 
-Estado: bloques A, B, C y D implementados; ejecución y revisión de integración registradas el 27/11/2026. Es el paso previo a las automejoras de D.A.R.K. (UI generativa y capacidades nuevas).
+Estado: bloques A, B, C y D implementados; bloque E auditado y limpiado el 27/11/2026. La suite conserva dos fallos reales de Python y uno de frontend, descritos en el bloque E. Este plan precede a las automejoras de D.A.R.K. (UI generativa y capacidades nuevas).
 
-## Diagnóstico del estado actual
+## Diagnóstico del estado actual (27/11/2026)
 
-- `_planificar_proyecto` (`especialistas/especialista_codigo.py`) limita los proyectos a `index.html`, `styles.css` y `script.js`, prohíbe `fetch()`, `package.json` y archivos de datos. Ningún proyecto puede ser una app.
-- El código se genera por secciones concatenadas (`_generar_seccion`) con `qwen2.5-coder:7b` (contexto de 2048) o Groq. Nadie ve el archivo completo, nada se ejecuta y nada se revisa.
-- No hay sistema de diseño: cada proyecto inventa colores, espaciado y tipografía desde cero, y eso es lo que da el "aspecto IA".
-- `consolidar_plan_proyecto` (`especialistas/especialista_tareas.py`) escribe fases y archivos fijos (`tienda.html`, `carrito.html`…) sin importar el tema. Las notas se guardan crudas, sin que un modelo las organice.
-- `tool_razonamiento_profundo` no está conectado al banco de herramientas ni a ninguna intención.
-- El único MD que hoy llega al coder es el de `escribir_documento`, que es contenido de texto y no una especificación.
+- El camino genérico (`_planificar_proyecto`, en `especialistas/especialista_codigo.py`) planifica como máximo cuatro archivos HTML/CSS/JS para proyectos vanilla. Las apps React y las webs inmersivas ya usan caminos especializados; una especificación Python todavía cae en el genérico y hereda esas reglas web.
+- `_generar_archivo` genera cada archivo completo en una sola llamada. `_generar_seccion` quedó sin llamadores: el proyecto genérico ya no concatena secciones. Guarda los archivos y `.dark_project.json`, pero no compila, ejecuta ni revisa el resultado.
+- React y las webs inmersivas sí usan un sistema de diseño propio, componen contra un kit validado y pasan por construcción y revisión visual. Esas garantías no se deben atribuir al camino genérico.
+- Tareas ya redacta una especificación de nueve secciones y la entrega como `contenido_md`; el coder la usa como encargo, no como texto para volcar sección por sección.
+- `tool_razonamiento_profundo` no existe: no está implementada, registrada en el manifiesto ni conectada al Núcleo. No es una herramienta pendiente de conectar.
+- `escribir_documento` sigue creando Markdown de contenido. Ese documento y la especificación de Tareas son contratos distintos.
 
 ## Decisiones tomadas
 
@@ -26,7 +26,7 @@ Estado: bloques A, B, C y D implementados; ejecución y revisión de integració
 Cada especialista tiene un **marco de pensamiento** propio: rol, pasos fijos, rúbrica de salida y lo que no le toca.
 
 - **Tareas, el planificador.** Detecta huecos en la especificación y pregunta solo por ellos. Prioriza (MVP o después), investiga cuando falta información y decide el stack con su motivo. No escribe código. **Hecho (27/11/2026):** las frases y preguntas usan trato formal; el Cerebro consulta el foco para elegir el vocabulario propio de Tareas. Tras una respuesta guiada, la nube puede señalar un trade-off o supuesto con evidencia y Guardia filtra la frase; si falla, se usa una pregunta local formal. Si la persona pide investigar durante el modo guiado, Tareas reutiliza su buscador, añade las URL de las fuentes al contexto del planificador y cita las fuentes en la sección correspondiente; si la búsqueda falla, guarda la respuesta original y lo informa.
-- **Coder: arquitecto → implementador → revisor.** Tres pasadas con instrucciones distintas. El arquitecto traduce la especificación a una estructura de archivos y componentes; el implementador escribe archivos completos con la especificación y el kit a la vista; el revisor solo critica contra la rúbrica y los criterios de aceptación.
+- **Coder: arquitecto → implementador → revisor (apps React y webs inmersivas).** Tres pasadas con instrucciones distintas. El arquitecto traduce la especificación a una estructura de archivos y componentes; el implementador escribe archivos completos con la especificación y el kit a la vista; el revisor solo critica contra la rúbrica y los criterios de aceptación. El camino genérico conserva una sola generación por archivo y no usa este ciclo de tres pasadas.
 - **Hecho (27/11/2026): especialistas enfocados.** El overlay envía el foco por el bridge; el Núcleo lo replica al Cerebro y enruta texto y voz a Tareas o Coder. Las intenciones de sistema se prueban primero, de modo que abrir aplicaciones, controlar música y otras acciones normales siguen disponibles con un especialista enfocado. Sin foco, el flujo anterior permanece.
 - **Hecho (27/11/2026): edición puntual con Coder.** El último proyecto completo conserva un mapa de archivos, pantallas, bloques y alias en `.dark_project.json`; en apps React también guarda la ruta JSON y el selector CSS de cada pieza, y en webs inmersivas localiza fichas, satélites y fotos con su ruta JSON real. Coder resuelve el destino contra el mapa y, si no es único, pregunta y anota el intento. Para editar exige un fragmento exacto único; valida el contrato de apps y vuelve a compilar React antes de conservar el cambio. Un fallo de compilación restaura el archivo.
 
@@ -64,7 +64,7 @@ Estado de la Fase 0 (25/11/2026):
 - **Hecho.** `crear_proveedor_trabajo` en `proveedores/llm/fabrica.py` y `nube_de_trabajo` en `cadena.py`: manda la cadena «codigo» del Centro y se respeta «solo local».
 - **Hecho.** El coder usa el modo paciente (`_llamar_online`) y avisa por voz las esperas de 10 s o más, como mucho una vez cada 2 min. El 429 diario pausa y guarda el proyecto; en la Fase 5 se ofrecen Ollama, esperar el reinicio o dejarlo pausado.
 - **Hecho.** Tareas redacta documentos con el rol `texto` en modo paciente (se quitó la pausa fija de 5 s entre secciones), y el resumen de terminal del Núcleo usa el mismo rol sin esperas, porque es parte de un turno. El aviso de voz es uno solo para los dos (`aviso_de_espera` en `remoto.py`). Se retiraron `herramientas/externas/programador_online.py` y su atajo en `respaldo/compatibilidad/`.
-- **Pendiente.** Quitar del planner las reglas que prohíben apps; va junto con la Fase 3, que trae el reemplazo.
+- **Hecho (confirmado en el bloque E).** Las apps React y las webs inmersivas ya no pasan por las reglas web del planner genérico. Vanilla conserva esas reglas; Python todavía cae en el planner genérico y es un pendiente real.
 
 **Fase 1. Contrato de especificación. Hecha (25/11/2026).** Vive en `contratos/especialista.py`: `SECCIONES_ESPECIFICACION` (cada sección con su propósito y la pregunta del modo guiado), `Especificacion`, `leer_especificacion`, `escribir_especificacion`, `huecos_especificacion` y la marca `[supuesto]` del modo rápido. Lee títulos con o sin número y sin importar acentos o mayúsculas, conserva las secciones desconocidas y escribe siempre la misma forma. Las pruebas están en `tests/test_especialista_contrato.py`.
 
@@ -152,6 +152,14 @@ Resto por decidir/construir:
 **Hecha (26/11/2026): presencia y estimación del Coder.** Las apps React y las webs inmersivas muestran en el progreso existente del overlay la estimación inicial y las etapas de composición, construcción, revisión y corrección (incluido el número de ronda). La app React se abre al completar el build; el kit Vite usa rutas relativas para que también funcione desde su `dist/index.html`. El cierre resume pantallas o estaciones, supuestos marcados y hallazgos pendientes.
 
 **Hecha con límite declarado (26/11/2026): cuota diaria.** El coder guarda la fase, proveedor y alternativas en `.dark_project.json`; ofrece continuar con Ollama, esperar el reinicio o dejar el trabajo pausado. Si se elige esperar, repite la misma llamada y el mismo proveedor. El repositorio no identifica claves de pago ni guarda tarifas, así que no presenta una opción de pago ni inventa un costo. La respuesta a la decisión se espera hasta 120 s; después el proyecto conserva el estado pausado.
+
+**Bloque E. Auditoría y limpieza. Hecho (27/11/2026).**
+- **E1, estado de la suite.** La línea base con `.venv/Scripts/python.exe` (Python 3.12.10) ejecutó 2279 pruebas: 10 fallos, 1 error y 1 fallo esperado, en 92.239 s. La suite final ejecutó 2280 pruebas —una nueva—: 2 fallos, 0 errores y 1 fallo esperado, en 104.607 s. Las 210 pruebas focalizadas de Coder, pipeline, hub, Manager, giro y voz pasan en 16.896 s.
+- **Nueve rojos obsoletos corregidos.** Seis estructurales (roles del hub, condición del encabezado, contrato de cuatro archivos sin fases, HTTP legítimo frente al Manager, seis sesiones y giro común de Orbe/Reactor) y tres de TTS que no simulaban `piper_disponible()`. Se añadió cobertura para impedir rutas que escapan del proyecto y para garantizar que el genérico no vuelva a concatenar secciones. No se cambió voz de producto.
+- **E2, camino genérico.** Vanilla genera archivos completos, no secciones; `_generar_seccion` está muerto. Las reglas contra `fetch()` y los datos externos siguen siendo válidas para abrir esas páginas con doble clic (`file://`), donde CORS impide ese acceso. Las apps React y las webs inmersivas ya no dependen de ellas. Sin especificación, el despachador existente sigue eligiendo entre catálogo, proyecto y archivo simple, todos por el camino genérico.
+- **Pendientes reales de E2.** Una especificación Python cae en un planner que solo admite HTML/CSS/JS. Además, el genérico no ejecuta ni revisa lo que genera. Corregir cualquiera de los dos requiere una decisión de alcance posterior; E solo deja documentada la carencia.
+- **E3, razonamiento profundo.** Verificado en el manifiesto y el Núcleo: `tool_razonamiento_profundo` no existe. La documentación ya no la presenta como una conexión pendiente.
+- **Rojos que quedan, sin tocar por alcance.** `config/runtime.json` pide `qwen3:4b-instruct-2507-q8_0` mientras `tests/test_runtime_config_m1.py` espera `qwen3:4b-instruct-2507-q4_K_M`; cambiar el modelo necesita una decisión del dueño. En STT, el hilo lector del proceso antiguo puede dejar su señal de cierre en la cola del proceso nuevo y hacer fallar el reinicio; es una carrera real de producto. Frontend mantiene 281 de 282 pruebas pasando: el runner nativo de Node no resuelve el alias `@/lib` en `dark-state.ts`, y el fallo es idéntico en la línea base.
 
 **Después: automejoras.** El mismo ciclo (especificación → coder → verificación) aplicado a D.A.R.K. mismo: UI generativa en el overlay y capacidades nuevas, siempre en una rama o *worktree* aislado, con pruebas y con aprobación explícita del usuario antes de integrar.
 

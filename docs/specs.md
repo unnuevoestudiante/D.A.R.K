@@ -1,5 +1,5 @@
 D.A.R.K. — Documento maestro de especificaciones
-Versión: 0.75 · Última actualización: 2026-11-27
+Versión: 0.76 · Última actualización: 2026-11-27
 
 Este es el documento único donde se va registrando cómo funciona cada parte de D.A.R.K. Se actualiza con el tiempo: cada vez que se define o se cambia algo, se edita la parte correspondiente (o se agrega una parte nueva al final) y se anota en el registro de cambios.
 
@@ -1276,6 +1276,8 @@ Parte 11 — Coder y generación de documentos
 11.1 Pipeline de documento a código
 [IMPLEMENTADO] El Router conserva el orden de los pasos del pipeline: `escribir_documento` crea el Markdown de contenido y `escribir_codigo` recibe su ruta. El especialista de código resuelve y lee esa ruta antes de planificar el proyecto. Si el planner devuelve un `md_heading` que no coincide, las secciones HTML de contenido reciben el documento completo como fuente; las secciones estructurales (navegación, metadatos, pie) no se rellenan con el cuerpo del documento. Si la ruta no existe, el coder genera el proyecto usando la petición; si la ruta existe pero no se puede leer, devuelve un error explícito en vez de descartar el contenido en silencio.
 
+[AUDITADO 27/11/2026, Coder v2 Bloque E] La especificación aprobada de Tareas viaja como `contenido_md` y es un encargo, no un Markdown de contenido para volcar por secciones. Las apps React y las webs inmersivas usan sus caminos especializados, con kit, composición, construcción y revisión. El camino genérico planifica como máximo cuatro archivos HTML/CSS/JS y genera cada archivo completo en una sola llamada; `_generar_seccion` no tiene llamadores. Ese genérico guarda `.dark_project.json`, pero no ejecuta ni revisa el resultado. Sin especificación, el despachador existente elige entre catálogo, proyecto y archivo simple por ese mismo camino.
+
 11.2 Búsqueda web sintetizada
 [IMPLEMENTADO] `investigar(query)` —antes `buscar_web`— conserva los resultados para la selección posterior, envía título, fragmento y URL de las tres primeras fuentes a `CHAT_MODEL` y **devuelve la síntesis seguida de esas tres fuentes citadas con su URL** (`_bloque_fuentes`). No abre el navegador: desde K.3.1 abrir una página es `abrir_en_navegador`, y el navegador dejó de ser el salvavidas cuando la síntesis falla. Antes sintetiza contenido de página mediante `investigar_a_fondo`, reutilizando esos resultados sin repetir la búsqueda. Si Ollama no está disponible o falla, conserva el fallback de títulos y `_narrar_resultado` avisa en humano sin prometer nada en pantalla (señal `_busqueda_web_sintesis_fallida`). Verificado por 6 tests en `tests/test_investigar_sin_navegador.py`.
 
@@ -1304,11 +1306,23 @@ Por qué no basta la dirección del requisito 4: el texto que entra por :8765 de
 11.3 Investigación profunda
 [IMPLEMENTADO] `investigar_a_fondo(tema, num_fuentes=4, resultados=None)` puede recibir resultados ya buscados, extrae contenido de las páginas y lo aporta al resumen. `investigar` es el punto de entrada del Router que lo conecta con una consulta de usuario.
 
+[NO IMPLEMENTADO] `tool_razonamiento_profundo` no existe ni está registrada en el manifiesto o el Núcleo. No debe describirse como una herramienta existente pendiente de conectar.
+
 11.4 Pendientes del planner
-[ABIERTO] Afinar el diseño de proyectos y validación de archivos generados más allá del pipeline de contenido descrito en 11.1.
+[ABIERTO] Una especificación con stack Python cae en `_planificar_proyecto`, que solo admite HTML/CSS/JS y arrastra reglas pensadas para una web abierta con doble clic. Falta decidir y construir el camino Python; el Bloque E solo documentó la carencia.
+
+[ABIERTO] El camino genérico no compila, ejecuta ni revisa los archivos que entrega. La verificación existente de React y webs inmersivas no cubre vanilla, Python ni los archivos simples.
+
+[CERRADO POR AUDITORÍA 27/11/2026] Las reglas contra `fetch()` y los datos en archivos aparte siguen siendo válidas para vanilla: bajo `file://`, CORS impide ese acceso y la página debe funcionar con doble clic. React y las webs inmersivas ya no dependen de esas reglas.
 
 11.5 Pruebas
 [IMPLEMENTADO] `tests/test_coder.py` verifica la inyección de Markdown con encabezado no coincidente y el fallback sin archivo. `tests/test_pipeline.py` verifica el paso por los especialistas de tareas y código, la síntesis web, el uso de las tres fuentes y el fallback cuando el modelo no está disponible.
+
+[IMPLEMENTADO 27/11/2026, Bloque E] `tests/test_coder.py` impide una regresión a secciones concatenadas y comprueba vanilla y Python como encargos del camino genérico. `tests/test_pipeline_especialistas_md_coder.py` fija el máximo de cuatro archivos, la ausencia de fases y el rechazo de rutas que escapan del proyecto. Los tests obsoletos del hub, Manager, giro de Nebulosa y fábrica TTS ahora reflejan el contrato vigente.
+
+[MEDIDO 27/11/2026, Bloque E] Con `.venv/Scripts/python.exe` (Python 3.12.10), la línea base ejecutó 2279 pruebas: 10 fallos, 1 error y 1 fallo esperado, en 92.239 s. Tras corregir nueve rojos obsoletos, la suite final ejecutó 2280 pruebas —una nueva—: 2 fallos, 0 errores y 1 fallo esperado, en 104.607 s. Las 210 pruebas focalizadas pasan en 16.896 s. Frontend mantiene 281 de 282 pruebas pasando; el fallo es el alias `@/lib` no resuelto por el runner nativo de Node y también aparece en la línea base.
+
+[SIN RESOLVER, fuera del alcance de E] Quedan dos fallos reales de Python: `config/runtime.json` usa `qwen3:4b-instruct-2507-q8_0` frente al q4_K_M que espera `tests/test_runtime_config_m1.py`, y el hilo lector de STT puede contaminar la cola del proceso nuevo al reiniciar. No se cambió el modelo ni la implementación de voz.
 
 [IMPLEMENTADO] Eliminado el respaldo retirado `dark_python/respaldo/HelloWord_backup.py`, que contenía errores de sintaxis y no participaba en el runtime.
 
@@ -1732,3 +1746,4 @@ Versión	Fecha	Cambio
 0.73	2026-11-27	Parte 11, Coder v2 (Bloque D2, parcial): las preguntas de la especificación, la pregunta por defecto y el resumen de Tareas usan trato formal; se elimina el relleno «Déjame pensarlo» antes de redactar y se formalizan los avisos de espera y traspaso a Coder.
 0.74	2026-11-27	Parte 11, Coder v2 (Bloque D): el overlay publica el especialista enfocado y el Núcleo mantiene disponibles las intenciones de sistema antes de enrutar el resto a Tareas o Coder. Tareas tiene frases formales por función y una voz proactiva de nube, filtrada por Guardia; en modo guiado investiga cuando la persona lo pide, conserva las URL y las cita en el plan. Los proyectos completos guardan un mapa navegable; los cambios puntuales preguntan ante ambigüedad, validan el parche y revierten si falla la compilación React.
 0.75	2026-11-27	Parte 11, Coder v2 (Bloque D, cierre): Tareas mantiene el trato formal al rechazar un tema de documento demasiado largo. El mapa de las webs inmersivas usa rutas JSON reales para fichas, satélites y fotos, de modo que la edición puntual localiza ese contenido.
+0.76	2026-11-27	Parte 11, Coder v2 (Bloque E): se corrigen nueve rojos obsoletos —seis estructurales y tres de aislamiento TTS— y se añade cobertura del plan genérico y de rutas que escapan del proyecto. Con Python 3.12.10, la suite pasa de 2279 pruebas con 10 fallos y 1 error a 2280 con 2 fallos y 0 errores; las 210 focalizadas pasan. Frontend queda en 281/282 por el alias `@/lib`. La auditoría confirma archivos completos sin concatenación, conserva las reglas `file://` para vanilla y deja abiertos el camino Python y la falta de ejecución/revisión del genérico. `tool_razonamiento_profundo` no existe. Los dos rojos de Python —modelo de runtime y carrera del lector STT— son reales y quedan sin tocar.

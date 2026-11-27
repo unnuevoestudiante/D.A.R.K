@@ -2,14 +2,13 @@
 Especialista de Código - Genera código con arquitectura de PLANNER:
   1. LLM Núcleo analiza la petición y produce un plan JSON
      (nombre del proyecto, archivos, secciones por archivo).
-  2. LLM Coder genera CADA SECCIÓN por separado (contexto corto).
-  3. Ensambla cada archivo y lo guarda con partial.json reanudable.
+  2. LLM Coder genera CADA ARCHIVO COMPLETO en una llamada.
+  3. Guarda los archivos y el estado del proyecto en .dark_project.json.
 
 NUEVO (pipeline doc -> código):
   Si la tool recibe `contenido_md` (ruta a un .md generado por el
   especialista de tareas), el planner lee sus encabezados ## y usa
-  UNA sección de HTML por cada sección del documento. Cada sección
-  HTML recibe su trozo correspondiente del .md como fuente.
+  las secciones del documento como fuente de los archivos completos.
 
 NUEVO (imágenes reales):
   El LLM ya NO escribe URLs de imágenes (las inventa y salen rotas).
