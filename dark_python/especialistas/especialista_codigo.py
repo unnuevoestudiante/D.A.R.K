@@ -3389,15 +3389,21 @@ class EspecialistaCodigo:
                 revision = self._revisar_visualmente(esp, indice)
                 if not revision.get("hallazgos") or ronda == 2:
                     break
-                mundo_corregido, errores_correccion = self._componer_mundo(
-                    esp, huella, hallazgos_revision=revision["hallazgos"])
-                if mundo_corregido is None:
+                try:
+                    mundo_corregido, errores_correccion = self._componer_mundo(
+                        esp, huella, hallazgos_revision=revision["hallazgos"])
+                    if mundo_corregido is None:
+                        raise RuntimeError("el modelo no devolvió una corrección válida")
+                    indice_corregido, avisos_fotos_nuevos = self._ensamblar_inmersivo(
+                        carpeta, mundo_corregido)
+                except Exception as error:
+                    print(f"[Código] no pude aplicar la corrección visual: {error}")
                     revision["hallazgos"].append(
                         "no pude aplicar la corrección sugerida por la revisión")
                     break
                 mundo = mundo_corregido
                 avisos_estilo.extend(errores_correccion)
-                indice, avisos_fotos_nuevos = self._ensamblar_inmersivo(carpeta, mundo)
+                indice = indice_corregido
                 avisos_fotos = avisos_fotos_nuevos
             estado.update(estado="completo", estaciones=len(mundo["estaciones"]),
                           objetos=[e["objeto"]["tipo"] for e in mundo["estaciones"]],
@@ -3658,12 +3664,17 @@ class EspecialistaCodigo:
                     hallazgos = revision.get("hallazgos", [])
                     if not hallazgos or ronda == 2:
                         break
-                    corregida, errores = self._componer_app(esp, hallazgos_revision=hallazgos)
-                    if corregida is None:
+                    try:
+                        corregida, errores = self._componer_app(
+                            esp, hallazgos_revision=hallazgos)
+                        if corregida is None:
+                            raise RuntimeError("el modelo no devolvió una corrección válida")
+                        self._ensamblar_app_react(carpeta, corregida, nombre_npm)
+                    except Exception as error:
+                        print(f"[Código] no pude aplicar la corrección de la app: {error}")
                         hallazgos.append("no pude aplicar la corrección sugerida por la revisión")
                         break
                     app = corregida
-                    self._ensamblar_app_react(carpeta, app, nombre_npm)
 
                 estado.update(estado="completo", pantallas=len(app["secciones"]),
                               navegacion=app["navegacion"], fondo3d=app["fondo3d"],
