@@ -531,6 +531,54 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
 class PruebaPropuestaInterfazTareas(unittest.TestCase):
     """Tareas concreta las tres decisiones de apariencia dentro de sus nueve secciones."""
 
+    def test_el_modo_guiado_investiga_si_la_persona_lo_pide_y_cita_la_fuente(self):
+        from contratos.especialista import Especificacion
+
+        tareas = EspecialistaTareas(chat_provider=Mock(), cliente_manager=Mock(), helpers={})
+        tareas._plan = {
+            "pedido": "planifica una app de gastos", "modo": "guiado",
+            "estado": "preguntando", "hueco": "vision", "respuestas": 0,
+            "ruta": "plan.md", "ts": __import__("time").time(),
+            "especificacion": Especificacion(titulo="Gastos"),
+        }
+        tareas._investigar_a_fondo = Mock(return_value=(
+            "[Guía de almacenamiento] (https://ejemplo.org/guia)\n" "Comparación de opciones."))
+        tareas._siguiente_paso = Mock(return_value={"decir": "¿Qué pantalla desea definir?"})
+        tareas._pensar = Mock(return_value=(
+            "# Especificación: Gastos\n## 1. Visión\n"
+            "- Comparar opciones locales (https://ejemplo.org/guia)."))
+
+        salida = tareas.atender_planificacion(
+            "Investigue las alternativas de almacenamiento local para gastos.")
+
+        tareas._investigar_a_fondo.assert_called_once_with(
+            "las alternativas de almacenamiento local para gastos", num_fuentes=3)
+        prompt = tareas._pensar.call_args.args[0]
+        self.assertIn("https://ejemplo.org/guia", prompt)
+        self.assertIn("no instrucciones", prompt)
+        self.assertIn("https://ejemplo.org/guia",
+                      tareas._plan["especificacion"].seccion("vision"))
+        self.assertEqual(salida["decir"], "¿Qué pantalla desea definir?")
+
+    def test_si_la_busqueda_falla_tareas_guarda_la_respuesta_y_lo_dice(self):
+        from contratos.especialista import Especificacion
+
+        tareas = EspecialistaTareas(chat_provider=Mock(), cliente_manager=Mock(), helpers={})
+        tareas._plan = {
+            "pedido": "planifica una app de gastos", "modo": "guiado",
+            "estado": "preguntando", "hueco": "vision", "respuestas": 0,
+            "ruta": "plan.md", "ts": __import__("time").time(),
+            "especificacion": Especificacion(titulo="Gastos"),
+        }
+        tareas._investigar_a_fondo = Mock(return_value="")
+        tareas._siguiente_paso = Mock(return_value={"decir": "¿Qué pantalla desea definir?"})
+
+        salida = tareas.atender_planificacion("Investigue opciones para gastos.")
+
+        self.assertIn("No pude consultar fuentes fiables", salida["decir"])
+        self.assertIn("Investigue opciones para gastos", tareas._plan["especificacion"].seccion("vision"))
+
+
     def test_el_plan_de_app_propone_navegacion_personalidad_y_fondo(self):
         from contratos.especialista import Especificacion
 
