@@ -432,7 +432,7 @@ SECCIONES_ESPECIFICACION: Tuple[SeccionEspecificacion, ...] = (
     SeccionEspecificacion(
         "pantallas", "Pantallas y flujo",
         "Cada pantalla o vista y cómo se pasa de una a otra.",
-        "¿Qué pantallas imaginas y qué se hace en cada una?",
+        "¿Qué pantallas imagina y qué se hace en cada una?",
         pide_lista=True),
     SeccionEspecificacion(
         "datos", "Datos",
@@ -441,12 +441,12 @@ SECCIONES_ESPECIFICACION: Tuple[SeccionEspecificacion, ...] = (
     SeccionEspecificacion(
         "funcionalidades", "Funcionalidades",
         "Lo imprescindible (MVP) separado de lo que puede esperar.",
-        "De todo lo que quieres, ¿qué es imprescindible en la primera versión?",
+        "De todo lo que quiere, ¿qué es imprescindible en la primera versión?",
         pide_lista=True),
     SeccionEspecificacion(
         "visual", "Dirección visual",
         "Referencia, tono, densidad, paleta, tipografía y lo que hay que evitar.",
-        "¿Cómo quieres que se vea y se sienta? ¿Alguna app o web de referencia?"),
+        "¿Cómo quiere que se vea y se sienta? ¿Alguna app o web de referencia?"),
     SeccionEspecificacion(
         "stack", "Stack",
         "Con qué se construye (react, inmersivo, vanilla o python) y por qué.",
@@ -454,12 +454,12 @@ SECCIONES_ESPECIFICACION: Tuple[SeccionEspecificacion, ...] = (
     SeccionEspecificacion(
         "criterios", "Criterios de aceptación",
         "Comprobaciones concretas que dicen si la app está terminada.",
-        "¿Qué tendría que poder hacer para que la des por terminada?",
+        "¿Qué tendría que poder hacer para que la dé por terminada?",
         pide_lista=True),
     SeccionEspecificacion(
         "fuera_de_alcance", "Fuera de alcance",
         "Lo que explícitamente no se hace en esta versión.",
-        "¿Hay algo que quieras dejar fuera a propósito en esta versión?"),
+        "¿Hay algo que quiera dejar fuera a propósito en esta versión?"),
 )
 
 _POR_CLAVE = {s.clave: s for s in SECCIONES_ESPECIFICACION}

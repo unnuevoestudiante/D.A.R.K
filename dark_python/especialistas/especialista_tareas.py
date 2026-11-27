@@ -1166,7 +1166,7 @@ class EspecialistaTareas:
         for seccion in SECCIONES_ESPECIFICACION:
             if seccion.clave == clave:
                 return seccion.pregunta
-        return "¿Qué más quieres que tenga?"
+        return "¿Qué más desea que tenga?"
 
     @staticmethod
     def _items(texto: str):
@@ -1216,7 +1216,7 @@ class EspecialistaTareas:
         stack = {"react": "React", "vanilla": "una página que se abre con doble clic",
                  "inmersivo": "una web en 3D que se recorre con el scroll",
                  "python": "Python"}.get(esp.stack(), "")
-        partes = ["Así queda." if cambio else f"Te propongo esto para {esp.titulo}."]
+        partes = ["Así queda." if cambio else "Le propongo esto, señor."]
         if pantallas:
             # En una web inmersiva las «pantallas» son las estaciones del recorrido.
             nombre = "estaciones" if esp.stack() == "inmersivo" else "pantallas"
@@ -1227,8 +1227,8 @@ class EspecialistaTareas:
         supuestos = [c[:1].lower() + c[1:] if c[1:2].islower() else c
                      for c in (self._corto(s) for s in esp.supuestos()[:2])]
         if supuestos:
-            partes.append(f"Decidí sin preguntarte: {self._lista_hablada(supuestos)}.")
-        partes.append("¿Lo construyo, o cambiamos algo?")
+            partes.append(f"Decidí sin consultarle: {self._lista_hablada(supuestos)}.")
+        partes.append("¿Lo construyo, o desea cambiar algo?")
         return " ".join(partes)
 
     @staticmethod

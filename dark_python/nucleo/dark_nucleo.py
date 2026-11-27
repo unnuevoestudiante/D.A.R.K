@@ -4375,10 +4375,8 @@ class DarkNucleo:
         vez de cruzar dos versiones del mismo plan.
         """
         if not self._plan_lock.acquire(blocking=False):
-            self.speak("Sigo pensando lo anterior; dame un momento.")
+            self.speak("Sigo pensando lo anterior; un momento, señor.")
             return
-        # Solo suena si tarda: `speak` cancela el relleno que aún no habló.
-        self._decir_filler("Déjame pensarlo.", delay=2.5)
 
         def correr():
             try:
@@ -4386,7 +4384,7 @@ class DarkNucleo:
             except Exception as error:
                 print(f"[Plan] el planificador falló: {error}")
                 resultado = {"decir": "No pude seguir con el plan. "
-                                      "Inténtalo de nuevo en un momento."}
+                                      "Inténtelo de nuevo en un momento, señor."}
             finally:
                 self._plan_lock.release()
             if resultado.get("decir"):
@@ -4408,7 +4406,7 @@ class DarkNucleo:
             params["contenido_md"] = traspaso["especificacion"]
         if not self._command_lock.acquire(timeout=30):
             self.speak("El plan está listo, pero estoy ocupado con otra cosa. "
-                       "Pídeme que lo construya en un momento.")
+                       "Pídame que lo construya en un momento, señor.")
             return
         try:
             intencion = self.intencion.intencion_desde_cache(

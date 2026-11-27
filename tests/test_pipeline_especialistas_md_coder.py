@@ -15,6 +15,8 @@ if str(DARK_PYTHON) not in sys.path:
 
 from especialistas.especialista_tareas import EspecialistaTareas
 from especialistas.especialista_codigo import EspecialistaCodigo
+from contratos.especialista import SECCIONES_ESPECIFICACION
+from nucleo.identidades.guardia import reparar_tuteo
 
 
 SPEC_COMPLETA = """# Especificación: App de gastos
@@ -86,8 +88,9 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         r = tareas.iniciar_planificacion("hazme una app para controlar mis gastos", "rapido")
         self.assertIn("3 pantallas: Inicio, Nuevo gasto y Categorías", r["decir"])
         self.assertIn("React", r["decir"])
-        self.assertIn("Decidí sin preguntarte: tema oscuro.", r["decir"])
-        self.assertTrue(r["decir"].endswith("¿Lo construyo, o cambiamos algo?"))
+        self.assertIn("Decidí sin consultarle: tema oscuro.", r["decir"])
+        self.assertTrue(r["decir"].endswith("¿Lo construyo, o desea cambiar algo?"))
+        self.assertIn("Le propongo esto, señor.", r["decir"])
         self.assertTrue(tareas.planificacion_activa())
         ruta = Path(tareas._plan["ruta"])
         self.assertIn("## 3. Pantallas y flujo", ruta.read_text(encoding="utf-8"))
@@ -104,7 +107,7 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
             "falta autenticación ni servidor]")
         r = self.tareas(real).iniciar_planificacion("hazme una app de gastos", "rapido")
         self.assertIn("3 pantallas: Inicio, Nuevo gasto y Categorías.", r["decir"])
-        self.assertIn("Decidí sin preguntarte: ambos usan el mismo dispositivo y tema oscuro.",
+        self.assertIn("Decidí sin consultarle: ambos usan el mismo dispositivo y tema oscuro.",
                       r["decir"])
         self.assertNotIn("**", r["decir"])
 
@@ -118,7 +121,7 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
             "- [supuesto: supuesto de uso compartido: los dos usan el mismo móvil]")
         r = self.tareas(real).iniciar_planificacion("hazme una app de gastos", "rapido")
         self.assertIn("3 pantallas: Principal, Nuevo gasto y Categorías.", r["decir"])
-        self.assertIn("Decidí sin preguntarte: los dos usan el mismo móvil.", r["decir"])
+        self.assertIn("Decidí sin consultarle: los dos usan el mismo móvil.", r["decir"])
 
     def test_una_web_inmersiva_se_resume_por_estaciones(self):
         inmersiva = SPEC_COMPLETA.replace("React con Vite: hay varias vistas.",
@@ -178,7 +181,7 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         prompt = tareas._pensar.call_args.args[0]
         self.assertIn("Pregunta: ¿Quién la va a usar", prompt)
         self.assertIn("Respuesta de la persona: mi familia, cuando cocinamos", prompt)
-        self.assertEqual(r["decir"], "¿Qué pantallas imaginas y qué se hace en cada una?")
+        self.assertEqual(r["decir"], "¿Qué pantallas imagina y qué se hace en cada una?")
         self.assertEqual(tareas._plan["especificacion"].seccion("vision"), "Guardar recetas familiares.",
                          "lo ya escrito no se pierde aunque el modelo lo omita")
 
@@ -186,7 +189,7 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         tareas = self.tareas(SPEC_PARCIAL, SPEC_COMPLETA)
         tareas.iniciar_planificacion("planifiquemos una app", "guiado")
         r = tareas.atender_planificacion("lo demás decídelo tú")
-        self.assertIn("¿Lo construyo, o cambiamos algo?", r["decir"])
+        self.assertIn("¿Lo construyo, o desea cambiar algo?", r["decir"])
         self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
         self.assertIn("[supuesto]", tareas._pensar.call_args.args[0])
 
@@ -216,7 +219,7 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
             preguntas.append(tareas._plan["hueco"])
             r = tareas.atender_planificacion(respuesta)
         self.assertEqual(preguntas, ["usuarios", "pantallas", "funcionalidades", "visual"])
-        self.assertTrue(r["decir"].endswith("¿Lo construyo, o cambiamos algo?"))
+        self.assertTrue(r["decir"].endswith("¿Lo construyo, o desea cambiar algo?"))
         self.assertEqual(tareas._plan["especificacion"].stack(), "react",
                          "el stack no se pregunta: lo propone D.A.R.K.")
 
@@ -248,7 +251,16 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         r = tareas.atender_planificacion("mi pareja y yo, cada noche")
         self.assertEqual(tareas._plan["especificacion"].seccion("usuarios"),
                          "mi pareja y yo, cada noche")
-        self.assertEqual(r["decir"], "¿Qué pantallas imaginas y qué se hace en cada una?")
+        self.assertEqual(r["decir"], "¿Qué pantallas imagina y qué se hace en cada una?")
+
+    def test_preguntas_de_tareas_salen_formales_sin_reparacion_de_guardia(self):
+        frases = [s.pregunta for s in SECCIONES_ESPECIFICACION]
+        frases.append(EspecialistaTareas._pregunta_de("desconocida"))
+        for frase in frases:
+            with self.subTest(frase=frase):
+                reparada, cambio = reparar_tuteo(frase)
+                self.assertEqual(reparada, frase)
+                self.assertFalse(cambio)
 
     def test_sin_modelo_las_pantallas_quedan_como_lista(self):
         tareas = self.tareas("", "", "")
