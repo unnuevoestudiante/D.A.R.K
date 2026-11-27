@@ -776,6 +776,12 @@ class PruebaAppReact(unittest.TestCase):
             ({"tipo": "kanban", "columnas": [
               {"id": "pendiente", "titulo": "Pendiente"}, {"id": "hecho", "titulo": "Hecho"}],
               "tarjetas": [{"id": "t1", "titulo": "A", "columna": "perdido"}]}, "columna existente"),
+            ({"tipo": "tabla", "columnas": [
+              {"id": "ID", "titulo": "Identificador"},
+              {"id": "monto", "titulo": "Monto"}], "filas": []}, "id técnico de la columna"),
+            ({"tipo": "tabla", "columnas": [
+              {"id": "id", "titulo": "Identificador"},
+              {"id": "id", "titulo": "Otro id"}], "filas": []}, "id técnico de la columna"),
         )
         for bloque, esperado in casos:
             with self.subTest(tipo=bloque["tipo"]):

@@ -38,7 +38,9 @@ import json
 import math
 import time
 import shutil
+import socket
 import subprocess
+import sys
 import datetime
 import hashlib
 import tempfile
@@ -47,6 +49,7 @@ import html as html_lib
 import unicodedata
 import urllib.error
 import urllib.request
+import webbrowser
 from urllib.parse import urlparse, unquote
 from typing import Optional
 
@@ -87,8 +90,6 @@ _MAX_TOKENS_POR_LENGUAJE = {
 _COMANDOS_NPM_PERMITIDOS = {
     "instalar": ("install", "--ignore-scripts", "--no-audit", "--no-fund"),
     "compilar": ("run", "build"),
-    "previsualizar": ("run", "preview", "--", "--host", "127.0.0.1",
-                      "--port", "4173", "--strictPort"),
 }
 _PRESUPUESTO_BUILD_MINIMO_MB = 2048
 
@@ -1276,6 +1277,10 @@ Catálogo de bloques (elige los que pida cada pantalla, en el orden en que se le
 - formulario: un botón que abre campos para añadir una fila a la lista de la misma pantalla.
 - texto: dos o tres frases, para lo que no es una lista ni un número.
 - tabla: de 2 a 6 columnas y hasta 20 filas; cada fila usa exactamente los id de sus columnas.
+  El «id» de cada columna es una clave técnica interna: un slug único en minúsculas,
+  sin espacios ni mayúsculas. El id de un registro es un valor de celda y puede ser
+  numérico; no cambies el id técnico de la columna cuando el plan pida cambiar el
+  tipo del id del registro.
 - grafico: barras, línea o anillo; de 2 a 12 etiquetas con valores numéricos finitos.
 - progreso: avance numérico entre cero y su total, que debe ser mayor que cero.
 - agenda: hasta 20 eventos con fecha real AAAA-MM-DD y hora opcional HH:MM.
@@ -4262,42 +4267,81 @@ class EspecialistaCodigo:
                            "pospuse la instalación para no presionar al equipo")
         return True, ""
 
+    @staticmethod
+    def _detener_servidor_app(proceso):
+        if proceso is None:
+            return
+        proceso.terminate()
+        try:
+            proceso.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proceso.kill()
+
+    def _iniciar_servidor_app(self, carpeta, persistente=False):
+        dist = os.path.join(carpeta, "dist")
+        if not os.path.isfile(os.path.join(dist, "index.html")):
+            return None, None, "no existe la compilación para previsualizar"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            puerto = s.getsockname()[1]
+        opciones = {"shell": False, "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL}
+        if persistente:
+            if os.name == "nt":
+                opciones["creationflags"] = (subprocess.DETACHED_PROCESS |
+                                             subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                opciones["start_new_session"] = True
+        try:
+            proceso = subprocess.Popen(
+                [sys.executable, "-m", "http.server", str(puerto),
+                 "--bind", "127.0.0.1"], cwd=dist, **opciones)
+        except OSError as error:
+            return None, None, str(error)
+        url = f"http://127.0.0.1:{puerto}/"
+        for _ in range(60):
+            if proceso.poll() is not None:
+                return None, url, "el servidor local terminó antes de responder"
+            try:
+                with urllib.request.urlopen(url, timeout=1):
+                    return proceso, url, ""
+            except (OSError, urllib.error.URLError):
+                time.sleep(0.25)
+        self._detener_servidor_app(proceso)
+        return None, url, "el servidor local no respondió"
+
+    def _abrir_app_compilada(self, carpeta):
+        proceso, url, error = self._iniciar_servidor_app(carpeta, persistente=True)
+        if error:
+            return {"ok": False, "url": url, "error": error}
+        abierta, motivo = False, ""
+        try:
+            abrir = getattr(os, "startfile", None)
+            if callable(abrir):
+                abrir(url)
+                abierta = True
+            else:
+                abierta = webbrowser.open(url)
+        except (OSError, webbrowser.Error) as error:
+            motivo = str(error)
+        if not abierta:
+            self._detener_servidor_app(proceso)
+            return {"ok": False, "url": url,
+                    "error": motivo or "no pude abrir el navegador"}
+        return {"ok": True, "url": url, "pid": proceso.pid}
+
     def _revisar_app_compilada(self, esp, carpeta, errores_build=()):
         proceso = None
         revision = {"revisado": False, "aprobado": None, "hallazgos": [],
                     "errores_consola": [], "errores_build": list(errores_build),
                     "capturas": []}
         try:
-            if not os.path.isfile(os.path.join(carpeta, "dist", "index.html")):
-                revision["motivo_sin_revisar"] = "no existe la compilación para previsualizar"
+            proceso, url, error = self._iniciar_servidor_app(carpeta)
+            if error:
+                revision["motivo_sin_revisar"] = error
                 revision["hallazgos"].extend(errores_build)
                 return revision
             revision["hallazgos"].extend(errores_build)
-            ejecutable = (shutil.which("npm.cmd") or shutil.which("npm")
-                          if os.name == "nt" else shutil.which("npm"))
-            if not ejecutable:
-                revision["motivo_sin_revisar"] = "npm no está instalado"
-                return revision
-            proceso = subprocess.Popen(
-                [ejecutable, *_COMANDOS_NPM_PERMITIDOS["previsualizar"]],
-                cwd=carpeta, shell=False, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL)
-            # El servidor vive solo durante la captura. Se usa el puerto fijo 4173
-            # declarado en la lista blanca, nunca un puerto o comando del modelo.
-            import time as _time
-            url = "http://127.0.0.1:4173/"
-            for _ in range(60):
-                try:
-                    with urllib.request.urlopen(url, timeout=1):
-                        break
-                except (OSError, urllib.error.URLError):
-                    if proceso.poll() is not None:
-                        break
-                    _time.sleep(0.25)
-            else:
-                revision["motivo_sin_revisar"] = "el servidor de previsualización no respondió"
-                revision["hallazgos"].append(revision["motivo_sin_revisar"])
-                return revision
             revision = revisor_visual.revisar_url(
                 url, os.path.join(carpeta, ".revision"), esp.sin_marcas("visual"),
                 esp.sin_marcas("criterios"), session=self._http,
@@ -4306,12 +4350,7 @@ class EspecialistaCodigo:
             print(f"[Código] revisión de app no disponible: {error}")
             revision["motivo_sin_revisar"] = str(error)
         finally:
-            if proceso is not None:
-                proceso.terminate()
-                try:
-                    proceso.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proceso.kill()
+            self._detener_servidor_app(proceso)
         return revision
 
     def generar_app_react(self, esp, ruta_especificacion, ruta_destino):
@@ -4416,29 +4455,25 @@ class EspecialistaCodigo:
                               navegacion=app["navegacion"], fondo3d=app["fondo3d"],
                               revision_visual=revision,
                               pendientes=list(dict.fromkeys(hallazgos)))
-                self._escribir_json_atomico(estado_path, estado)
                 self._registrar_ultimo_proyecto(carpeta)
                 self._informar_progreso(4, 4, "App lista")
                 pendiente = " " + self._resumen_pendientes(hallazgos)
                 if not revision.get("revisado"):
                     motivo = revision.get("motivo_sin_revisar") or "revisión visual incompleta"
                     pendiente += f" No pude completar la revisión visual: {motivo}."
-                indice = os.path.join(carpeta, "dist", "index.html")
-                abierta = False
-                try:
-                    abrir = getattr(os, "startfile", None)
-                    if callable(abrir):
-                        abrir(indice)
-                        abierta = True
-                except OSError as error:
-                    print(f"[Código] no pude abrir la app al terminar: {error}")
-                apertura = (" La abrí en el navegador." if abierta else
-                            f" Puede abrirla desde {indice}.")
+                apertura = self._abrir_app_compilada(carpeta)
+                estado["servidor_local"] = apertura
+                self._escribir_json_atomico(estado_path, estado)
+                if apertura["ok"]:
+                    texto_apertura = f" La abrí en {apertura['url']}."
+                else:
+                    texto_apertura = (" La app está compilada, pero no pude abrirla: "
+                                      f"{apertura['error']}.")
                 return (f"App «{app['titulo']}» construida en {carpeta}: "
                         f"{len(app['secciones'])} pantallas, navegación "
                         f"{app['navegacion']} y fondo 3D "
                         f"{'activo' if app['fondo3d'] else 'desactivado'}. "
-                        f"{self._resumen_supuestos(esp)}{apertura}{pendiente}")
+                        f"{self._resumen_supuestos(esp)}{texto_apertura}{pendiente}")
 
             def instalar_y_verificar():
                 # La confirmación llega después de que generar_app_react haya

@@ -1025,7 +1025,9 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
             identificador = re.sub(r"[^a-z0-9]+", "-", _normal(id_original)).strip("-")
             titulo = _texto(cruda["titulo"], _LARGOS["ficha_titulo"])
             if id_original != identificador or identificador in ids:
-                errores.append(f"{donde}, columna {indice}: «id» debe ser un slug único en minúsculas")
+                errores.append(
+                    f"{donde}, columna {indice}: el id técnico de la columna "
+                    "debe ser un slug único en minúsculas")
                 continue
             ids.add(identificador)
             columnas.append({"id": identificador, "titulo": titulo})

@@ -688,6 +688,16 @@ class PruebasAppReact(unittest.TestCase):
         pedido = coder._llamar_online.call_args.args[0]
         self.assertNotIn("Combinaciones de presentación usadas en otras apps", pedido)
 
+    def test_el_prompt_separa_el_id_tecnico_de_columna_del_id_de_dato(self):
+        from contratos.especialista import leer_especificacion
+        coder = self.coder(APP_JSON)
+
+        coder._componer_app(leer_especificacion(SPEC_REACT))
+
+        pedido = coder._llamar_online.call_args.args[0]
+        self.assertIn("El «id» de cada columna es una clave técnica", pedido)
+        self.assertIn("El id de un registro es un valor de celda", pedido)
+
     def test_instalar_y_compilar_queda_detras_de_confirmar_accion(self):
         coder = self.coder(APP_JSON)
         coder._confirmar_instalacion = Mock(return_value="¿Autoriza instalar?")
@@ -818,6 +828,8 @@ class PruebasAppReact(unittest.TestCase):
         coder._comando_npm = Mock(return_value={"ok": True, "error": ""})
         coder._revisar_app_compilada = Mock(return_value={
             "revisado": True, "aprobado": True, "hallazgos": []})
+        coder._abrir_app_compilada = Mock(return_value={
+            "ok": True, "url": "http://127.0.0.1:4173/"})
 
         with patch.object(os, "startfile", create=True) as abrir:
             mensaje = self.generar(coder)
@@ -830,9 +842,87 @@ class PruebasAppReact(unittest.TestCase):
                             for etiqueta in etiquetas))
         self.assertIn("no habrá cuentas de usuario", mensaje)
         self.assertIn("No quedaron hallazgos pendientes", mensaje)
-        abrir.assert_called_once()
-        abrir.assert_called_once_with(str(Path(coder.ultima_carpeta_proyecto) /
-                                          "dist" / "index.html"))
+        self.assertIn("http://127.0.0.1:4173/", mensaje)
+        abrir.assert_not_called()
+        coder._abrir_app_compilada.assert_called_once_with(coder.ultima_carpeta_proyecto)
+
+    def test_abrir_app_compilada_sirve_dist_y_no_cierra_el_servidor(self):
+        carpeta = self.raiz / "proyecto"
+        dist = carpeta / "dist"
+        dist.mkdir(parents=True)
+        (dist / "index.html").write_text("<div id=\"root\">Arca</div>", encoding="utf-8")
+        coder = self.coder()
+        proceso = Mock()
+        proceso.poll.return_value = None
+        proceso.pid = 4321
+
+        with patch("especialistas.especialista_codigo.subprocess.Popen",
+                   return_value=proceso) as lanzar, \
+                patch("especialistas.especialista_codigo.urllib.request.urlopen") as responder, \
+                patch("especialistas.especialista_codigo.time.sleep"), \
+                patch.object(os, "startfile", create=True) as abrir:
+            resultado = coder._abrir_app_compilada(str(carpeta))
+
+        self.assertTrue(resultado["ok"], resultado)
+        self.assertTrue(resultado["url"].startswith("http://127.0.0.1:"))
+        puerto = int(resultado["url"].rsplit(":", 1)[1].rstrip("/"))
+        abrir.assert_called_once_with(resultado["url"])
+        proceso.terminate.assert_not_called()
+        self.assertEqual(lanzar.call_args.args[0][:3],
+                         [sys.executable, "-m", "http.server"])
+        self.assertEqual(lanzar.call_args.args[0][3], str(puerto))
+        self.assertEqual(lanzar.call_args.kwargs["cwd"], str(dist))
+        self.assertFalse(lanzar.call_args.kwargs["shell"])
+        if os.name == "nt":
+            self.assertNotEqual(lanzar.call_args.kwargs.get("creationflags", 0), 0)
+        else:
+            self.assertTrue(lanzar.call_args.kwargs.get("start_new_session"))
+        responder.assert_called_once_with(resultado["url"], timeout=1)
+
+    def test_si_el_navegador_no_abre_cierra_el_servidor(self):
+        carpeta = self.raiz / "proyecto"
+        dist = carpeta / "dist"
+        dist.mkdir(parents=True)
+        (dist / "index.html").write_text("<div id=\"root\">Arca</div>", encoding="utf-8")
+        coder = self.coder()
+        proceso = Mock()
+        proceso.poll.return_value = None
+
+        with patch("especialistas.especialista_codigo.subprocess.Popen",
+                   return_value=proceso), \
+                patch("especialistas.especialista_codigo.urllib.request.urlopen"), \
+                patch("especialistas.especialista_codigo.time.sleep"), \
+                patch.object(os, "startfile", create=True,
+                             side_effect=OSError("no hay navegador")):
+            resultado = coder._abrir_app_compilada(str(carpeta))
+
+        self.assertFalse(resultado["ok"])
+        self.assertIn("no hay navegador", resultado["error"])
+        proceso.terminate.assert_called_once()
+        proceso.wait.assert_called_once_with(timeout=5)
+
+    def test_revision_app_usa_el_servidor_local_y_lo_cierra(self):
+        from contratos.especialista import leer_especificacion
+        coder = self.coder()
+        carpeta = self.raiz / "proyecto"
+        dist = carpeta / "dist"
+        dist.mkdir(parents=True)
+        (dist / "index.html").write_text("<div id=\"root\">Arca</div>", encoding="utf-8")
+        proceso = Mock()
+        url = "http://127.0.0.1:43210/"
+        coder._iniciar_servidor_app = Mock(return_value=(proceso, url, ""))
+
+        with patch("especialistas.especialista_codigo.revisor_visual.revisar_url",
+                   return_value={"revisado": True, "aprobado": True,
+                                 "hallazgos": []}) as revisar:
+            resultado = coder._revisar_app_compilada(
+                leer_especificacion(SPEC_REACT), str(carpeta))
+
+        coder._iniciar_servidor_app.assert_called_once_with(str(carpeta))
+        self.assertEqual(revisar.call_args.args[0], url)
+        self.assertTrue(resultado["revisado"])
+        proceso.terminate.assert_called_once()
+        proceso.wait.assert_called_once_with(timeout=5)
 
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', APP_JSON)
