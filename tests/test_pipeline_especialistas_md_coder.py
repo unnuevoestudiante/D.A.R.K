@@ -262,6 +262,16 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
                 self.assertEqual(reparada, frase)
                 self.assertFalse(cambio)
 
+    def test_rechazo_de_documento_con_tema_largo_habla_de_forma_formal(self):
+        tareas = self.tareas()
+        tareas._soltar_trabajo = Mock()
+
+        respuesta = tareas.escribir_documento("Un tema demasiado largo para esta prueba. " * 8)
+
+        reparada, cambio = reparar_tuteo(respuesta)
+        self.assertFalse(cambio, reparada)
+        self.assertIn("Dígame un tema concreto", respuesta)
+
     def test_sin_modelo_las_pantallas_quedan_como_lista(self):
         tareas = self.tareas("", "", "")
         tareas.iniciar_planificacion("planifiquemos una app", "guiado")

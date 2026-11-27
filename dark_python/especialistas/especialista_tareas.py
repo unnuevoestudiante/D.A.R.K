@@ -514,9 +514,9 @@ class EspecialistaTareas:
         if len(tema) > 250:
             print(f"[escribir_documento] tema demasiado largo ({len(tema)} chars), "
                   f"probablemente es un prompt mal clasificado")
-            return ("No entendí bien qué documento querías. "
-                    "Dime un tema concreto, por ejemplo: "
-                    "'escribe un ensayo sobre la Revolución Francesa'.")
+            return ("No entendí bien qué documento deseaba. "
+                    "Dígame un tema concreto, por ejemplo: "
+                    "'escriba un ensayo sobre la Revolución Francesa'.")
 
         extension = (extension or "md").strip().lower().lstrip(".")
         if extension not in {"md", "txt", "pdf"}:
