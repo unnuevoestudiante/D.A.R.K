@@ -156,6 +156,16 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         self.assertTrue(Path(traspaso["especificacion"]).is_file())
         self.assertFalse(tareas.planificacion_activa())
 
+    def test_las_ordenes_de_voz_pasan_al_coder_sin_repetir_el_resumen(self):
+        for frase in ("pasaselo a coder", "pasalo a coder", "construye"):
+            with self.subTest(frase=frase):
+                tareas = self.tareas(SPEC_COMPLETA)
+                tareas.iniciar_planificacion("hazme una app de gastos", "rapido")
+                r = tareas.atender_planificacion(frase)
+                self.assertIn("traspaso", r)
+                self.assertEqual(r["decir"], "")
+                self.assertFalse(tareas.planificacion_activa())
+
     def test_si_con_cambio_no_es_aprobacion_sino_un_cambio(self):
         tareas = self.tareas(SPEC_COMPLETA, SPEC_COMPLETA, SPEC_COMPLETA,
                              SPEC_COMPLETA.replace("React con Vite", "Vanilla"))
@@ -297,7 +307,8 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         self.assertFalse(EspecialistaTareas.pide_app("crea una página web sobre gatos"))
 
     def test_que_cuenta_como_aprobacion(self):
-        for frase in ("sí", "dale", "Perfecto, constrúyelo", "pásaselo al coder", "ok"):
+        for frase in ("sí", "dale", "Perfecto, constrúyelo", "pásaselo al coder",
+                      "pasaselo a coder", "pasalo a coder", "construye", "ok"):
             self.assertTrue(EspecialistaTareas._es_aprobacion(frase), frase)
         for frase in ("sí, pero cambia el color", "no", "quiero que tenga modo oscuro y gráficas"):
             self.assertFalse(EspecialistaTareas._es_aprobacion(frase), frase)

@@ -794,7 +794,8 @@ class EspecialistaTareas:
         return False
 
     FRASES_APROBACION = (
-        "si", "sí", "dale", "adelante", "hazlo", "construyelo", "constrúyelo",
+        "si", "sí", "dale", "adelante", "hazlo", "construye", "construyelo", "constrúyelo",
+        "pasaselo a coder", "pásaselo a coder", "pasalo a coder", "pásalo a coder",
         "pasaselo al coder", "pásaselo al coder", "pasalo al coder", "pásalo al coder",
         "perfecto", "me gusta", "esta bien", "está bien", "de acuerdo", "listo",
         "aprobado", "vale", "ok", "okay", "manos a la obra",
