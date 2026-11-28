@@ -615,6 +615,115 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
                     nucleo.intencion.marcar_cancelada.assert_called_once_with("i-1")
                     nucleo.intencion.marcar_obsoleta.assert_not_called()
 
+    def test_el_cierre_fallido_no_cierra_la_intencion_ni_borra_la_tarea(self):
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        for fallo in (False, RuntimeError("el Manager no responde")):
+            with self.subTest(fallo=fallo):
+                resultado = PasoResultado(
+                    ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+                    mensaje="No pude componer la app.", error=errores[0],
+                    tipo_error="interno", reintentable=False,
+                    datos={"etapa": "composicion", "errores": errores,
+                           "especificacion": "C:/planes/gastos.md"},
+                )
+                nucleo = self.worker(resultado)
+                nucleo._pasos_originales["tarea-plan"] = [{"tool": "escribir_codigo"}]
+                nucleo.esp_tareas.reabrir_por_error.return_value = {
+                    "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+                nucleo._cliente_manager.cancelar.return_value = False
+                if isinstance(fallo, Exception):
+                    nucleo._cliente_manager.cancelar.side_effect = fallo
+
+                with redirect_stdout(io.StringIO()), \
+                        self.assertRaisesRegex(RuntimeError, "fin del worker"):
+                    nucleo._worker_tareas_bg()
+
+                cerrar = nucleo.esp_tareas.reabrir_por_error.call_args.kwargs["al_cerrar"]
+                with redirect_stdout(io.StringIO()):
+                    cerrado = cerrar(True)
+
+                self.assertIs(cerrado, False)
+                nucleo._cliente_manager.cancelar.assert_called_once_with("tarea-plan")
+                self.assertIn("tarea-plan", nucleo._pasos_originales)
+                nucleo.intencion.marcar_obsoleta.assert_not_called()
+                nucleo.intencion.marcar_cancelada.assert_not_called()
+
+    def test_el_cierre_puede_reintentarse_sin_perder_el_paso_ya_cancelado(self):
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        resultado = PasoResultado(
+            ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+            mensaje="No pude componer la app.", error=errores[0],
+            tipo_error="interno", reintentable=False,
+            datos={"etapa": "composicion", "errores": errores,
+                   "especificacion": "C:/planes/gastos.md"},
+        )
+        nucleo = self.worker(resultado)
+        nucleo._pasos_originales["tarea-plan"] = [{"tool": "escribir_codigo"}]
+        nucleo.esp_tareas.reabrir_por_error.return_value = {
+            "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+        nucleo._cliente_manager.cancelar.side_effect = [False, True]
+        nucleo.intencion.marcar_obsoleta.side_effect = [RuntimeError("sin disco"), None]
+
+        with redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(RuntimeError, "fin del worker"):
+            nucleo._worker_tareas_bg()
+
+        cerrar = nucleo.esp_tareas.reabrir_por_error.call_args.kwargs["al_cerrar"]
+        with redirect_stdout(io.StringIO()):
+            self.assertIs(cerrar(True), False)
+            self.assertIs(cerrar(True), False)
+            self.assertIs(cerrar(True), True)
+
+        self.assertEqual(nucleo._cliente_manager.cancelar.call_count, 2)
+        self.assertNotIn("tarea-plan", nucleo._pasos_originales)
+        self.assertEqual(nucleo.intencion.marcar_obsoleta.call_count, 2)
+
+    def test_la_pausa_se_hace_bajo_el_candado_del_plan(self):
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        resultado = PasoResultado(
+            ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+            mensaje="No pude componer la app.", error=errores[0],
+            tipo_error="interno", reintentable=False,
+            datos={"etapa": "composicion", "errores": errores,
+                   "especificacion": "C:/planes/gastos.md"},
+        )
+        nucleo = self.worker(resultado)
+        nucleo.esp_tareas.reabrir_por_error.return_value = {
+            "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+
+        def pausar_con_candado(tarea_id):
+            self.assertTrue(nucleo._plan_lock.locked())
+            return True
+
+        nucleo._cliente_manager.pausar.side_effect = pausar_con_candado
+        with redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(RuntimeError, "fin del worker"):
+            nucleo._worker_tareas_bg()
+
+        nucleo._cliente_manager.pausar.assert_called_once_with("tarea-plan")
+
+    def test_si_no_se_puede_pausar_no_se_publica_como_recuperacion(self):
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        resultado = PasoResultado(
+            ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+            mensaje="No pude componer la app.", error=errores[0],
+            tipo_error="interno", reintentable=False,
+            datos={"etapa": "composicion", "errores": errores,
+                   "especificacion": "C:/planes/gastos.md"},
+        )
+        nucleo = self.worker(resultado)
+        nucleo.esp_tareas.reabrir_por_error.return_value = {
+            "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+        nucleo._cliente_manager.pausar.return_value = False
+
+        with redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(RuntimeError, "fin del worker"):
+            nucleo._worker_tareas_bg()
+
+        nucleo._pausar_tarea_por_fallo.assert_called_once()
+        nucleo.intencion.marcar_fallida.assert_called_once_with("i-1")
+        self.assertTrue(nucleo._avisos_pendientes.empty())
+
     def test_el_worker_no_reabre_tareas_por_un_fallo_de_json(self):
         errores = ["la respuesta no contiene un objeto JSON completo"]
         resultado = PasoResultado(

@@ -240,11 +240,15 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         self.assertEqual(tareas._plan["recuperacion_pendientes"], [])
         self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
         self.assertTrue(resultado["decir"].endswith("¿Lo construyo, o desea cambiar algo?"))
+        self.assertNotIn("Gasto: importe", tareas._plan["especificacion"].seccion("datos"))
 
         traspaso = tareas.atender_planificacion("sí, constrúyelo")["traspaso"]
         self.assertEqual(traspaso["especificacion"], str(ruta))
-        for respuesta in respuestas:
-            self.assertIn(respuesta, traspaso["tarea"])
+        for pantalla in ("inicio", "catálogo", "carrito"):
+            self.assertIn(f"- {pantalla}", traspaso["tarea"])
+        self.assertIn("productos, carrito y compras, guardados en localStorage", traspaso["tarea"])
+        self.assertIn("añadir al carrito y confirmar la compra con un formulario conectado al modelo",
+                      traspaso["tarea"])
         self.assertFalse(tareas.planificacion_activa())
 
     def test_una_respuesta_ignorada_se_guarda_antes_de_aprobar(self):
@@ -258,8 +262,55 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         resultado = tareas.atender_planificacion(respuesta)
 
         self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
-        self.assertIn(respuesta, tareas._plan["especificacion"].seccion("pantallas"))
+        self.assertEqual(tareas._plan["especificacion"].seccion("pantallas"),
+                         "- inicio\n- catálogo\n- carrito")
         self.assertNotIn("traspaso", resultado)
+
+    def test_una_parafrasis_que_ignora_la_respuesta_no_recupera_la_pantalla(self):
+        ruta = self.especificacion_en_disco()
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas._texto_online = Mock(return_value="")
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores)
+        tareas._pensar.return_value = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- **Panel principal**: resumen mensual y movimientos recientes.")
+
+        resultado = tareas.atender_planificacion("inicio, catálogo y carrito")
+
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertEqual(tareas._plan["especificacion"].seccion("pantallas"),
+                         "- inicio\n- catálogo\n- carrito")
+        self.assertNotIn("Panel principal", tareas._plan["especificacion"].seccion("pantallas"))
+        self.assertNotIn("traspaso", resultado)
+
+    def test_un_reformateo_no_aclara_el_campo_ante_el_coder(self):
+        ruta = self.especificacion_en_disco()
+        reformateada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- **Inicio**: total del mes y últimos gastos.")
+        tareas = self.tareas(reformateada)
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+
+        resultado = tareas.reabrir_por_error(str(ruta), errores)
+
+        self.assertEqual(tareas._plan["estado"], "preguntando")
+        self.assertEqual(tareas._plan["recuperacion_pendientes"], ["pantallas"])
+        self.assertIn("No pude aclararlo", resultado["decir"])
+
+    def test_un_cambio_sin_declarar_el_modelo_no_aclara_los_datos(self):
+        ruta = self.especificacion_en_disco()
+        reformateada = SPEC_COMPLETA.replace(
+            "Gasto: importe, categoría, fecha y nota; en localStorage.",
+            "**Gasto**: importe, categoría, fecha y nota; en localStorage.")
+        tareas = self.tareas(reformateada)
+        errores = ["el plan pide datos persistentes o calculados: declara «modelos» y conecta los bloques"]
+
+        resultado = tareas.reabrir_por_error(str(ruta), errores)
+
+        self.assertEqual(tareas._plan["estado"], "preguntando")
+        self.assertEqual(tareas._plan["recuperacion_pendientes"], ["datos"])
+        self.assertIn("No pude aclararlo", resultado["decir"])
 
     def test_decidir_por_tareas_no_aprueba_un_campo_que_el_modelo_no_cambio(self):
         ruta = self.especificacion_en_disco()
@@ -315,6 +366,46 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
 
                 cierre.assert_called_once_with(aprobado)
                 self.assertFalse(tareas.planificacion_activa())
+
+    def test_el_traspaso_no_avanza_si_no_se_cierra_el_intento_anterior(self):
+        revisada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: panel principal con el total calculado y últimos gastos.")
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        for fallo in (False, RuntimeError("el Manager no responde")):
+            with self.subTest(fallo=fallo):
+                ruta = self.especificacion_en_disco()
+                tareas = self.tareas(revisada)
+                cierre = Mock(return_value=False)
+                if isinstance(fallo, Exception):
+                    cierre.side_effect = fallo
+                tareas.reabrir_por_error(str(ruta), errores, al_cerrar=cierre)
+
+                resultado = tareas.atender_planificacion("sí, constrúyelo")
+
+                self.assertNotIn("traspaso", resultado)
+                self.assertIn("No pude cerrar", resultado["decir"])
+                self.assertTrue(tareas.planificacion_activa())
+                self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+                cierre.assert_called_once_with(True)
+
+    def test_el_traspaso_reintenta_el_cierre_sin_duplicar_la_tarea(self):
+        ruta = self.especificacion_en_disco()
+        revisada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: panel principal con el total calculado y últimos gastos.")
+        tareas = self.tareas(revisada)
+        cierre = Mock(side_effect=[False, True])
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores, al_cerrar=cierre)
+
+        primero = tareas.atender_planificacion("sí, constrúyelo")
+        segundo = tareas.atender_planificacion("sí, constrúyelo")
+
+        self.assertNotIn("traspaso", primero)
+        self.assertIn("traspaso", segundo)
+        self.assertEqual(cierre.call_count, 2)
+        self.assertFalse(tareas.planificacion_activa())
 
     def test_tareas_completa_un_titulo_ausente_sin_necesitar_al_modelo(self):
         ruta = self.especificacion_en_disco(SPEC_COMPLETA.replace(

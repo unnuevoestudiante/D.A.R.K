@@ -6860,15 +6860,20 @@ class DarkNucleo:
             return False
         tarea_id = tarea.get("task_manager_id")
         intencion_id = tarea.get("intencion_id")
+        cierre = {"tarea": not bool(tarea_id), "intencion": not bool(intencion_id)}
 
         def cerrar_intento(aprobado):
-            if tarea_id:
+            if tarea_id and not cierre["tarea"]:
                 try:
-                    self._cliente_manager.cancelar(tarea_id)
+                    if not self._cliente_manager.cancelar(tarea_id):
+                        print("[Tareas] el Manager no confirmó la cancelación de la tarea anterior")
+                        return False
                 except Exception as error:
                     print(f"[Tareas] no pude cancelar la tarea anterior: {error}")
+                    return False
+                cierre["tarea"] = True
                 self._pasos_originales.pop(tarea_id, None)
-            if intencion_id:
+            if intencion_id and not cierre["intencion"]:
                 try:
                     if aprobado:
                         self.intencion.marcar_obsoleta(intencion_id)
@@ -6876,8 +6881,19 @@ class DarkNucleo:
                         self.intencion.marcar_cancelada(intencion_id)
                 except Exception as error:
                     print(f"[Tareas] no pude cerrar la intención anterior: {error}")
+                    return False
+                cierre["intencion"] = True
+            return True
 
         try:
+            if tarea_id:
+                try:
+                    if not self._cliente_manager.pausar(tarea_id):
+                        print("[Tareas] el Manager no confirmó la pausa de la tarea anterior")
+                        return False
+                except Exception as error:
+                    print(f"[Tareas] no pude pausar la tarea anterior: {error}")
+                    return False
             respuesta = reabrir(
                 ruta, list(errores),
                 pedido=args.get("tarea") or tarea.get("descripcion", ""),
@@ -6889,8 +6905,6 @@ class DarkNucleo:
             candado.release()
         if not isinstance(respuesta, dict) or not respuesta.get("decir"):
             return False
-        if tarea.get("task_manager_id"):
-            self._cliente_manager.pausar(tarea["task_manager_id"])
         self._avisos_pendientes.put(respuesta["decir"])
         return True
 

@@ -936,19 +936,24 @@ class EspecialistaTareas:
         if plan is None:
             return False
         if time.time() - plan["ts"] > self.PLAN_TTL_SEGUNDOS:
-            self._cerrar_plan()
+            if not self._cerrar_plan():
+                plan["ts"] = time.time()
+                return True
             return False
         return True
 
-    def _cerrar_plan(self, aprobado: bool = False) -> None:
+    def _cerrar_plan(self, aprobado: bool = False) -> bool:
         plan = self._plan
-        self._plan = None
         al_cerrar = plan.get("al_cerrar") if plan else None
         if callable(al_cerrar):
             try:
-                al_cerrar(aprobado)
+                if al_cerrar(aprobado) is False:
+                    return False
             except Exception as error:
                 print(f"[Tareas] no pude cerrar el intento anterior: {error}")
+                return False
+        self._plan = None
+        return True
 
     @staticmethod
     def _carpeta_planes() -> str:
@@ -1007,7 +1012,9 @@ class EspecialistaTareas:
         plan["ts"] = time.time()
         if self._contiene_frase(texto, self.FRASES_SALIR_PLAN):
             ruta = plan["ruta"]
-            self._cerrar_plan()
+            if not self._cerrar_plan():
+                return {"decir": "No pude cerrar la tarea anterior. El plan sigue abierto "
+                                 "para reintentar el cierre."}
             return {"decir": f"De acuerdo, dejo el plan guardado en {ruta}."}
         if plan["estado"] == "esperando_aprobacion":
             if self._es_aprobacion(texto):
@@ -1040,6 +1047,7 @@ class EspecialistaTareas:
             if recuperando and hueco:
                 plan["recuperacion_anterior"] = {
                     hueco: plan["especificacion"].seccion(hueco)}
+                plan.setdefault("recuperacion_respuestas", {})[hueco] = texto
             instruccion = (
                 f"Pregunta: {self._pregunta_de(hueco)}\nRespuesta de la persona: {texto}")
             resultados_investigacion = ""
@@ -1078,10 +1086,10 @@ class EspecialistaTareas:
                         "Encontré fuentes, pero no pude integrarlas al plan sin el modelo "
                         "libre. Guardé su respuesta original. " + paso["decir"])
                     return paso
-            elif (recuperando and hueco
-                  and plan["especificacion"].seccion(hueco)
-                  == plan["recuperacion_anterior"].get(hueco)):
-                self._anotar_tal_cual(hueco, texto)
+            elif recuperando and hueco:
+                actual = plan["especificacion"].seccion(hueco)
+                if not self._respuesta_incorporada(actual, texto):
+                    self._anotar_tal_cual(hueco, texto)
         return self._siguiente_paso()
 
     def _anotar_tal_cual(self, clave: str, texto: str) -> None:
@@ -1091,23 +1099,91 @@ class EspecialistaTareas:
         if seccion is None or not texto:
             return
         esp = self._plan["especificacion"]
-        nuevo = f"- {texto}" if seccion.pide_lista else texto
-        previo = esp.seccion(clave)
+        recuperando = clave in self._plan.get("recuperacion_pendientes", [])
+        if seccion.pide_lista and recuperando and clave == "pantallas":
+            partes = [parte.strip(" .;:")
+                      for parte in re.split(r"\s*,\s*|\s+(?:y|e)\s+", texto,
+                                            flags=re.IGNORECASE)
+                      if parte.strip(" .;:")]
+            nuevo = "\n".join(f"- {parte}" for parte in partes)
+        else:
+            nuevo = f"- {texto}" if seccion.pide_lista else texto
+        previo = "" if recuperando else esp.seccion(clave)
         self._plan["especificacion"] = esp.con_seccion(
             clave, f"{previo}\n{nuevo}" if previo else nuevo)
+
+    _PALABRAS_RESPUESTA = frozenset((
+        "a al de del el la los las un una unos unas en con por para que se su sus "
+        "mi mis le les lo y e o es son ser estar debe puede quiero necesito"
+    ).split())
+
+    @classmethod
+    def _respuesta_incorporada(cls, actual: str, respuesta: str) -> bool:
+        normal = cls._normal(respuesta)
+        if not normal:
+            return True
+        texto = cls._normal(actual)
+        if normal in texto:
+            return True
+        palabras = [p for p in normal.split() if p not in cls._PALABRAS_RESPUESTA]
+        return bool(palabras) and all(p in texto.split() for p in palabras)
+
+    @classmethod
+    def _seccion_cumple_recuperacion(cls, clave: str, texto: str, errores) -> bool:
+        normal = cls._normal(texto)
+        for fragmento, campo, afectadas in cls._CAMPOS_RECUPERABLES:
+            if clave not in afectadas or not any(fragmento in error for error in errores):
+                continue
+            if campo == "las pantallas":
+                pantallas = [linea for linea in texto.splitlines()
+                             if re.match(r"^(?:[-*+]|\d+[.)])\s+\S", linea)]
+                if not 1 <= len(pantallas) <= 8:
+                    return False
+            elif campo == "los modelos de datos":
+                if ("modelo" not in normal
+                        or not any(p in normal for p in (
+                            "persist", "localstorage", "archivo", "api", "guard"))
+                        or not any(p in normal for p in (
+                            "lista", "tabla", "estadist", "grafic", "formulario",
+                            "bloque", "registro"))):
+                    return False
+            elif campo == "la persistencia":
+                if not any(p in normal for p in (
+                        "persist", "localstorage", "archivo", "api", "guard")):
+                    return False
+            elif campo == "el formulario conectado a un modelo":
+                if ("formulario" not in normal or "modelo" not in normal
+                        or not any(p in normal for p in (
+                            "guard", "registr", "anot", "agreg", "modific", "crear"))):
+                    return False
+            elif campo == "el cálculo de totales o evolución":
+                if ("calcul" not in normal
+                        or not any(p in normal for p in (
+                            "total", "evolucion", "estadist", "grafic", "serie",
+                            "indicador"))):
+                    return False
+        return True
 
     def _siguiente_paso(self, cambio: bool = False) -> Dict:
         plan = self._plan
         self._guardar_plan()
         if plan.get("recuperacion_pendientes") and plan["estado"] == "preguntando":
             anteriores = plan.pop("recuperacion_anterior", {})
+            respuestas = plan.get("recuperacion_respuestas", {})
             actual = plan["especificacion"]
-            plan["recuperacion_pendientes"] = [
-                clave for clave in plan["recuperacion_pendientes"]
-                if clave not in anteriores or actual.seccion(clave) == anteriores[clave]]
-            if plan["recuperacion_pendientes"]:
-                plan["recuperacion_pendientes"] = self._aclarar_campos_para_coder(
-                    plan["recuperacion_pendientes"])
+            pendientes = []
+            for clave in plan["recuperacion_pendientes"]:
+                seccion = actual.seccion(clave)
+                incorporada = (clave in respuestas
+                               and self._respuesta_incorporada(seccion, respuestas[clave]))
+                if clave in anteriores and self._normal(seccion) == self._normal(anteriores[clave]):
+                    pendientes.append(clave)
+                elif not incorporada and not self._seccion_cumple_recuperacion(
+                        clave, seccion, plan.get("errores_coder", [])):
+                    pendientes.append(clave)
+            plan["recuperacion_pendientes"] = pendientes
+            if pendientes:
+                plan["recuperacion_pendientes"] = self._aclarar_campos_para_coder(pendientes)
                 self._guardar_plan()
                 if plan["recuperacion_pendientes"]:
                     plan["modo"], plan["estado"] = "guiado", "preguntando"
@@ -1221,7 +1297,7 @@ class EspecialistaTareas:
             "modo": "rapido", "pedido": pedido or f"Construye «{esp.titulo}».",
             "ruta": ruta, "ts": time.time(), "estado": "preguntando",
             "especificacion": esp, "respuestas": 0, "errores_coder": errores,
-            "al_cerrar": al_cerrar,
+            "al_cerrar": al_cerrar, "recuperacion_respuestas": {},
         }
         pendientes = self._aclarar_campos_para_coder(claves) if claves else []
         self._guardar_plan()
@@ -1253,13 +1329,26 @@ class EspecialistaTareas:
         if not self._redactar(instruccion, claves, completar=True):
             return list(claves)
         actual = plan["especificacion"]
-        return [clave for clave in claves if actual.seccion(clave) == antes[clave]]
+        respuestas = plan.get("recuperacion_respuestas", {})
+        pendientes = []
+        for clave in claves:
+            seccion = actual.seccion(clave)
+            incorporada = (clave in respuestas
+                           and self._respuesta_incorporada(seccion, respuestas[clave]))
+            if self._normal(seccion) == self._normal(antes[clave]):
+                pendientes.append(clave)
+            elif not incorporada and not self._seccion_cumple_recuperacion(
+                    clave, seccion, plan.get("errores_coder", [])):
+                pendientes.append(clave)
+        return pendientes
 
     def _traspasar(self) -> Dict:
         """El plan aprobado pasa al coder: el Núcleo despacha `escribir_codigo`."""
         plan = self._plan
         esp = plan["especificacion"]
-        self._cerrar_plan(aprobado=True)
+        if not self._cerrar_plan(aprobado=True):
+            return {"decir": "No pude cerrar la tarea anterior. No he enviado el plan "
+                             "al coder; el plan sigue abierto para reintentarlo."}
         traspaso = {
             "tarea": self._tarea_para_coder(esp),
             "nombre_archivo": self._slug(esp.titulo),
