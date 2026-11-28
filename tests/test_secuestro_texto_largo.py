@@ -48,6 +48,20 @@ PETICION_CON_RAM = (
     '"sobre nosotros" y "contactenos"'
 )
 
+PETICION_CON_CPU_PANEL_MENU = (
+    "Vamos a crear una pagina web para vender componentes para pc y gaming, "
+    "quiero que haya una pagina de inicio una introduccion de la pagina y que "
+    "aparezcan ciertos componentes en oferta, un catalogo amplio, cada componente "
+    "se debe de poder agregar al carrito de compras desde donde se hace la compra, "
+    "debe de tener un apartado de registro de usuario o inicio de sesion\n\n"
+    "para la forma visual, me gustaria que tuviera fondos violetas y que tenga de "
+    "fondo varios compoenentes flotando como cpu gpu rams etc... con animaciones "
+    "de movimientos 3D al seleccionarse y ademas en la parte de registro, que el "
+    "panel de registro parece que estuviera grabado en la carcasa de una cpu y "
+    "que esa cpu en la que esta ese menu aparezca como si saliera del fondo hacia "
+    "el frente"
+)
+
 
 def _nucleo_sin_puertos():
     return DarkNucleo.__new__(DarkNucleo)
@@ -61,6 +75,10 @@ class PruebasMatchComandoMenu(unittest.TestCase):
 
     def test_la_peticion_larga_no_levanta_el_panel(self):
         self.assertIsNone(self.nucleo._match_comando_menu(PETICION_CON_RAM))
+
+    def test_la_peticion_con_cpu_panel_y_menu_no_levanta_el_panel(self):
+        self.assertIsNone(
+            self.nucleo._match_comando_menu(PETICION_CON_CPU_PANEL_MENU))
 
     def test_el_mensaje_de_menu_sigue_levantandolo(self):
         for frase, esperado in (

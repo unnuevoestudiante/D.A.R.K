@@ -532,13 +532,13 @@ MENU_COMANDOS = {
     ],
 }
 
-#: Palabras que dan forma de orden de menú a un mensaje largo: con una de ellas
+#: Verbos que dan forma de orden de menú a un mensaje largo: con uno de ellos
 #: presente, una palabra suelta de `MENU_COMANDOS` («ram», «tareas») vuelve a
-#: abrir el panel aunque el resto de la frase no coincida literal.
+#: abrir el panel aunque el resto de la frase no coincida literal. «panel»,
+#: «menu» y «estado» no son verbos: dentro de un encargo solo describen contenido.
 _VERBOS_MENU = frozenset({
     "abre", "abrir", "abres", "muestra", "mostrar", "muestrame",
-    "muéstrame", "ver", "dime", "panel", "estado", "menu", "menú",
-    "menus", "menús",
+    "muéstrame", "ver", "dime",
 })
 
 
