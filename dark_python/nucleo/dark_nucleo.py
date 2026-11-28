@@ -6858,10 +6858,30 @@ class DarkNucleo:
         candado = getattr(self, "_plan_lock", None)
         if candado is None or not candado.acquire(blocking=False):
             return False
+        tarea_id = tarea.get("task_manager_id")
+        intencion_id = tarea.get("intencion_id")
+
+        def cerrar_intento(aprobado):
+            if tarea_id:
+                try:
+                    self._cliente_manager.cancelar(tarea_id)
+                except Exception as error:
+                    print(f"[Tareas] no pude cancelar la tarea anterior: {error}")
+                self._pasos_originales.pop(tarea_id, None)
+            if intencion_id:
+                try:
+                    if aprobado:
+                        self.intencion.marcar_obsoleta(intencion_id)
+                    else:
+                        self.intencion.marcar_cancelada(intencion_id)
+                except Exception as error:
+                    print(f"[Tareas] no pude cerrar la intención anterior: {error}")
+
         try:
             respuesta = reabrir(
                 ruta, list(errores),
-                pedido=args.get("tarea") or tarea.get("descripcion", ""))
+                pedido=args.get("tarea") or tarea.get("descripcion", ""),
+                al_cerrar=cerrar_intento)
         except Exception as error:
             print(f"[Tareas] no pude reabrir el plan por el fallo del coder: {error}")
             return False

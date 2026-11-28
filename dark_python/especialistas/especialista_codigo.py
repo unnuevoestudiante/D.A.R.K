@@ -4281,6 +4281,8 @@ class EspecialistaCodigo:
             if datos is None:
                 app, errores = None, ("la respuesta no contiene un objeto JSON completo",)
             else:
+                if not str(datos.get("titulo") or "").strip():
+                    datos["titulo"] = esp.titulo
                 app, errores = validar_app(datos, plan_texto=plan)
             if not errores:
                 return app, ()

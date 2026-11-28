@@ -936,9 +936,19 @@ class EspecialistaTareas:
         if plan is None:
             return False
         if time.time() - plan["ts"] > self.PLAN_TTL_SEGUNDOS:
-            self._plan = None
+            self._cerrar_plan()
             return False
         return True
+
+    def _cerrar_plan(self, aprobado: bool = False) -> None:
+        plan = self._plan
+        self._plan = None
+        al_cerrar = plan.get("al_cerrar") if plan else None
+        if callable(al_cerrar):
+            try:
+                al_cerrar(aprobado)
+            except Exception as error:
+                print(f"[Tareas] no pude cerrar el intento anterior: {error}")
 
     @staticmethod
     def _carpeta_planes() -> str:
@@ -967,6 +977,8 @@ class EspecialistaTareas:
         carpeta = self._carpeta_planes()
         os.makedirs(carpeta, exist_ok=True)
         ruta = os.path.join(carpeta, f"{self._slug(titulo)}.md")
+        recuperaciones = getattr(self, "_recuperaciones_por_ruta", {})
+        recuperaciones.pop(os.path.normcase(os.path.abspath(ruta)), None)
         self._plan = {
             "modo": modo, "pedido": pedido, "ruta": ruta, "ts": time.time(),
             "estado": "preguntando", "especificacion": Especificacion(titulo=titulo),
@@ -995,7 +1007,7 @@ class EspecialistaTareas:
         plan["ts"] = time.time()
         if self._contiene_frase(texto, self.FRASES_SALIR_PLAN):
             ruta = plan["ruta"]
-            self._plan = None
+            self._cerrar_plan()
             return {"decir": f"De acuerdo, dejo el plan guardado en {ruta}."}
         if plan["estado"] == "esperando_aprobacion":
             if self._es_aprobacion(texto):
@@ -1009,14 +1021,25 @@ class EspecialistaTareas:
         # Preguntando: la respuesta va solo a la sección que se preguntó. Si el
         # modelo pudiera escribir las demás, las inventaría y dejaría de preguntar.
         hueco = plan.get("hueco") or ""
+        recuperando = bool(plan.get("recuperacion_pendientes"))
         if (self.es_frase_consolidacion(texto)
                 or self._contiene_frase(texto, self.FRASES_DECIDE_TU)):
             faltan = [c for c, _ in huecos_especificacion(plan["especificacion"])]
+            for clave in plan.get("recuperacion_pendientes", []):
+                if clave not in faltan:
+                    faltan.append(clave)
+            if recuperando:
+                plan["recuperacion_anterior"] = {
+                    clave: plan["especificacion"].seccion(clave) for clave in faltan}
             if not self._redactar("La persona te deja decidir lo que falta.", faltan,
                                   completar=True):
+                plan.pop("recuperacion_anterior", None)
                 return {"decir": "Sin un modelo libre no puedo decidirlo yo. Sigamos: "
                                  + self._pregunta_de(hueco)}
         else:
+            if recuperando and hueco:
+                plan["recuperacion_anterior"] = {
+                    hueco: plan["especificacion"].seccion(hueco)}
             instruccion = (
                 f"Pregunta: {self._pregunta_de(hueco)}\nRespuesta de la persona: {texto}")
             resultados_investigacion = ""
@@ -1055,6 +1078,10 @@ class EspecialistaTareas:
                         "Encontré fuentes, pero no pude integrarlas al plan sin el modelo "
                         "libre. Guardé su respuesta original. " + paso["decir"])
                     return paso
+            elif (recuperando and hueco
+                  and plan["especificacion"].seccion(hueco)
+                  == plan["recuperacion_anterior"].get(hueco)):
+                self._anotar_tal_cual(hueco, texto)
         return self._siguiente_paso()
 
     def _anotar_tal_cual(self, clave: str, texto: str) -> None:
@@ -1073,10 +1100,11 @@ class EspecialistaTareas:
         plan = self._plan
         self._guardar_plan()
         if plan.get("recuperacion_pendientes") and plan["estado"] == "preguntando":
-            hueco_actual = plan.get("hueco")
-            if hueco_actual:
-                plan["recuperacion_pendientes"] = [
-                    c for c in plan["recuperacion_pendientes"] if c != hueco_actual]
+            anteriores = plan.pop("recuperacion_anterior", {})
+            actual = plan["especificacion"]
+            plan["recuperacion_pendientes"] = [
+                clave for clave in plan["recuperacion_pendientes"]
+                if clave not in anteriores or actual.seccion(clave) == anteriores[clave]]
             if plan["recuperacion_pendientes"]:
                 plan["recuperacion_pendientes"] = self._aclarar_campos_para_coder(
                     plan["recuperacion_pendientes"])
@@ -1151,7 +1179,7 @@ class EspecialistaTareas:
         return pregunta
 
     def reabrir_por_error(self, ruta_especificacion: str, errores,
-                          pedido: str = "") -> Optional[Dict]:
+                          pedido: str = "", al_cerrar=None) -> Optional[Dict]:
         """Reabre un plan aprobado cuando al coder le faltan campos de composición."""
         if self.planificacion_activa():
             return None
@@ -1193,6 +1221,7 @@ class EspecialistaTareas:
             "modo": "rapido", "pedido": pedido or f"Construye «{esp.titulo}».",
             "ruta": ruta, "ts": time.time(), "estado": "preguntando",
             "especificacion": esp, "respuestas": 0, "errores_coder": errores,
+            "al_cerrar": al_cerrar,
         }
         pendientes = self._aclarar_campos_para_coder(claves) if claves else []
         self._guardar_plan()
@@ -1230,7 +1259,7 @@ class EspecialistaTareas:
         """El plan aprobado pasa al coder: el Núcleo despacha `escribir_codigo`."""
         plan = self._plan
         esp = plan["especificacion"]
-        self._plan = None
+        self._cerrar_plan(aprobado=True)
         traspaso = {
             "tarea": self._tarea_para_coder(esp),
             "nombre_archivo": self._slug(esp.titulo),

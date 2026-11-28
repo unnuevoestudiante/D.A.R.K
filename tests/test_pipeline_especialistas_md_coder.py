@@ -4,6 +4,7 @@ especificación en MD) y Especialista Código (planificación y ejecución por f
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -246,6 +247,75 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
             self.assertIn(respuesta, traspaso["tarea"])
         self.assertFalse(tareas.planificacion_activa())
 
+    def test_una_respuesta_ignorada_se_guarda_antes_de_aprobar(self):
+        ruta = self.especificacion_en_disco()
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas._texto_online = Mock(return_value="")
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores)
+        respuesta = "inicio, catálogo y carrito"
+
+        resultado = tareas.atender_planificacion(respuesta)
+
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertIn(respuesta, tareas._plan["especificacion"].seccion("pantallas"))
+        self.assertNotIn("traspaso", resultado)
+
+    def test_decidir_por_tareas_no_aprueba_un_campo_que_el_modelo_no_cambio(self):
+        ruta = self.especificacion_en_disco()
+        tareas = self.tareas(SPEC_COMPLETA)
+        tareas._texto_online = Mock(return_value="")
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores)
+
+        tareas.atender_planificacion("lo demás decídelo tú")
+
+        self.assertEqual(tareas._plan["estado"], "preguntando")
+        self.assertEqual(tareas._plan["hueco"], "pantallas")
+        self.assertEqual(tareas._plan["recuperacion_pendientes"], ["pantallas"])
+
+    def test_un_plan_nuevo_renueva_el_limite_de_recuperacion_de_su_ruta(self):
+        ruta = Path(self.temporal.name) / "app_de_gastos.md"
+        ruta.write_text(SPEC_COMPLETA, encoding="utf-8")
+        revisada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: panel principal con el total calculado y últimos gastos.")
+        tareas = self.tareas(revisada)
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores)
+        tareas.atender_planificacion("sí, constrúyelo")
+        self.assertIsNone(tareas.reabrir_por_error(str(ruta), errores))
+
+        tareas.iniciar_planificacion("App de gastos", "rapido")
+        self.assertEqual(tareas._plan["ruta"], str(ruta))
+        tareas.atender_planificacion("cancela el plan")
+
+        self.assertIsNotNone(tareas.reabrir_por_error(str(ruta), errores))
+        self.assertTrue(tareas.planificacion_activa())
+
+    def test_cancelar_caducar_o_aprobar_cierra_el_intento_anterior(self):
+        revisada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: panel principal con el total calculado y últimos gastos.")
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        for salida, aprobado in (("cancelar", False), ("caducar", False),
+                                 ("aprobar", True)):
+            with self.subTest(salida=salida):
+                ruta = self.especificacion_en_disco()
+                tareas = self.tareas(revisada)
+                cierre = Mock()
+                tareas.reabrir_por_error(str(ruta), errores, al_cerrar=cierre)
+                if salida == "cancelar":
+                    tareas.atender_planificacion("cancela el plan")
+                elif salida == "caducar":
+                    tareas._plan["ts"] = time.time() - tareas.PLAN_TTL_SEGUNDOS - 1
+                    self.assertFalse(tareas.planificacion_activa())
+                else:
+                    tareas.atender_planificacion("sí, constrúyelo")
+
+                cierre.assert_called_once_with(aprobado)
+                self.assertFalse(tareas.planificacion_activa())
+
     def test_tareas_completa_un_titulo_ausente_sin_necesitar_al_modelo(self):
         ruta = self.especificacion_en_disco(SPEC_COMPLETA.replace(
             "# Especificación: App de gastos", "# Especificación: "))
@@ -259,11 +329,14 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         self.assertIn("título", resultado["decir"])
         tareas._pensar.assert_not_called()
 
-    def test_tareas_no_reabre_por_json_cortado_red_ni_build(self):
+    def test_tareas_no_reabre_por_json_cortado_red_cuota_ram_ni_build(self):
         ruta = self.especificacion_en_disco()
         for errores in (
             ("la respuesta no contiene un objeto JSON completo",),
             ("Read timed out",),
+            ("cuota diaria agotada; trabajo pausado en .dark_project.json",),
+            ("No pude reservar memoria para el modelo local",),
+            ("el presupuesto seguro disponible es 1024 MB; pospuse la instalación",),
             ("falló npm run build: error de compilación",),
         ):
             with self.subTest(errores=errores):

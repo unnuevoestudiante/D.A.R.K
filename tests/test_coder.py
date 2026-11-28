@@ -1077,6 +1077,19 @@ class PruebasAppReact(unittest.TestCase):
         self.assertFalse(errores)
         self.assertEqual(app["titulo"], "Bitácora")
 
+    def test_el_titulo_aprobado_completa_un_json_que_lo_omite(self):
+        from contratos.especialista import leer_especificacion
+        sin_titulo = json.loads(APP_JSON)
+        sin_titulo.pop("titulo")
+        coder = self.coder(*(json.dumps(sin_titulo, ensure_ascii=False) for _ in range(3)))
+
+        with patch("builtins.print"):
+            app, errores = coder._componer_app(leer_especificacion(SPEC_REACT))
+
+        self.assertFalse(errores)
+        self.assertEqual(app["titulo"], "Bitácora")
+        self.assertEqual(coder._llamar_online.call_count, 1)
+
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', APP_JSON)
         self.assertIn("Necesito confirmación", self.generar(coder))

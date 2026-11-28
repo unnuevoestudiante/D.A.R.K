@@ -571,8 +571,10 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
                 self.assertRaisesRegex(RuntimeError, "fin del worker"):
             nucleo._worker_tareas_bg()
 
-        nucleo.esp_tareas.reabrir_por_error.assert_called_once_with(
-            "C:/planes/gastos.md", errores, pedido="Construye «App de gastos».")
+        llamada = nucleo.esp_tareas.reabrir_por_error.call_args
+        self.assertEqual(llamada.args, ("C:/planes/gastos.md", errores))
+        self.assertEqual(llamada.kwargs["pedido"], "Construye «App de gastos».")
+        self.assertTrue(callable(llamada.kwargs.get("al_cerrar")))
         nucleo._pausar_tarea_por_fallo.assert_not_called()
         nucleo._cliente_manager.pausar.assert_called_once_with("tarea-plan")
         nucleo.intencion.marcar_fallida.assert_not_called()
@@ -580,6 +582,38 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         self.assertEqual(nucleo._avisos_pendientes.get_nowait(),
                          "El coder señaló campos faltantes. Ya preparé el plan.")
         self.assertIsNone(nucleo._tarea_bg_activa)
+
+    def test_al_cerrar_la_recuperacion_se_cierra_la_tarea_y_la_intencion(self):
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        for aprobado in (False, True):
+            with self.subTest(aprobado=aprobado):
+                resultado = PasoResultado(
+                    ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+                    mensaje="No pude componer la app.", error=errores[0],
+                    tipo_error="interno", reintentable=False,
+                    datos={"etapa": "composicion", "errores": errores,
+                           "especificacion": "C:/planes/gastos.md"},
+                )
+                nucleo = self.worker(resultado)
+                nucleo._pasos_originales["tarea-plan"] = [{"tool": "escribir_codigo"}]
+                nucleo.esp_tareas.reabrir_por_error.return_value = {
+                    "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+
+                with redirect_stdout(io.StringIO()), \
+                        self.assertRaisesRegex(RuntimeError, "fin del worker"):
+                    nucleo._worker_tareas_bg()
+
+                cerrar = nucleo.esp_tareas.reabrir_por_error.call_args.kwargs["al_cerrar"]
+                cerrar(aprobado)
+
+                nucleo._cliente_manager.cancelar.assert_called_once_with("tarea-plan")
+                self.assertNotIn("tarea-plan", nucleo._pasos_originales)
+                if aprobado:
+                    nucleo.intencion.marcar_obsoleta.assert_called_once_with("i-1")
+                    nucleo.intencion.marcar_cancelada.assert_not_called()
+                else:
+                    nucleo.intencion.marcar_cancelada.assert_called_once_with("i-1")
+                    nucleo.intencion.marcar_obsoleta.assert_not_called()
 
     def test_el_worker_no_reabre_tareas_por_un_fallo_de_json(self):
         errores = ["la respuesta no contiene un objeto JSON completo"]
