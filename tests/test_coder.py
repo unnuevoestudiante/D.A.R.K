@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 RAIZ = Path(__file__).resolve().parents[1]
 DARK_PYTHON = RAIZ / "dark_python"
@@ -560,19 +560,20 @@ Alguien que anota pendientes y notas rápidas.
 - Notas
 
 ## 4. Datos
-Las notas se guardan solo en memoria.
+Las notas se guardan en localStorage y sobreviven a recargar. Datos iniciales: una nota titulada «Ideas para el viaje», con texto «Rutas por el norte». También se admite el título «Ideas para el fin de semana».
 
 ## 5. Funcionalidades
 - MVP: ver y añadir notas.
 
 ## 6. Dirección visual
-Oscura y técnica.
+Oscura y técnica, con densidad compacta, cabecera dividida, formas angulares y acento verde lima.
 
 ## 7. Stack
 React con Vite y TypeScript.
 
 ## 8. Criterios de aceptación
 - Se puede añadir una nota y verla en la lista.
+- La nota añadida sigue ahí después de recargar.
 
 ## 9. Fuera de alcance
 Sincronizar en la nube.
@@ -580,14 +581,30 @@ Sincronizar en la nube.
 
 APP_JSON = json.dumps({
     "titulo": "Bitácora", "descripcion": "Notas rápidas.", "personalidad": "tecnica",
-    "navegacion": "superior", "fondo3d": True,
+    "navegacion": "superior", "fondo3d": True, "persistencia": True,
+    "clave_almacenamiento": "bitacora_notas",
+    "direccion_visual": {
+        "densidad": "compacta", "cabecera": "division", "forma": "angular",
+        "paleta": {"fondo": "#111411", "texto": "#edf0e6", "acento": "#b7e36b", "linea": "#31382d"},
+    },
+    "modelos": [{
+        "id": "notas", "titulo": "Notas",
+        "registros": [{"origen": "plan", "valores": {
+            "titulo": "Ideas para el viaje", "texto": "Rutas por el norte"}}],
+        "campos": [
+            {"id": "titulo", "etiqueta": "Título", "tipo": "texto", "obligatorio": True},
+            {"id": "texto", "etiqueta": "Texto", "tipo": "area"},
+        ],
+    }],
     "secciones": [
         {"id": "notas", "titulo": "Notas", "bloques": [
-            {"tipo": "estadisticas", "chips": [{"etiqueta": "Notas", "valor": "8"}]},
-            {"tipo": "lista", "vacio": "Todavía no hay notas.",
-             "items": [{"titulo": "Ideas para el viaje", "detalle": "Rutas por el norte", "nota": "Hoy"}]},
-            {"tipo": "formulario", "boton_abrir": "Nueva nota",
-             "campos": [{"etiqueta": "Título", "tipo": "texto"}, {"etiqueta": "Texto", "tipo": "area"}]},
+            {"tipo": "estadisticas", "indicadores": [{
+                "etiqueta": "Notas", "formato": "numero",
+                "calculo": {"operacion": "conteo", "modelo": "notas"}}]},
+            {"tipo": "lista", "vacio": "Todavía no hay notas.", "modelo": "notas",
+             "campo_titulo": "titulo", "campo_detalle": "texto"},
+            {"tipo": "formulario", "boton_abrir": "Nueva nota", "modelo": "notas",
+             "campos": ["titulo", "texto"]},
         ]},
     ],
 }, ensure_ascii=False)
@@ -616,6 +633,28 @@ class PruebasAppReact(unittest.TestCase):
         return coder.tool_escribir_codigo(
             tarea="(plan)", ruta_destino=str(self.raiz), contenido_md=str(self.spec))
 
+    def test_la_raiz_no_tapa_el_fondo_3d(self):
+        kit = DARK_PYTHON / "especialistas" / "kit" / "apps"
+        css = (kit / "Cascaron.css").read_text(encoding="utf-8")
+        raiz = re.search(r"\.raiz-app\s*\{([^}]*)\}", css, re.S)
+        self.assertIsNotNone(raiz)
+        self.assertRegex(raiz.group(1), r"background:\s*transparent\s*;")
+
+    def test_los_controles_heredan_el_esquema_de_la_paleta(self):
+        kit = DARK_PYTHON / "especialistas" / "kit" / "apps"
+        app = (kit / "App.tsx").read_text(encoding="utf-8")
+        css = (kit / "Cascaron.css").read_text(encoding="utf-8")
+        self.assertIn('setProperty("--esquema", esquemaSegunFondo(paleta.fondo))', app)
+        self.assertIn("color-scheme: var(--esquema);", css)
+        self.assertNotIn("color-scheme: dark;", css)
+
+    def test_el_aviso_de_guardado_usa_el_acento_de_la_paleta(self):
+        kit = DARK_PYTHON / "especialistas" / "kit" / "apps"
+        css = (kit / "Cascaron.css").read_text(encoding="utf-8")
+        aviso = re.search(r"\.aviso-guardado\s*\{([^}]*)\}", css, re.S)
+        self.assertIsNotNone(aviso)
+        self.assertRegex(aviso.group(1), r"color:\s*var\(--accent\)\s*;")
+
     def test_un_plan_de_react_produce_un_proyecto_instalable(self):
         coder = self.coder(APP_JSON)
         mensaje = self.generar(coder)
@@ -632,17 +671,21 @@ class PruebasAppReact(unittest.TestCase):
         for nombre in ("main.tsx", "App.tsx", "app.json"):
             self.assertTrue((src / nombre).is_file(), nombre)
         kit = src / "kit"
-        for nombre in ("Fondo.tsx", "Fondo.css", "Cascaron.tsx", "Cascaron.css", "tokens.css", "fuentes.css"):
+        for nombre in ("Fondo.tsx", "Fondo.css", "Cascaron.tsx", "Cascaron.css", "tokens.css",
+                       "fuentes.css", "datos.ts"):
             self.assertTrue((kit / nombre).is_file(), nombre)
+        self.assertTrue((carpeta / "tests" / "datos.test.ts").is_file())
         tokens = (kit / "tokens.css").read_text(encoding="utf-8")
         self.assertIn('[data-p="tecnica"]', tokens)
         self.assertIn('[data-p="sobria"]', tokens)
         self.assertIn('[data-p="calida"]', tokens)
         fondo = (kit / "Fondo.tsx").read_text(encoding="utf-8")
-        self.assertIn("tecnica: 0x5ee6ff, sobria: 0x2f4ad0, calida: 0xc4623a", fondo)
+        self.assertIn("setClearColor(paleta.fondo, 1)", fondo)
+        self.assertIn("color: paleta.acento", fondo)
         cascaron = (kit / "Cascaron.tsx").read_text(encoding="utf-8")
         for tipo in ("tabla", "grafico", "progreso", "agenda", "kanban"):
-            self.assertIn(f'b.tipo === "{tipo}"', cascaron)
+            self.assertIn(f'bloque.tipo === "{tipo}"', cascaron)
+        self.assertIn("guardarAlmacen(app, datos)", cascaron)
         fuentes = sorted(p.name for p in (kit / "fuentes").iterdir())
         self.assertTrue(fuentes and all(n.startswith("space-grotesk") or n.startswith("jetbrains")
                                         for n in fuentes), "solo viajan las fuentes de la personalidad elegida")
@@ -651,21 +694,39 @@ class PruebasAppReact(unittest.TestCase):
         self.assertIn("SIL Open Font License", licencias)
         app = json.loads((src / "app.json").read_text(encoding="utf-8"))
         self.assertEqual(app["navegacion"], "superior")
+        self.assertTrue(app["persistencia"])
+        self.assertEqual(app["modelos"][0]["id"], "notas")
         self.assertEqual(len(app["secciones"][0]["bloques"]), 3)
         variedad = json.loads((self.raiz / "apps_variedad.json").read_text(encoding="utf-8"))
-        self.assertEqual(variedad[0]["firma"], "tecnica:superior:con 3D")
+        self.assertIn("tecnica:superior:con 3D", variedad[0]["firma"])
+        self.assertIn(":compacta:division:angular:", variedad[0]["firma"])
+        self.assertIn("#111411", variedad[0]["firma"])
         vite = (carpeta / "vite.config.ts").read_text(encoding="utf-8")
         self.assertIn('base: "./"', vite)
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
         self.assertEqual((estado["estado"], estado["tipo"]),
                          ("pendiente_confirmacion_instalacion", "app_react"))
+        self.assertIn("src/kit/datos.ts", estado["archivos"])
+        self.assertIn("tests/datos.test.ts", estado["archivos"])
         self.assertEqual(estado["mapa"]["pantallas"][0]["nombre"], "Notas")
         self.assertIn("Ideas para el viaje", estado["mapa"]["piezas"][1]["alias"])
         self.assertEqual(estado["mapa"]["piezas"][1]["selector_css"],
                          'main.contenido[data-pantalla="notas"] [data-bloque="notas-1"]')
         cascaron = (carpeta / "src" / "kit" / "Cascaron.tsx").read_text(encoding="utf-8")
         self.assertIn("data-pantalla={seccion.id}", cascaron)
-        self.assertIn("data-bloque={`${seccion.id}-${i}`}", cascaron)
+        self.assertIn("data-bloque={`${seccion.id}-${indice}`}", cascaron)
+
+    def test_mapa_app_no_expone_el_motor_ni_sus_pruebas(self):
+        mapa = EspecialistaCodigo._mapa_app(json.loads(APP_JSON))
+        self.assertNotIn("src/kit/datos.ts", mapa["archivos"])
+        self.assertNotIn("tests/datos.test.ts", mapa["archivos"])
+        for relativo in ("src/kit/datos.ts", "tests/datos.test.ts",
+                         "src/kit/./datos.ts", "SRC/KIT/DATOS.TS"):
+            with self.subTest(archivo=relativo):
+                ruta, absoluta = EspecialistaCodigo._archivo_edicion(
+                    str(self.raiz), {"archivo": relativo}, "cambiar el motor")
+                self.assertIsNone(ruta)
+                self.assertIsNone(absoluta)
 
     def test_una_app_distinta_recibe_las_combinaciones_anteriores(self):
         from contratos.especialista import leer_especificacion
@@ -677,6 +738,18 @@ class PruebasAppReact(unittest.TestCase):
         pedido = coder._llamar_online.call_args.args[0]
         self.assertIn("Combinaciones de presentación usadas en otras apps", pedido)
         self.assertIn("tecnica:superior:con 3D", pedido)
+        self.assertIn(":compacta:division:angular:", pedido)
+
+    def test_la_composicion_rechaza_registros_ajenos_al_plan(self):
+        from contratos.especialista import leer_especificacion
+        inventado = json.loads(APP_JSON)
+        inventado["modelos"][0]["registros"][0]["valores"]["titulo"] = "Saldo inventado"
+        coder = self.coder(*(json.dumps(inventado, ensure_ascii=False) for _ in range(3)))
+
+        app, errores = coder._componer_app(leer_especificacion(SPEC_REACT))
+
+        self.assertIsNone(app)
+        self.assertTrue(any("no consta en el plan aprobado" in error for error in errores), errores)
 
     def test_la_misma_app_puede_repetir_su_combinacion(self):
         from contratos.especialista import leer_especificacion
@@ -710,7 +783,7 @@ class PruebasAppReact(unittest.TestCase):
 
     def _proyecto_app_completo(self, coder):
         from contratos.especialista import validar_app
-        app, errores = validar_app(json.loads(APP_JSON))
+        app, errores = validar_app(json.loads(APP_JSON), plan_texto=self.spec.read_text(encoding="utf-8"))
         self.assertFalse(errores)
         carpeta = self.raiz / "proyecto"
         (carpeta / "src").mkdir(parents=True)
@@ -788,15 +861,35 @@ class PruebasAppReact(unittest.TestCase):
 
         ruta = carpeta / "src" / "app.json"
         app = json.loads(ruta.read_text(encoding="utf-8"))
-        self.assertEqual(app["secciones"][0]["bloques"][1]["items"][0]["titulo"],
+        self.assertEqual(app["modelos"][0]["registros"][0]["valores"]["titulo"],
                          "Ideas para el fin de semana")
-        coder._comando_npm.assert_called_once_with(str(carpeta), "compilar", 240)
+        self.assertEqual(coder._comando_npm.call_args_list, [
+            call(str(carpeta), "probar", 120), call(str(carpeta), "compilar", 240)])
         coder._revisar_app_compilada.assert_called_once()
         self.assertIn("React compiló correctamente", salida)
         estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
         self.assertIn("Ideas para el fin de semana", estado["mapa"]["piezas"][1]["alias"])
         self.assertEqual(estado["busquedas_edicion"][-1]["resultado"], "aplicado")
         self.assertFalse(Path(str(ruta) + ".dark_bak").exists())
+
+    def test_cambio_puntual_no_inventa_registros_ajenos_al_plan(self):
+        coder = self.coder(json.dumps({
+            "buscar": "Ideas para el viaje", "reemplazar": "Saldo inventado",
+            "pregunta": "",
+        }, ensure_ascii=False))
+        carpeta = self._proyecto_app_completo(coder)
+        coder._presupuesto_para_build = Mock(return_value=(True, ""))
+        coder._comando_npm = Mock(return_value={"ok": True, "error": ""})
+        ruta = carpeta / "src" / "app.json"
+        antes = ruta.read_text(encoding="utf-8")
+
+        salida = coder.modificar_ultimo_proyecto("cambie Ideas para el viaje")
+
+        self.assertIn("contrato de la app", salida)
+        self.assertEqual(ruta.read_text(encoding="utf-8"), antes)
+        coder._comando_npm.assert_not_called()
+        estado = json.loads((carpeta / ".dark_project.json").read_text(encoding="utf-8"))
+        self.assertEqual(estado["busquedas_edicion"][-1]["resultado"], "app_json_invalido")
 
     def test_cambio_puntual_restaura_el_archivo_si_falla_el_build(self):
         coder = self.coder(json.dumps({
@@ -805,7 +898,8 @@ class PruebasAppReact(unittest.TestCase):
         }, ensure_ascii=False))
         carpeta = self._proyecto_app_completo(coder)
         coder._presupuesto_para_build = Mock(return_value=(True, ""))
-        coder._comando_npm = Mock(return_value={"ok": False, "error": "TypeScript inválido"})
+        coder._comando_npm = Mock(side_effect=[
+            {"ok": True, "error": ""}, {"ok": False, "error": "TypeScript inválido"}])
         ruta = carpeta / "src" / "app.json"
         antes = ruta.read_text(encoding="utf-8")
 
@@ -840,6 +934,9 @@ class PruebasAppReact(unittest.TestCase):
                             for etiqueta in etiquetas))
         self.assertTrue(any("Revisando la app · ronda 1 de 3" in etiqueta
                             for etiqueta in etiquetas))
+        self.assertTrue(any("Probando los datos" in etiqueta for etiqueta in etiquetas))
+        self.assertEqual([llamada.args[1] for llamada in coder._comando_npm.call_args_list],
+                         ["instalar", "probar", "compilar"])
         self.assertIn("no habrá cuentas de usuario", mensaje)
         self.assertIn("No quedaron hallazgos pendientes", mensaje)
         self.assertIn("http://127.0.0.1:4173/", mensaje)
@@ -908,6 +1005,10 @@ class PruebasAppReact(unittest.TestCase):
         dist = carpeta / "dist"
         dist.mkdir(parents=True)
         (dist / "index.html").write_text("<div id=\"root\">Arca</div>", encoding="utf-8")
+        src = carpeta / "src"
+        src.mkdir()
+        app = json.loads(APP_JSON)
+        (src / "app.json").write_text(json.dumps(app, ensure_ascii=False), encoding="utf-8")
         proceso = Mock()
         url = "http://127.0.0.1:43210/"
         coder._iniciar_servidor_app = Mock(return_value=(proceso, url, ""))
@@ -920,6 +1021,7 @@ class PruebasAppReact(unittest.TestCase):
 
         coder._iniciar_servidor_app.assert_called_once_with(str(carpeta))
         self.assertEqual(revisar.call_args.args[0], url)
+        self.assertEqual(revisar.call_args.kwargs["app"], app)
         self.assertTrue(resultado["revisado"])
         proceso.terminate.assert_called_once()
         proceso.wait.assert_called_once_with(timeout=5)
@@ -1006,6 +1108,175 @@ class PruebasRevisionVisual(unittest.TestCase):
         self.assertIn("falló la compilación", resultado["hallazgos"])
         self.assertIn("desbordamiento horizontal", resultado["hallazgos"])
         self.assertEqual(len(resultado["capturas"]), 2)
+
+    def test_captura_envia_la_composicion_y_recoge_la_sonda_funcional(self):
+        from especialistas import revisor_visual
+        app = json.loads(APP_JSON)
+        funcional = {"ok": False, "hallazgos": ["el formulario no guardó"]}
+        salida = str(self.raiz / "escritorio.png")
+
+        def ejecutar(comando, **_opciones):
+            trabajo = json.loads(Path(comando[2]).read_text(encoding="utf-8"))
+            self.assertEqual(trabajo["app"], app)
+            Path(comando[3]).write_text(json.dumps({
+                "ok": True,
+                "capturas": [{"salida": salida, "ok": True, "consola": [],
+                              "comprobaciones": {}, "error": None}],
+                "funcional": funcional,
+            }), encoding="utf-8")
+            return Mock(returncode=0, stderr="")
+
+        with patch("especialistas.revisor_visual.electron_disponible", return_value=True), \
+                patch("especialistas.revisor_visual.subprocess.run", side_effect=ejecutar):
+            capturas, error = revisor_visual.capturar_pantallas(
+                "http://localhost", str(self.raiz), app=app)
+
+        self.assertIsNone(error)
+        self.assertEqual(len(capturas), 1)
+        self.assertEqual(capturas[0].comprobaciones["funcional"], funcional)
+
+    def test_el_contraste_compone_fondos_translucidos_y_opacidad(self):
+        from especialistas import revisor_visual
+        if not revisor_visual.electron_disponible():
+            self.skipTest("Electron no está disponible")
+        pagina = self.raiz / "contraste.html"
+        pagina.write_text(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><style>"
+            "html,body{height:100%;margin:0}body{background:#f2efe7;font:16px sans-serif}"
+            ".fondo{background:rgba(154,62,47,.09);padding:24px}"
+            ".texto{color:#9a3e2f}.tenue{opacity:.65}"
+            "</style></head><body><div class=\"fondo\"><span class=\"texto\">01</span> "
+            "<span class=\"texto tenue\">02</span></div></body></html>", encoding="utf-8")
+
+        capturas, error = revisor_visual.capturar_pantallas(
+            pagina.as_uri(), str(self.raiz), anchos=((400, 300),), espera_ms=50)
+
+        self.assertIsNone(error)
+        self.assertTrue(capturas[0].ok, capturas[0].error)
+        self.assertEqual(capturas[0].comprobaciones["textos_bajo_contraste"], 1)
+
+    def test_la_sonda_no_pide_localstorage_a_una_app_estatica(self):
+        from especialistas import revisor_visual
+        if not revisor_visual.electron_disponible():
+            self.skipTest("Electron no está disponible")
+        pagina = self.raiz / "estatica.html"
+        pagina.write_text(
+            "<!doctype html><html><head><meta=\"utf-8\"><style>"
+            "html,body{height:100%;margin:0}body{background:#f2efe7;font:16px sans-serif}"
+            "</style></head><body><main><p>Sin datos.</p></main></body></html>",
+            encoding="utf-8")
+        app = {
+            "titulo": "Estática", "descripcion": "Información.", "idioma": "es",
+            "personalidad": "sobria", "navegacion": "superior", "fondo3d": False,
+            "persistencia": False, "clave_almacenamiento": "estatica_prueba", "modelos": [],
+            "secciones": [{"id": "inicio", "titulo": "Inicio", "bloques": [
+                {"tipo": "texto", "origen": "plan", "texto": "Sin datos."}]}],
+        }
+
+        capturas, error = revisor_visual.capturar_pantallas(
+            pagina.as_uri(), str(self.raiz), anchos=((400, 300),), espera_ms=50, app=app)
+
+        self.assertIsNone(error)
+        self.assertTrue(capturas[0].ok, capturas[0].error)
+        funcional = capturas[0].comprobaciones["funcional"]
+        self.assertTrue(funcional["ok"], funcional)
+        self.assertEqual(funcional["hallazgos"], [])
+        self.assertIn("no declara formularios", funcional["motivo"])
+
+    def test_la_sonda_no_confunde_chips_estaticos_con_indicadores_calculados(self):
+        from especialistas import revisor_visual
+        if not revisor_visual.electron_disponible():
+            self.skipTest("Electron no está disponible")
+        pagina = self.raiz / "indicadores.html"
+        pagina.write_text(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><style>"
+            "html,body{height:100%;margin:0}body{background:#f2efe7;font:16px sans-serif}"
+            "</style></head><body><nav><a href=\"#inicio\">Inicio</a></nav><main>"
+            "<div data-tipo=\"estadisticas\" data-indicadores=\"estaticos\">"
+            "<div class=\"estadistica\"><span class=\"etiqueta\">Fijo</span>"
+            "<strong class=\"valor\">99</strong></div></div>"
+            "<div data-tipo=\"estadisticas\" data-indicadores=\"calculados\">"
+            "<div class=\"estadistica\"><span class=\"etiqueta\">Notas</span>"
+            "<strong class=\"valor\">0</strong></div></div>"
+            "<div data-tipo=\"formulario\"><button class=\"boton\" type=\"button\">Nueva nota</button></div>"
+            "<form data-modelo=\"notas\" hidden><input name=\"titulo\"></form>"
+            "</main><script>"
+            "const clave='indicadores_prueba';"
+            "const form=document.querySelector('form');"
+            "const mostrar=()=>{const datos=JSON.parse(localStorage.getItem(clave)||'{\"notas\":[]}');"
+            "document.querySelector('[data-indicadores=\"calculados\"] .valor').textContent=datos.notas.length;};"
+            "document.querySelector('button.boton').onclick=()=>{form.hidden=false;};"
+            "form.onsubmit=(evento)=>{evento.preventDefault();"
+            "const datos=JSON.parse(localStorage.getItem(clave)||'{\"notas\":[]}');"
+            "datos.notas.push({id:'usuario-1',valores:{titulo:form.elements.titulo.value}});"
+            "localStorage.setItem(clave,JSON.stringify(datos));mostrar();};mostrar();"
+            "</script></body></html>", encoding="utf-8")
+        app = {
+            "titulo": "Indicadores", "descripcion": "Prueba.", "idioma": "es",
+            "personalidad": "sobria", "navegacion": "superior", "fondo3d": False,
+            "persistencia": True, "clave_almacenamiento": "indicadores_prueba",
+            "modelos": [{"id": "notas", "titulo": "Notas", "registros": [],
+                         "campos": [{"id": "titulo", "etiqueta": "Título", "tipo": "texto",
+                                     "obligatorio": True}]}],
+            "secciones": [{"id": "inicio", "titulo": "Inicio", "bloques": [
+                {"tipo": "estadisticas", "origen": "plan",
+                 "chips": [{"etiqueta": "Fijo", "valor": "99"}]},
+                {"tipo": "estadisticas", "indicadores": [{"etiqueta": "Notas", "formato": "numero",
+                 "calculo": {"operacion": "conteo", "modelo": "notas"}}]},
+                {"tipo": "formulario", "modelo": "notas", "campos": ["titulo"],
+                 "boton_abrir": "Nueva nota"},
+            ]}],
+        }
+
+        capturas, error = revisor_visual.capturar_pantallas(
+            pagina.as_uri(), str(self.raiz), anchos=((400, 300),), espera_ms=50, app=app)
+
+        self.assertIsNone(error)
+        self.assertTrue(capturas[0].ok, capturas[0].error)
+        funcional = capturas[0].comprobaciones["funcional"]
+        self.assertTrue(funcional["ok"], funcional)
+        self.assertEqual(funcional["indicadores_comprobados"], 1)
+        self.assertEqual(funcional["hallazgos"], [])
+
+    def test_el_desplazamiento_horizontal_intencional_no_es_un_elemento_fuera(self):
+        from especialistas import revisor_visual
+        if not revisor_visual.electron_disponible():
+            self.skipTest("Electron no está disponible")
+        pagina = self.raiz / "desplazamiento.html"
+        pagina.write_text(
+            "<!doctype html><html><head><meta=\"utf-8\"><style>"
+            "html,body{height:100%;margin:0}body{background:#f2efe7;font:16px sans-serif}"
+            ".scroll{width:200px;overflow-x:auto}.ancho{width:600px;height:40px}"
+            ".lejos{margin-left:500px;width:100px}"
+            "</style></head><body><div class=\"scroll\"><div class=\"ancho\">"
+            "<span class=\"lejos\">Columnas</span></div></div></body></html>", encoding="utf-8")
+
+        capturas, error = revisor_visual.capturar_pantallas(
+            pagina.as_uri(), str(self.raiz), anchos=((400, 300),), espera_ms=50)
+
+        self.assertIsNone(error)
+        self.assertTrue(capturas[0].ok, capturas[0].error)
+        comprobaciones = capturas[0].comprobaciones
+        self.assertEqual(comprobaciones["elementos_fuera"], 0)
+        self.assertFalse(any("fuera del ancho visible" in hallazgo
+                             for hallazgo in comprobaciones["hallazgos"]), comprobaciones)
+
+    def test_revision_convierte_fallo_funcional_en_hallazgo(self):
+        from especialistas import revisor_visual
+        funcional = {"ok": False, "hallazgos": ["el formulario no guardó"]}
+        capturas = [revisor_visual.Captura(
+            ancho=1440, ruta="escritorio.png",
+            comprobaciones={"funcional": funcional})]
+        with patch("especialistas.revisor_visual.capturar_pantallas",
+                   return_value=(capturas, None)), \
+                patch("especialistas.revisor_visual.criticar_captura",
+                      return_value=(True, True, [])):
+            resultado = revisor_visual.revisar_url(
+                "http://localhost", str(self.raiz), "sobria", "guarda y recarga",
+                app=json.loads(APP_JSON))
+        self.assertFalse(resultado["aprobado"])
+        self.assertEqual(resultado["funcional"], funcional)
+        self.assertIn("funcional: el formulario no guardó", resultado["hallazgos"])
 
     def test_revision_critica_escritorio_y_movil(self):
         from especialistas import revisor_visual

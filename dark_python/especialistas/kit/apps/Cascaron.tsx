@@ -1,183 +1,257 @@
-import { useState } from "react";
+import { useCallback, useRef, useState, type CSSProperties } from "react";
+import {
+  agregarRegistro,
+  calcular,
+  cargarAlmacen,
+  formatearCampo,
+  formatearIndicador,
+  guardarAlmacen,
+  moverRegistro,
+  serieGrafica,
+  validarValores,
+  type AlmacenDatos,
+  type AppDatos,
+  type Bloque,
+  type CampoModelo,
+  type EstadoCarga,
+  type ModeloDatos,
+  type RegistroDatos,
+  type Seccion,
+} from "./datos";
 import "./Cascaron.css";
 
-/**
- * El cascarón de una app de D.A.R.K.: cabecera, navegación (lateral o
- * superior, según decidió el coder) y las pantallas, leídas de un JSON
- * (como la web inmersiva lee su «mundo»). Nada va envuelto en una caja: el
- * contenido flota sobre el fondo con espacio y líneas finas, nunca un panel
- * opaco con borde (ver prototipos/kit-coder/fondo-app.html).
- */
-
-interface Chip { etiqueta: string; valor: string }
-interface Campo { etiqueta: string; tipo: "texto" | "area" }
-interface ItemLista { titulo: string; detalle: string; nota: string }
-interface Columna { id: string; titulo: string }
-interface FilaTabla { [columna: string]: string }
-interface PuntoGrafico { etiqueta: string; valor: number }
-interface EventoAgenda { fecha: string; hora: string; titulo: string; detalle: string }
-interface TarjetaKanban { id: string; titulo: string; detalle: string; columna: string }
-type Bloque =
-  | { tipo: "estadisticas"; chips: Chip[] }
-  | { tipo: "lista"; items: ItemLista[]; vacio: string }
-  | { tipo: "formulario"; boton_abrir: string; campos: Campo[] }
-  | { tipo: "texto"; texto: string }
-  | { tipo: "tabla"; columnas: Columna[]; filas: FilaTabla[]; vacio: string }
-  | { tipo: "grafico"; visualizacion: "barras" | "linea" | "anillo"; titulo: string; datos: PuntoGrafico[] }
-  | { tipo: "progreso"; etiqueta: string; valor: number; total: number; unidad: string }
-  | { tipo: "agenda"; eventos: EventoAgenda[]; vacio: string }
-  | { tipo: "kanban"; columnas: Columna[]; tarjetas: TarjetaKanban[] };
-interface Seccion { id: string; titulo: string; bloques: Bloque[] }
-export interface AppDatos {
-  titulo: string; personalidad: string; fondo3d: boolean;
-  navegacion: "lateral" | "superior"; secciones: Seccion[];
+function useAlmacen(app: AppDatos) {
+  const [estado, setEstado] = useState<EstadoCarga>(() => cargarAlmacen(app));
+  const actual = useRef(estado);
+  const reemplazar = useCallback((datos: AlmacenDatos) => {
+    const error = guardarAlmacen(app, datos);
+    const siguiente = { datos, error };
+    actual.current = siguiente;
+    setEstado(siguiente);
+    return error;
+  }, [app]);
+  const reemplazarModelo = useCallback((modeloId: string, registros: RegistroDatos[]) => {
+    return reemplazar({ ...actual.current.datos, [modeloId]: registros });
+  }, [reemplazar]);
+  return { datos: estado.datos, error: estado.error, reemplazar, reemplazarModelo };
 }
 
-function Estadisticas({ chips }: { chips: Chip[] }) {
-  return (
-    <div className="estadisticas">
-      {chips.map((c) => (
-        <div className="estadistica" key={c.etiqueta}>
-          <div className="etiqueta">{c.etiqueta}</div>
-          <div className="valor num">{c.valor}</div>
-        </div>
-      ))}
+function Estadisticas({ bloque, datos, idioma }: {
+  bloque: Extract<Bloque, { tipo: "estadisticas" }>;
+  datos: AlmacenDatos;
+  idioma: string;
+}) {
+  if (bloque.indicadores) {
+    return <div className="estadisticas" data-indicadores="calculados">{bloque.indicadores.map((indicador) => (
+      <div className="estadistica" key={indicador.etiqueta}>
+        <span className="etiqueta">{indicador.etiqueta}</span>
+        <strong className="valor num">
+          {formatearIndicador(indicador, calcular(indicador.calculo, datos), idioma)}
+        </strong>
+      </div>
+    ))}</div>;
+  }
+  return <div className="estadisticas" data-indicadores="estaticos">{(bloque.chips ?? []).map((chip) => (
+    <div className="estadistica" key={chip.etiqueta}>
+      <span className="etiqueta">{chip.etiqueta}</span>
+      <strong className="valor num">{chip.valor}</strong>
+    </div>
+  ))}</div>;
+}
+
+function Lista({ bloque, datos, modelos, idioma }: {
+  bloque: Extract<Bloque, { tipo: "lista" }>;
+  datos: AlmacenDatos;
+  modelos: Map<string, ModeloDatos>;
+  idioma: string;
+}) {
+  const modelo = bloque.modelo ? modelos.get(bloque.modelo) : undefined;
+  const items = modelo ? (datos[modelo.id] ?? []).map((registro) => ({
+    id: registro.id,
+    titulo: String(registro.valores[bloque.campo_titulo!] ?? ""),
+    detalle: bloque.campo_detalle
+      ? formatearCampo(modelo.campos.find((campo) => campo.id === bloque.campo_detalle)!, registro.valores[bloque.campo_detalle], idioma)
+      : "",
+    nota: bloque.campo_nota
+      ? formatearCampo(modelo.campos.find((campo) => campo.id === bloque.campo_nota)!, registro.valores[bloque.campo_nota], idioma)
+      : "",
+  })) : (bloque.items ?? []).map((item, indice) => ({ ...item, id: `estatico-${indice}` }));
+  if (!items.length) return <p className="vacio-tabla">{bloque.vacio}</p>;
+  return <ul className="lista">{items.map((item) => (
+    <li key={item.id}>
+      <span className="titulo-fila">{item.titulo || "—"}</span>
+      {item.nota && item.nota !== "—" && <span className="nota num">{item.nota}</span>}
+      {item.detalle && item.detalle !== "—" && <span className="detalle">{item.detalle}</span>}
+    </li>
+  ))}</ul>;
+}
+
+function Formulario({ bloque, modelo, onGuardar }: {
+  bloque: Extract<Bloque, { tipo: "formulario" }>;
+  modelo: ModeloDatos;
+  onGuardar: (valores: Record<string, string>) => string | null;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const campos = modelo.campos.filter((campo) => bloque.campos.includes(campo.id));
+  const cambiar = (id: string, valor: string) => {
+    setValores((previos) => ({ ...previos, [id]: valor }));
+    setError("");
+    setAviso("");
+  };
+  if (!abierto) return (
+    <div className="accion-formulario">
+      <button className="boton" onClick={() => { setAbierto(true); setAviso(""); }}>
+        <span aria-hidden="true">+</span>{bloque.boton_abrir}
+      </button>
+      {aviso && <span className="aviso-guardado" role="status">{aviso}</span>}
     </div>
   );
-}
-
-function Lista({ items, vacio }: { items: ItemLista[]; vacio: string }) {
-  if (!items.length) {
-    return (
-      <div className="vacio">
-        <p>{vacio}</p>
-      </div>
-    );
-  }
-  return (
-    <ul className="lista">
-      {items.map((it, i) => (
-        <li key={i}>
-          <span className="titulo-fila">{it.titulo}</span>
-          {it.nota && <span className="nota num">{it.nota}</span>}
-          {it.detalle && <span className="detalle">{it.detalle}</span>}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Formulario({ campos, botonAbrir, onEnviar }:
-  { campos: Campo[]; botonAbrir: string; onEnviar: (valores: string[]) => void }) {
-  const [abierto, setAbierto] = useState(false);
-  const [valores, setValores] = useState<string[]>(campos.map(() => ""));
-  if (!abierto) {
-    return (
-      <button className="boton" onClick={() => setAbierto(true)}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        {botonAbrir}
-      </button>
-    );
-  }
   return (
     <form
       className="formulario abierto"
-      onSubmit={(ev) => {
-        ev.preventDefault();
-        if (!valores[0]?.trim()) return;
-        onEnviar(valores);
-        setValores(campos.map(() => ""));
+      data-modelo={modelo.id}
+      onSubmit={(evento) => {
+        evento.preventDefault();
+        const fallo = onGuardar(valores);
+        if (fallo) {
+          setError(fallo);
+          return;
+        }
+        setValores({});
+        setError("");
+        setAviso("Registro guardado.");
         setAbierto(false);
       }}
     >
-      {campos.map((campo, i) =>
-        campo.tipo === "area" ? (
-          <textarea key={i} rows={2} placeholder={campo.etiqueta}
-            value={valores[i]} onChange={(ev) => setValores(v => v.map((x, j) => j === i ? ev.target.value : x))} />
-        ) : (
-          <input key={i} type="text" placeholder={campo.etiqueta} required={i === 0}
-            value={valores[i]} onChange={(ev) => setValores(v => v.map((x, j) => j === i ? ev.target.value : x))} />
-        )
-      )}
+      <div className="campos-formulario">
+        {campos.map((campo) => (
+          <label key={campo.id} className={campo.tipo === "area" ? "campo ancho" : "campo"}>
+            <span>{campo.etiqueta}</span>
+            <ControlCampo campo={campo} valor={valores[campo.id] ?? ""}
+              onChange={(valor) => cambiar(campo.id, valor)} />
+          </label>
+        ))}
+      </div>
+      {error && <p className="error-formulario" role="alert">{error}</p>}
       <div className="acciones">
-        <button type="button" className="boton fantasma" onClick={() => setAbierto(false)}>Cancelar</button>
-        <button type="submit" className="boton">Guardar</button>
+        <button type="button" className="boton fantasma" onClick={() => { setAbierto(false); setError(""); }}>
+          Cancelar
+        </button>
+        <button type="submit" className="boton">Guardar registro</button>
       </div>
     </form>
   );
 }
 
-function Tabla({ bloque, nombre }: { bloque: Extract<Bloque, { tipo: "tabla" }>; nombre: string }) {
-  if (!bloque.filas.length) return <p className="vacio-tabla">{bloque.vacio}</p>;
+function ControlCampo({ campo, valor, onChange }: {
+  campo: CampoModelo;
+  valor: string;
+  onChange: (valor: string) => void;
+}) {
+  if (campo.tipo === "area") {
+    return <textarea name={campo.id} rows={3} value={valor} maxLength={160}
+      required={campo.obligatorio} onChange={(evento) => onChange(evento.target.value)} />;
+  }
+  if (campo.tipo === "seleccion") {
+    return <select name={campo.id} value={valor} required={campo.obligatorio}
+      onChange={(evento) => onChange(evento.target.value)}>
+      <option value="">Elige una opción</option>
+      {campo.opciones?.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
+    </select>;
+  }
+  return <input name={campo.id} type={campo.tipo === "numero" ? "number" : campo.tipo === "fecha" ? "date" : "text"}
+    value={valor} maxLength={campo.tipo === "numero" || campo.tipo === "fecha" ? undefined : 160}
+    required={campo.obligatorio} min={campo.min} max={campo.max} step={campo.tipo === "numero" ? "any" : undefined}
+    onChange={(evento) => onChange(evento.target.value)} />;
+}
+
+function Tabla({ bloque, datos, modelos, idioma, nombre }: {
+  bloque: Extract<Bloque, { tipo: "tabla" }>;
+  datos: AlmacenDatos;
+  modelos: Map<string, ModeloDatos>;
+  idioma: string;
+  nombre: string;
+}) {
+  const modelo = bloque.modelo ? modelos.get(bloque.modelo) : undefined;
+  const registros = modelo ? datos[modelo.id] ?? [] : [];
+  const filas = modelo ? registros.map((registro) => bloque.columnas.map((columna) => {
+    const campo = modelo.campos.find((definicion) => definicion.id === columna.id)!;
+    return formatearCampo(campo, registro.valores[columna.id], idioma);
+  })) : (bloque.filas ?? []).map((fila) => bloque.columnas.map((columna) => fila[columna.id]));
+  if (!filas.length) return <p className="vacio-tabla">{bloque.vacio}</p>;
   return (
-    <div className="tabla-desbordable" role="region" aria-label={nombre} tabIndex={0}>
+    <div className="tabla-desbordable" role="region" aria-label={nombre} tabIndex={0} data-registros={filas.length}>
       <table>
-        <thead><tr>{bloque.columnas.map((c) => <th key={c.id} scope="col">{c.titulo}</th>)}</tr></thead>
-        <tbody>{bloque.filas.map((fila, i) => (
-          <tr key={i}>{bloque.columnas.map((c) => <td key={c.id}>{fila[c.id]}</td>)}</tr>
+        <thead><tr>{bloque.columnas.map((columna) => <th key={columna.id} scope="col">{columna.titulo}</th>)}</tr></thead>
+        <tbody>{filas.map((fila, indice) => (
+          <tr key={modelo ? registros[indice].id : indice}>
+            {fila.map((celda, columna) => <td key={bloque.columnas[columna].id}>{celda}</td>)}
+          </tr>
         ))}</tbody>
       </table>
     </div>
   );
 }
 
-function Grafico({ bloque }: { bloque: Extract<Bloque, { tipo: "grafico" }> }) {
-  const colores = ["var(--accent)", "var(--muted)", "var(--negativo)", "var(--fg)"];
-  const total = bloque.datos.reduce((suma, punto) => suma + punto.valor, 0);
+function Grafico({ bloque, datos }: { bloque: Extract<Bloque, { tipo: "grafico" }>; datos: AlmacenDatos }) {
+  const puntos = bloque.modelo ? serieGrafica(bloque, datos) : bloque.datos;
+  if (!puntos.length) return <p className="vacio-tabla">Aún no hay datos para el gráfico.</p>;
+  const colores = ["var(--accent)", "var(--fg)", "var(--muted)", "var(--negativo)"];
+  const total = puntos.reduce((suma, punto) => suma + punto.valor, 0);
   const circunferencia = 2 * Math.PI * 72;
   let acumulado = 0;
-  const minimo = Math.min(0, ...bloque.datos.map((p) => p.valor));
-  const maximo = Math.max(0, ...bloque.datos.map((p) => p.valor));
+  const minimo = Math.min(0, ...puntos.map((punto) => punto.valor));
+  const maximo = Math.max(0, ...puntos.map((punto) => punto.valor));
   const amplitud = maximo - minimo || 1;
   const y = (valor: number) => 190 - ((valor - minimo) / amplitud) * 145;
   const base = y(0);
-  const paso = 520 / bloque.datos.length;
-  const puntos = bloque.datos.map((punto, i) => ({
-    ...punto, x: 40 + paso * (i + 0.5), y: y(punto.valor),
+  const paso = 520 / puntos.length;
+  const trazados = puntos.map((punto, indice) => ({
+    ...punto, x: 40 + paso * (indice + 0.5), y: y(punto.valor),
   }));
-
   return (
     <figure className="grafico">
       {bloque.titulo && <figcaption>{bloque.titulo}</figcaption>}
       {bloque.visualizacion === "anillo" ? (
-        <div className="anillo-contenido">
+        total > 0 ? <div className="anillo-contenido">
           <svg viewBox="0 0 220 220" role="img" aria-label={bloque.titulo || "Gráfico de anillo"}>
             <circle cx="110" cy="110" r="72" fill="none" stroke="var(--line)" strokeWidth="28" />
-            {bloque.datos.map((punto, i) => {
+            {puntos.map((punto, indice) => {
               const longitud = (punto.valor / total) * circunferencia;
               const offset = acumulado;
               acumulado += longitud;
               return <circle key={punto.etiqueta} cx="110" cy="110" r="72" fill="none"
-                stroke={colores[i % colores.length]} strokeWidth="28"
+                stroke={colores[indice % colores.length]} strokeWidth="28"
                 strokeDasharray={`${longitud} ${circunferencia}`} strokeDashoffset={-offset}
                 transform="rotate(-90 110 110)" />;
             })}
           </svg>
-          <ul className="leyenda-grafico">{bloque.datos.map((p, i) => (
-            <li key={p.etiqueta}><span style={{ color: colores[i % colores.length] }}>●</span>
-              {p.etiqueta}<strong>{p.valor}</strong></li>
+          <ul className="leyenda-grafico">{puntos.map((punto, indice) => (
+            <li key={punto.etiqueta}><span style={{ color: colores[indice % colores.length] }}>●</span>
+              {punto.etiqueta}<strong>{punto.valor}</strong></li>
           ))}</ul>
-        </div>
+        </div> : <p className="vacio-tabla">Aún no hay valores para el gráfico.</p>
       ) : (
         <svg viewBox="0 0 600 250" role="img" aria-label={bloque.titulo || "Gráfico"}>
           <line x1="35" x2="565" y1={base} y2={base} className="eje-grafico" />
-          {bloque.visualizacion === "barras" ? puntos.map((p) => (
-            <g key={p.etiqueta}>
-              <rect x={p.x - Math.min(24, paso * 0.3)} y={Math.min(base, p.y)}
-                width={Math.min(48, paso * 0.6)} height={Math.max(1, Math.abs(base - p.y))}
+          {bloque.visualizacion === "barras" ? trazados.map((punto) => (
+            <g key={punto.etiqueta}>
+              <rect x={punto.x - Math.min(24, paso * 0.3)} y={Math.min(base, punto.y)}
+                width={Math.min(48, paso * 0.6)} height={Math.max(1, Math.abs(base - punto.y))}
                 rx="2" className="barra-grafico" />
-              <text x={p.x} y="225" textAnchor="middle">{p.etiqueta}</text>
-              <text x={p.x} y={Math.max(22, Math.min(base, p.y) - 7)} textAnchor="middle">{p.valor}</text>
+              <text x={punto.x} y="225" textAnchor="middle">{punto.etiqueta}</text>
+              <text x={punto.x} y={Math.max(22, Math.min(base, punto.y) - 7)} textAnchor="middle">{punto.valor}</text>
             </g>
           )) : (
             <>
-              <polyline points={puntos.map((p) => `${p.x},${p.y}`).join(" ")} className="linea-grafico" />
-              {puntos.map((p) => <g key={p.etiqueta}>
-                <circle cx={p.x} cy={p.y} r="4" className="punto-grafico" />
-                <text x={p.x} y="225" textAnchor="middle">{p.etiqueta}</text>
-                <text x={p.x} y={Math.max(22, p.y - 9)} textAnchor="middle">{p.valor}</text>
+              <polyline points={trazados.map((punto) => `${punto.x},${punto.y}`).join(" ")} className="linea-grafico" />
+              {trazados.map((punto) => <g key={punto.etiqueta}>
+                <circle cx={punto.x} cy={punto.y} r="4" className="punto-grafico" />
+                <text x={punto.x} y="225" textAnchor="middle">{punto.etiqueta}</text>
+                <text x={punto.x} y={Math.max(22, punto.y - 9)} textAnchor="middle">{punto.valor}</text>
               </g>)}
             </>
           )}
@@ -187,84 +261,133 @@ function Grafico({ bloque }: { bloque: Extract<Bloque, { tipo: "grafico" }> }) {
   );
 }
 
-function Progreso({ bloque }: { bloque: Extract<Bloque, { tipo: "progreso" }> }) {
+function Progreso({ bloque, datos }: { bloque: Extract<Bloque, { tipo: "progreso" }>; datos: AlmacenDatos }) {
+  const valor = bloque.calculo ? calcular(bloque.calculo, datos) : bloque.valor ?? 0;
+  const total = bloque.total_calculo ? calcular(bloque.total_calculo, datos) : bloque.total ?? 0;
+  const porcentaje = total > 0 ? Math.min(100, Math.max(0, valor / total * 100)) : 0;
   return (
     <div className="progreso">
-      <div><span>{bloque.etiqueta}</span><strong>{bloque.valor} / {bloque.total} {bloque.unidad}</strong></div>
-      <progress value={bloque.valor} max={bloque.total} aria-label={bloque.etiqueta} />
+      <div><span>{bloque.etiqueta}</span><strong>{valor} / {total} {bloque.unidad}</strong></div>
+      <progress value={porcentaje} max={100} aria-label={bloque.etiqueta} />
     </div>
   );
 }
 
-function Agenda({ bloque }: { bloque: Extract<Bloque, { tipo: "agenda" }> }) {
-  if (!bloque.eventos.length) return <p className="vacio-tabla">{bloque.vacio}</p>;
-  return <ol className="agenda">{bloque.eventos.map((evento, i) => (
-    <li key={`${evento.fecha}-${evento.hora}-${i}`}>
+function Agenda({ bloque, datos, modelos, idioma }: {
+  bloque: Extract<Bloque, { tipo: "agenda" }>;
+  datos: AlmacenDatos;
+  modelos: Map<string, ModeloDatos>;
+  idioma: string;
+}) {
+  const modelo = bloque.modelo ? modelos.get(bloque.modelo) : undefined;
+  const eventos = modelo ? (datos[modelo.id] ?? []).flatMap((registro) => {
+    const fecha = registro.valores[bloque.campo_fecha!];
+    if (typeof fecha !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return [];
+    const campoHora = modelo.campos.find((campo) => campo.id === bloque.campo_hora);
+    const campoDetalle = modelo.campos.find((campo) => campo.id === bloque.campo_detalle);
+    return [{
+      id: registro.id,
+      fecha,
+      hora: campoHora ? String(registro.valores[campoHora.id] ?? "") : "",
+      titulo: String(registro.valores[bloque.campo_titulo!] ?? ""),
+      detalle: campoDetalle ? formatearCampo(campoDetalle, registro.valores[campoDetalle.id], idioma) : "",
+    }];
+  }).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora))
+    : (bloque.eventos ?? []).map((evento, indice) => ({ ...evento, id: `estatico-${indice}` }));
+  if (!eventos.length) return <p className="vacio-tabla">{bloque.vacio}</p>;
+  return <ol className="agenda">{eventos.map((evento) => (
+    <li key={evento.id}>
       <time dateTime={`${evento.fecha}${evento.hora ? `T${evento.hora}` : ""}`}>
         {evento.fecha}{evento.hora && ` · ${evento.hora}`}
       </time>
       <span className="titulo-fila">{evento.titulo}</span>
-      {evento.detalle && <span className="detalle">{evento.detalle}</span>}
+      {evento.detalle && evento.detalle !== "—" && <span className="detalle">{evento.detalle}</span>}
     </li>
   ))}</ol>;
 }
 
-function Tablero({ bloque }: { bloque: Extract<Bloque, { tipo: "kanban" }> }) {
-  const [tarjetas, setTarjetas] = useState(bloque.tarjetas);
+function Tablero({ bloque, datos, modelos, idioma, onMover }: {
+  bloque: Extract<Bloque, { tipo: "kanban" }>;
+  datos: AlmacenDatos;
+  modelos: Map<string, ModeloDatos>;
+  idioma: string;
+  onMover: (registroId: string, columna: string) => void;
+}) {
+  const modelo = bloque.modelo ? modelos.get(bloque.modelo) : undefined;
+  const tarjetas = modelo ? (datos[modelo.id] ?? []).map((registro) => ({
+    id: registro.id,
+    titulo: String(registro.valores[bloque.campo_titulo!] ?? ""),
+    detalle: bloque.campo_detalle
+      ? formatearCampo(modelo.campos.find((campo) => campo.id === bloque.campo_detalle)!, registro.valores[bloque.campo_detalle], idioma)
+      : "",
+    columna: String(registro.valores[bloque.campo_columna!] ?? ""),
+  })) : bloque.tarjetas;
   return <div className="kanban">{bloque.columnas.map((columna) => (
     <section className="columna-kanban" key={columna.id}>
-      <h2>{columna.titulo}</h2>
-      <ul>{tarjetas.filter((t) => t.columna === columna.id).map((tarjeta) => (
+      <h2><span>{columna.titulo}</span><strong className="num">
+        {tarjetas.filter((tarjeta) => tarjeta.columna === (columna.valor ?? columna.id)).length}
+      </strong></h2>
+      <ul>{tarjetas.filter((tarjeta) => tarjeta.columna === (columna.valor ?? columna.id)).map((tarjeta) => (
         <li key={tarjeta.id}>
           <span className="titulo-fila">{tarjeta.titulo}</span>
-          {tarjeta.detalle && <span className="detalle">{tarjeta.detalle}</span>}
-          <label className="mover-kanban">Mover a
-            <select value={tarjeta.columna} aria-label={`Mover ${tarjeta.titulo}`} onChange={(ev) =>
-              setTarjetas((previas) => previas.map((t) => t.id === tarjeta.id
-                ? { ...t, columna: ev.target.value } : t))}>
-              {bloque.columnas.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.titulo}</option>)}
+          {tarjeta.detalle && tarjeta.detalle !== "—" && <span className="detalle">{tarjeta.detalle}</span>}
+          {modelo ? <label className="mover-kanban">Estado
+            <select value={tarjeta.columna} aria-label={`Estado de ${tarjeta.titulo}`}
+              onChange={(evento) => onMover(tarjeta.id, evento.target.value)}>
+              {bloque.columnas.map((opcion) => <option key={opcion.id} value={opcion.valor ?? opcion.id}>
+                {opcion.titulo}
+              </option>)}
             </select>
-          </label>
+          </label> : <span className="estado-fijo">{columna.titulo}</span>}
         </li>
       ))}</ul>
     </section>
   ))}</div>;
 }
 
-function Pantalla({ seccion }: { seccion: Seccion }) {
-  const indiceLista = seccion.bloques.findIndex((b) => b.tipo === "lista");
-  const [items, setItems] = useState<ItemLista[]>(
-    indiceLista >= 0 ? (seccion.bloques[indiceLista] as { items: ItemLista[] }).items : []);
-
+function Pantalla({ app, seccion, datos, reemplazar, reemplazarModelo }: {
+  app: AppDatos;
+  seccion: Seccion;
+  datos: AlmacenDatos;
+  reemplazar: (datos: AlmacenDatos) => void;
+  reemplazarModelo: (modeloId: string, registros: RegistroDatos[]) => string;
+}) {
+  const modelos = new Map(app.modelos.map((modelo) => [modelo.id, modelo]));
+  const lista = seccion.bloques.find((bloque) => bloque.tipo === "lista" && bloque.modelo);
+  const cuenta = lista?.tipo === "lista" && lista.modelo ? datos[lista.modelo]?.length ?? 0 : null;
   return (
     <main className="contenido" data-pantalla={seccion.id}>
       <div className="fila-titulo">
-        <h1>{seccion.titulo}</h1>
-        {indiceLista >= 0 && <span className="cuenta num">{items.length}</span>}
+        <div><span className="seccion-indice">{String(app.secciones.indexOf(seccion) + 1).padStart(2, "0")}</span>
+          <h1>{seccion.titulo}</h1></div>
+        {cuenta !== null && <span className="cuenta num">{cuenta} registros</span>}
       </div>
-      {seccion.bloques.map((b, i) => {
-        const contenido = (() => {
-        if (b.tipo === "estadisticas") return <Estadisticas key={i} chips={b.chips} />;
-        if (b.tipo === "texto") return <p key={i} className="texto-libre">{b.texto}</p>;
-        if (b.tipo === "lista") return <Lista key={i} items={items} vacio={b.vacio} />;
-        if (b.tipo === "formulario")
-          return (
-            <Formulario key={i} campos={b.campos} botonAbrir={b.boton_abrir}
-              onEnviar={(valores) => setItems((prev) => [
-                { titulo: valores[0], detalle: valores.slice(1).join(" · "), nota: "Ahora" }, ...prev,
-              ])}
-            />
-          );
-        if (b.tipo === "tabla") return <Tabla key={i} bloque={b} nombre={seccion.titulo} />;
-        if (b.tipo === "grafico") return <Grafico key={i} bloque={b} />;
-        if (b.tipo === "progreso") return <Progreso key={i} bloque={b} />;
-        if (b.tipo === "agenda") return <Agenda key={i} bloque={b} />;
-        if (b.tipo === "kanban") return <Tablero key={i} bloque={b} />;
-        return null;
-        })();
-        return <div key={i} className="bloque-app" data-bloque={`${seccion.id}-${i}`}>
-          {contenido}
-        </div>;
+      {seccion.bloques.map((bloque, indice) => {
+        const modelo = "modelo" in bloque && bloque.modelo ? modelos.get(bloque.modelo) : undefined;
+        let contenido;
+        if (bloque.tipo === "estadisticas") contenido = <Estadisticas bloque={bloque} datos={datos} idioma={app.idioma} />;
+        else if (bloque.tipo === "texto") contenido = <p className="texto-libre">{bloque.texto}</p>;
+        else if (bloque.tipo === "lista") contenido = <Lista bloque={bloque} datos={datos} modelos={modelos} idioma={app.idioma} />;
+        else if (bloque.tipo === "formulario" && modelo) contenido = <Formulario bloque={bloque} modelo={modelo}
+          onGuardar={(valores) => {
+            const error = validarValores(modelo, valores);
+            if (error) return error;
+            try {
+              return reemplazarModelo(modelo.id, agregarRegistro(datos, modelo, valores));
+            } catch (fallo) {
+              return fallo instanceof Error ? fallo.message : "No se pudo guardar el registro.";
+            }
+          }} />;
+        else if (bloque.tipo === "tabla") contenido = <Tabla bloque={bloque} datos={datos} modelos={modelos} idioma={app.idioma} nombre={seccion.titulo} />;
+        else if (bloque.tipo === "grafico") contenido = <Grafico bloque={bloque} datos={datos} />;
+        else if (bloque.tipo === "progreso") contenido = <Progreso bloque={bloque} datos={datos} />;
+        else if (bloque.tipo === "agenda") contenido = <Agenda bloque={bloque} datos={datos} modelos={modelos} idioma={app.idioma} />;
+        else if (bloque.tipo === "kanban") contenido = <Tablero bloque={bloque} datos={datos} modelos={modelos} idioma={app.idioma}
+          onMover={(registroId, columna) => {
+            if (modelo) reemplazar(moverRegistro(datos, modelo.id, registroId, bloque.campo_columna!, columna));
+          }} />;
+        return <div key={indice} className={`bloque-app bloque-${bloque.tipo}`}
+          data-bloque={`${seccion.id}-${indice}`} data-tipo={bloque.tipo}>{contenido}</div>;
       })}
     </main>
   );
@@ -272,30 +395,45 @@ function Pantalla({ seccion }: { seccion: Seccion }) {
 
 export default function Cascaron({ app }: { app: AppDatos }) {
   const [activa, setActiva] = useState(app.secciones[0]?.id);
-  const seccion = app.secciones.find((s) => s.id === activa) ?? app.secciones[0];
+  const { datos, error, reemplazar, reemplazarModelo } = useAlmacen(app);
+  const seccion = app.secciones.find((pantalla) => pantalla.id === activa) ?? app.secciones[0];
   const lateral = app.navegacion === "lateral";
-
-  const nav = app.secciones.map((s) => (
-    <a key={s.id} href="#" aria-current={s.id === seccion?.id ? "page" : undefined}
-      onClick={(ev) => { ev.preventDefault(); setActiva(s.id); }}>
-      {s.titulo}
+  const paleta = app.direccion_visual.paleta;
+  const estilo = {
+    "--fondo": paleta.fondo,
+    "--fg": paleta.texto,
+    "--muted": paleta.muted,
+    "--line": paleta.linea,
+    "--accent": paleta.acento,
+    "--accent-fg": paleta.acento_fg,
+    "--negativo": paleta.negativo,
+    "--radio": app.direccion_visual.forma === "angular" ? "2px" : "10px",
+    "--espacio-bloque": app.direccion_visual.densidad === "compacta" ? "14px"
+      : app.direccion_visual.densidad === "amplia" ? "30px" : "22px",
+  } as CSSProperties;
+  const nav = app.secciones.map((pantalla, indice) => (
+    <a key={pantalla.id} href="#" aria-current={pantalla.id === seccion?.id ? "page" : undefined}
+      onClick={(evento) => { evento.preventDefault(); setActiva(pantalla.id); }}>
+      <span className="nav-indice num">{String(indice + 1).padStart(2, "0")}</span>{pantalla.titulo}
     </a>
   ));
-
   return (
-    <div className="ventana" data-nav={app.navegacion}>
-      <header className="cabecera">
-        <div className="marca">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
-          {app.titulo}
+    <div className="raiz-app" data-nav={app.navegacion} data-cabecera={app.direccion_visual.cabecera}
+      data-forma={app.direccion_visual.forma} data-densidad={app.direccion_visual.densidad} style={estilo}>
+      <div className="ventana">
+        <header className="cabecera">
+          <div className="marca">
+            <span className="monograma" aria-hidden="true">{app.titulo.trim().charAt(0).toUpperCase()}</span>
+            <div><strong>{app.titulo}</strong><span>{app.descripcion}</span></div>
+          </div>
+          {!lateral && <nav className="secciones-top" aria-label="Secciones">{nav}</nav>}
+        </header>
+        {error && <div className="aviso-datos" role="alert">{error}</div>}
+        <div className="cuerpo">
+          {lateral && <nav className="lateral" aria-label="Secciones">{nav}</nav>}
+          {seccion && <Pantalla key={seccion.id} app={app} seccion={seccion} datos={datos}
+            reemplazar={reemplazar} reemplazarModelo={reemplazarModelo} />}
         </div>
-        {!lateral && <nav className="secciones-top" aria-label="Secciones">{nav}</nav>}
-      </header>
-      <div className="cuerpo">
-        {lateral && <nav className="lateral" aria-label="Secciones">{nav}</nav>}
-        {seccion && <Pantalla seccion={seccion} />}
       </div>
     </div>
   );

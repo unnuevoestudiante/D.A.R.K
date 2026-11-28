@@ -89,8 +89,17 @@ _MAX_TOKENS_POR_LENGUAJE = {
 # a subprocess: el proyecto solo se instala después de la confirmación humana.
 _COMANDOS_NPM_PERMITIDOS = {
     "instalar": ("install", "--ignore-scripts", "--no-audit", "--no-fund"),
+    "probar": ("run", "test"),
     "compilar": ("run", "build"),
 }
+_ARCHIVOS_APP_GENERADOS = (
+    "src/app.json", "src/main.tsx", "src/App.tsx",
+    "src/kit/Cascaron.tsx", "src/kit/Cascaron.css", "src/kit/tokens.css",
+    "src/kit/fuentes.css", "src/kit/Fondo.tsx", "src/kit/Fondo.css",
+    "src/kit/datos.ts", "tests/datos.test.ts",
+)
+# El modelo no puede editar archivos que después se ejecutan como pruebas.
+_ARCHIVOS_APP_NO_EDITABLES = {"src/kit/datos.ts", "tests/datos.test.ts"}
 _PRESUPUESTO_BUILD_MINIMO_MB = 2048
 
 _RUTAS_BLOQUEADAS = (
@@ -1200,21 +1209,30 @@ Que esta web no se parezca a ninguna otra: elige variantes, ambiente y recorrido
 # hecho a mano) la convierte en la app real. Apartarse del kit vive en estas
 # decisiones (fondo3d: false, otra navegación, otros bloques), no en código libre.
 _SYSTEM_APP = (
-    "Eres el arquitecto de las apps de D.A.R.K.: decides qué pantallas tiene la app "
-    "y qué bloques lleva cada una. No escribes código; el kit ya sabe dibujar cada "
-    "bloque, tú solo eliges cuáles y con qué contenido.\n"
+    "Eres el arquitecto de las apps de D.A.R.K.: decides pantallas, modelos de datos, "
+    "bloques y dirección visual. No escribes código; el kit convierte tu JSON en una "
+    "app real y persistente.\n"
     "Piensas así:\n"
-    "1. De 1 a 8 pantallas, una por cada función real que pida el plan. El título de "
-    "cada pantalla es corto y concreto (el nombre de esa sección, no una frase).\n"
-    "2. Cada pantalla tiene de 1 a 6 bloques, en el orden en que se leen. Compón con lo "
-    "que hay: estadísticas arriba si hay números que resumir, luego la lista o el "
-    "formulario, texto libre para lo que no es una lista.\n"
-    "3. El plan ya trae una propuesta de personalidad, navegación y fondo 3D (si la "
-    "dio Tareas); síguela salvo que algo concreto del propio plan la contradiga "
-    "— en ese caso, lo que pide el plan manda, no la propuesta.\n"
-    "4. Los datos de ejemplo de listas y estadísticas deben sonar reales para el tema "
-    "del plan (nombres, cifras, fechas creíbles), nunca «Lorem», «Item 1» ni relleno.\n"
-    "5. Todo el texto en el idioma del plan (español si no dice otro).\n"
+    "1. De 1 a 8 pantallas, una por cada función real del plan. Cada pantalla lleva de "
+    "1 a 6 bloques en el orden en que se leen.\n"
+    "2. No inventes ningún dato operativo: saldos, ingresos, gastos, inversiones, "
+    "proyectos, registros, fechas, precios, totales ni cifras de ejemplo. Los modelos "
+    "empiezan con «registros»: []. Solo incluyes un registro inicial si el plan aprobado "
+    "lo da explícitamente; entonces usas {\"origen\":\"plan\",\"valores\":{...}} con sus "
+    "valores exactos. Nunca completes lo que el plan no dijo.\n"
+    "3. Toda función con datos usa un modelo persistente. Un formulario apunta al modelo "
+    "y guarda registros; listas, tablas, estadísticas, gráficos, progreso, agenda y "
+    "kanban leen ese mismo modelo. Las cifras se derivan con «calculo», no se escriben "
+    "a mano. No entregues controles decorativos ni datos estáticos que parezcan reales.\n"
+    "4. El contenido estático solo puede usarse para información que el plan aprueba. "
+    "Todo bloque estático, incluido «texto», exige «origen»: \"plan\"; sus datos y cifras "
+    "deben aparecer en el plan. Si no están, deja el bloque vacío o conecta un modelo.\n"
+    "5. Dirige la identidad visual del proyecto con densidad, composición de cabecera, "
+    "forma y una paleta de cuatro colores con un propósito. No te limites a repetir la "
+    "propuesta genérica de Tareas ni uses tarjetas redondeadas por todas partes. Evita "
+    "degradados morados, emojis, sombras y frases de bienvenida o relleno.\n"
+    "6. Respeta personalidad, navegación y fondo 3D del plan salvo contradicción "
+    "concreta. Todo el texto va en el idioma del plan, español si no dice otro.\n"
     "Respondes SOLO con JSON válido, sin texto antes ni después."
 )
 
@@ -1243,51 +1261,64 @@ _FORMA_APP = """{
   "personalidad": "tecnica | sobria | calida",
   "navegacion": "lateral | superior",
   "fondo3d": true,
-  "secciones": [
-    {"id": "slug-corto", "titulo": "título de la pantalla",
-     "bloques": [
-       {"tipo": "estadisticas", "chips": [{"etiqueta": "...", "valor": "..."}]},
-       {"tipo": "lista", "vacio": "qué decir si no hay nada",
-        "items": [{"titulo": "...", "detalle": "...", "nota": "fecha o cifra corta"}]},
-       {"tipo": "formulario", "boton_abrir": "texto del botón que abre el formulario",
-        "campos": [{"etiqueta": "...", "tipo": "texto | area"}]},
-       {"tipo": "texto", "texto": "dos o tres frases"},
-       {"tipo": "tabla", "columnas": [{"id": "fecha", "titulo": "Fecha"},
-        {"id": "tarea", "titulo": "Tarea"}],
-        "filas": [{"fecha": "27 nov", "tarea": "Enviar informe"}],
-        "vacio": "Todavía no hay filas."},
-       {"tipo": "grafico", "visualizacion": "barras | linea | anillo",
-        "titulo": "Gasto mensual", "datos": [{"etiqueta": "Enero", "valor": 120},
-        {"etiqueta": "Febrero", "valor": 95}]},
-       {"tipo": "progreso", "etiqueta": "Lectura", "valor": 32,
-        "total": 50, "unidad": "páginas"},
-       {"tipo": "agenda", "eventos": [{"fecha": "2026-11-27", "hora": "15:30",
-        "titulo": "Revisión", "detalle": "Presentar el borrador"}],
-        "vacio": "No hay eventos programados."},
-       {"tipo": "kanban", "columnas": [{"id": "pendiente", "titulo": "Pendiente"},
-        {"id": "hecho", "titulo": "Hecho"}],
-        "tarjetas": [{"id": "t1", "titulo": "Preparar borrador",
-        "detalle": "", "columna": "pendiente"}]}
-     ]}
-  ]
+  "persistencia": true,
+  "clave_almacenamiento": "slug_unico_de_la_app",
+  "direccion_visual": {
+    "densidad": "compacta | equilibrada | amplia",
+    "cabecera": "marca | centro | division",
+    "forma": "angular | suave",
+    "paleta": {"fondo": "#rrggbb", "texto": "#rrggbb", "acento": "#rrggbb", "linea": "#rrggbb"}
+  },
+  "modelos": [{
+    "id": "slug-del-modelo", "titulo": "nombre visible", "registros": [],
+    "campos": [
+      {"id": "proyecto", "etiqueta": "Proyecto", "tipo": "texto", "obligatorio": true},
+      {"id": "monto", "etiqueta": "Monto", "tipo": "numero", "obligatorio": true, "min": 0},
+      {"id": "fecha", "etiqueta": "Fecha", "tipo": "fecha", "obligatorio": true}
+    ]
+  }],
+  "secciones": [{
+    "id": "slug-corto", "titulo": "título de la pantalla",
+    "bloques": [
+      {"tipo": "estadisticas", "indicadores": [
+        {"etiqueta": "Total", "formato": "moneda", "moneda": "COP",
+         "calculo": {"operacion": "suma", "modelo": "slug-del-modelo", "campo": "monto"}},
+        {"etiqueta": "Registros", "formato": "numero",
+         "calculo": {"operacion": "conteo", "modelo": "slug-del-modelo"}}
+      ]},
+      {"tipo": "formulario", "modelo": "slug-del-modelo", "boton_abrir": "Nuevo registro"},
+      {"tipo": "lista", "modelo": "slug-del-modelo", "campo_titulo": "proyecto",
+       "campo_detalle": "monto", "campo_nota": "fecha", "vacio": "Todavía no hay registros."},
+      {"tipo": "tabla", "modelo": "slug-del-modelo", "columnas": [
+        {"id": "proyecto", "titulo": "Proyecto"}, {"id": "monto", "titulo": "Monto"},
+        {"id": "fecha", "titulo": "Fecha"}], "vacio": "Todavía no hay filas."},
+      {"tipo": "grafico", "visualizacion": "linea", "titulo": "Evolución",
+       "modelo": "slug-del-modelo", "eje_x": "fecha", "agrupacion": "mes", "acumulado": true,
+       "calculo": {"operacion": "suma", "campo": "monto"}},
+      {"tipo": "texto", "origen": "plan", "texto": "Información concreta y aprobada por el plan."}
+    ]
+  }]
 }
-Catálogo de bloques (elige los que pida cada pantalla, en el orden en que se leen):
-- estadisticas: hasta 4 chips con un número o cifra corta. Para resumir de un vistazo.
-- lista: filas de ejemplo con datos reales del tema; «vacio» es lo que se lee sin filas.
-- formulario: un botón que abre campos para añadir una fila a la lista de la misma pantalla.
-- texto: dos o tres frases, para lo que no es una lista ni un número.
-- tabla: de 2 a 6 columnas y hasta 20 filas; cada fila usa exactamente los id de sus columnas.
-  El «id» de cada columna es una clave técnica interna: un slug único en minúsculas,
-  sin espacios ni mayúsculas. El id de un registro es un valor de celda y puede ser
-  numérico; no cambies el id técnico de la columna cuando el plan pida cambiar el
-  tipo del id del registro.
-- grafico: barras, línea o anillo; de 2 a 12 etiquetas con valores numéricos finitos.
-- progreso: avance numérico entre cero y su total, que debe ser mayor que cero.
-- agenda: hasta 20 eventos con fecha real AAAA-MM-DD y hora opcional HH:MM.
-- kanban: de 2 a 4 columnas y hasta 30 tarjetas, cada una asociada a una columna existente.
-  Se puede cambiar de columna mientras la app está abierta; el cambio vive en memoria.
-Navegación: superior si son pocas pantallas, lateral si son muchas (el kit decide el corte si no estás seguro).
-Fondo 3D: una app seria o muy densa en datos puede no llevarlo (fondo3d: false); por defecto sí."""
+Catálogo de bloques:
+- estadisticas: hasta 4 «indicadores» calculados. formato: numero, moneda o porcentaje.
+- lista: modelo y campos campo_titulo, campo_detalle y campo_nota. Lee registros reales.
+- formulario: modelo y boton_abrir; «campos» opcional es una lista de ids del modelo.
+- texto: contenido informativo aprobado; exige «origen»: "plan" y ninguna cifra ajena al plan.
+- tabla: modelo y de 1 a 6 columnas. El «id» de cada columna es una clave técnica interna:
+  un slug único en minúsculas, sin espacios ni mayúsculas. El id de un registro es un valor de celda y puede ser
+  numérico; no cambies el id técnico de la columna cuando
+  el plan pida cambiar el tipo del id del registro.
+- grafico: modelo, eje_x de tipo fecha, agrupacion dia/mes/anio, acumulado y calculo.
+- progreso: modelo, etiqueta, calculo y total_calculo; unidad es opcional.
+- agenda: modelo, campo_titulo, campo_fecha y opcionales campo_hora/campo_detalle.
+- kanban: modelo, campo_titulo, campo_columna de tipo seleccion y campo_detalle opcional;
+  cada columna lleva id, titulo y valor exacto de una opción del modelo.
+Campos: texto, area, numero, fecha o seleccion. operacion: suma, conteo, promedio,
+minimo o maximo. Los ids de modelos y campos son slugs únicos en minúsculas.
+Un bloque operativo estático usa chips/items/filas/datos/eventos/tarjetas con
+«origen»: \"plan\"; sus valores tienen que estar en el plan. No los uses para rellenar.
+Navegación: superior si son pocas pantallas, lateral si son muchas. Fondo 3D: puede
+apagarse en una app seria o densa, pero no sustituye la identidad visual del proyecto."""
 
 
 class EspecialistaCodigo:
@@ -2455,36 +2486,70 @@ class EspecialistaCodigo:
             .encode("ascii", "ignore").decode().lower()).strip()
 
     @staticmethod
-    def _nombres_bloque_app(bloque):
+    def _nombres_bloque_app(bloque, modelos=None):
         """Nombres visibles por los que una persona puede identificar el bloque."""
         tipo = bloque.get("tipo", "")
-        nombres = []
+        modelo = (modelos or {}).get(bloque.get("modelo"), {})
+        campos = {c["id"]: c.get("etiqueta", "") for c in modelo.get("campos", [])}
+        nombres = [modelo.get("titulo", "")] if modelo else []
+
+        def nombre_campo(identificador):
+            return campos.get(identificador, "")
+
+        def nombres_registros(ids):
+            for registro in modelo.get("registros", []):
+                for identificador in ids:
+                    valor = registro.get("valores", {}).get(identificador)
+                    if isinstance(valor, str) and valor.strip():
+                        nombres.append(valor)
+
         if tipo == "estadisticas":
-            nombres.extend(c.get("etiqueta", "") for c in bloque.get("chips", []))
+            nombres.extend(c.get("etiqueta", "") for c in (bloque.get("indicadores") or bloque.get("chips", [])))
         elif tipo == "lista":
-            nombres.extend(i.get("titulo", "") for i in bloque.get("items", []))
+            if modelo:
+                ids = [bloque.get("campo_titulo"), bloque.get("campo_detalle"), bloque.get("campo_nota")]
+                nombres.extend(nombre_campo(identificador) for identificador in ids)
+                nombres_registros(ids)
+            else:
+                nombres.extend(i.get("titulo", "") for i in bloque.get("items", []))
         elif tipo == "formulario":
             nombres.append(bloque.get("boton_abrir", ""))
-            nombres.extend(c.get("etiqueta", "") for c in bloque.get("campos", []))
+            nombres.extend(nombre_campo(identificador) for identificador in bloque.get("campos", []))
         elif tipo == "texto":
             nombres.append(str(bloque.get("texto", ""))[:72])
         elif tipo == "tabla":
             nombres.extend(c.get("titulo", "") for c in bloque.get("columnas", []))
         elif tipo == "grafico":
             nombres.append(bloque.get("titulo", ""))
-            nombres.extend(d.get("etiqueta", "") for d in bloque.get("datos", []))
+            if modelo:
+                nombres.append(nombre_campo(bloque.get("eje_x")))
+                nombres.append(nombre_campo(bloque.get("calculo", {}).get("campo")))
+            else:
+                nombres.extend(d.get("etiqueta", "") for d in bloque.get("datos", []))
         elif tipo == "progreso":
             nombres.append(bloque.get("etiqueta", ""))
         elif tipo == "agenda":
-            nombres.extend(e.get("titulo", "") for e in bloque.get("eventos", []))
+            if modelo:
+                ids = [bloque.get("campo_titulo"), bloque.get("campo_fecha"),
+                       bloque.get("campo_hora"), bloque.get("campo_detalle")]
+                nombres.extend(nombre_campo(identificador) for identificador in ids)
+                nombres_registros([bloque.get("campo_titulo")])
+            else:
+                nombres.extend(e.get("titulo", "") for e in bloque.get("eventos", []))
         elif tipo == "kanban":
             nombres.extend(c.get("titulo", "") for c in bloque.get("columnas", []))
-            nombres.extend(t.get("titulo", "") for t in bloque.get("tarjetas", []))
+            if modelo:
+                ids = [bloque.get("campo_titulo"), bloque.get("campo_columna"), bloque.get("campo_detalle")]
+                nombres.extend(nombre_campo(identificador) for identificador in ids)
+                nombres_registros([bloque.get("campo_titulo")])
+            else:
+                nombres.extend(t.get("titulo", "") for t in bloque.get("tarjetas", []))
         return list(dict.fromkeys(n.strip() for n in nombres if isinstance(n, str) and n.strip()))
 
     @classmethod
     def _mapa_app(cls, app):
         pantallas, piezas = [], []
+        modelos = {modelo["id"]: modelo for modelo in app.get("modelos", [])}
         for indice, seccion in enumerate(app.get("secciones", [])):
             pantalla = {
                 "id": seccion["id"], "nombre": seccion["titulo"],
@@ -2495,7 +2560,7 @@ class EspecialistaCodigo:
             }
             pantallas.append(pantalla)
             for orden, bloque in enumerate(seccion.get("bloques", [])):
-                nombres = cls._nombres_bloque_app(bloque)
+                nombres = cls._nombres_bloque_app(bloque, modelos)
                 piezas.append({
                     "id": f"{seccion['id']}:bloque:{orden}",
                     "nombre": nombres[0] if nombres else f"{bloque['tipo']} {orden + 1}",
@@ -2509,8 +2574,8 @@ class EspecialistaCodigo:
                     "archivo_estilos": "src/kit/Cascaron.css",
                 })
         return {"version": 1, "pantallas": pantallas, "piezas": piezas,
-                "archivos": ["src/app.json", "src/App.tsx", "src/kit/Cascaron.tsx",
-                             "src/kit/Cascaron.css", "src/kit/tokens.css"]}
+                "archivos": [r for r in _ARCHIVOS_APP_GENERADOS
+                             if r not in _ARCHIVOS_APP_NO_EDITABLES]}
 
     @staticmethod
     def _mapa_mundo(mundo):
@@ -2704,7 +2769,7 @@ class EspecialistaCodigo:
                     else destino.get("archivo")) or destino.get("archivo")
         if not isinstance(relativo, str):
             return None, None
-        relativo = relativo.replace("\\", "/").lstrip("./")
+        relativo = relativo.replace("\\", "/")
         extension = os.path.splitext(relativo)[1].lower()
         if (os.path.isabs(relativo) or relativo.startswith("/") or ".." in relativo.split("/")
                 or "node_modules" in relativo.lower().split("/")
@@ -2712,6 +2777,9 @@ class EspecialistaCodigo:
                     "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"}
                 or extension not in {".html", ".htm", ".css", ".js", ".jsx", ".ts", ".tsx",
                                      ".py", ".json", ".md", ".svg"}):
+            return None, None
+        relativo = os.path.normpath(relativo).replace("\\", "/")
+        if relativo.lower() in _ARCHIVOS_APP_NO_EDITABLES:
             return None, None
         absoluto = os.path.abspath(os.path.join(carpeta, relativo))
         try:
@@ -2830,7 +2898,20 @@ class EspecialistaCodigo:
 
         nuevo = contenido.replace(buscar, reemplazar, 1)
         if relativo == "src/app.json":
-            normalizado, errores_app = validar_app(self._leer_json_incrustado(nuevo))
+            plan_texto = None
+            try:
+                with open(estado.get("especificacion"), "r", encoding="utf-8") as fuente:
+                    candidato = fuente.read()
+                if re.match(r"^\s*#\s*especificaci[oó]n\s*:", candidato, re.IGNORECASE):
+                    plan_texto = candidato
+            except (OSError, TypeError):
+                pass
+            if not plan_texto:
+                self._registrar_busqueda_edicion(estado, pedido, destino, "plan_no_encontrado")
+                self._escribir_json_atomico(manifiesto, estado)
+                return ("No encontré el plan aprobado de esta app. "
+                        "No he modificado el proyecto para no introducir datos sin procedencia.")
+            normalizado, errores_app = validar_app(self._leer_json_incrustado(nuevo), plan_texto=plan_texto)
             if errores_app:
                 self._registrar_busqueda_edicion(estado, pedido, destino, "app_json_invalido")
                 self._escribir_json_atomico(manifiesto, estado)
@@ -2846,8 +2927,12 @@ class EspecialistaCodigo:
         revision = None
         if estado.get("tipo") == "app_react":
             puede, motivo = self._presupuesto_para_build()
-            compilacion = (self._comando_npm(carpeta, "compilar", 240) if puede
-                           else {"ok": False, "error": motivo})
+            prueba_datos = (self._comando_npm(carpeta, "probar", 120) if puede
+                            else {"ok": False, "error": motivo})
+            compilacion = (self._comando_npm(carpeta, "compilar", 240)
+                           if prueba_datos["ok"] else
+                           {"ok": False, "error": "fallaron las pruebas del motor de datos: "
+                            + prueba_datos["error"]})
             if not compilacion["ok"]:
                 shutil.copy2(respaldo, ruta)
                 try:
@@ -3790,7 +3875,14 @@ class EspecialistaCodigo:
     def _firma_variedad_app(app):
         """La combinación de decisiones visuales que ya permite el kit de apps."""
         fondo = "con 3D" if app.get("fondo3d") else "sin 3D"
-        return f"{app['personalidad']}:{app['navegacion']}:{fondo}"
+        direccion = app.get("direccion_visual", {})
+        paleta = direccion.get("paleta", {})
+        return ":".join([
+            app["personalidad"], app["navegacion"], fondo,
+            direccion.get("densidad", "equilibrada"), direccion.get("cabecera", "division"),
+            direccion.get("forma", "suave"), paleta.get("fondo", ""), paleta.get("texto", ""),
+            paleta.get("acento", ""), paleta.get("linea", ""),
+        ])
 
     def _anotar_variedad_app(self, huella, app):
         """Guarda la presentación elegida; una regeneración sustituye la firma anterior."""
@@ -4179,7 +4271,7 @@ class EspecialistaCodigo:
                 print(f"[Código] app de React: el modelo no respondió ({texto})")
                 return None, (texto,)
             datos = self._leer_json_incrustado(texto)
-            app, errores = validar_app(datos)
+            app, errores = validar_app(datos, plan_texto=plan)
             if not errores:
                 return app, ()
             print(f"[Código] app de React con errores: {errores}")
@@ -4197,6 +4289,7 @@ class EspecialistaCodigo:
         src = os.path.join(carpeta, "src")
         kit_dst = os.path.join(src, "kit")
         os.makedirs(os.path.join(kit_dst, "fuentes"), exist_ok=True)
+        os.makedirs(os.path.join(carpeta, "tests"), exist_ok=True)
 
         for nombre in ("package.json", "vite.config.ts", "tsconfig.json", "tsconfig.node.json"):
             with open(os.path.join(_KIT_APPS, nombre), encoding="utf-8") as fuente:
@@ -4213,8 +4306,11 @@ class EspecialistaCodigo:
 
         for nombre in ("main.tsx", "App.tsx"):
             shutil.copyfile(os.path.join(_KIT_APPS, nombre), os.path.join(src, nombre))
-        for nombre in ("Fondo.tsx", "Fondo.css", "Cascaron.tsx", "Cascaron.css", "tokens.css"):
+        for nombre in ("Fondo.tsx", "Fondo.css", "Cascaron.tsx", "Cascaron.css", "tokens.css", "datos.ts"):
             shutil.copyfile(os.path.join(_KIT_APPS, nombre), os.path.join(kit_dst, nombre))
+        with open(os.path.join(_KIT_APPS, "tests", "datos.test.ts"), encoding="utf-8") as fuente:
+            prueba_datos = fuente.read().replace('"../datos.ts"', '"../src/kit/datos.ts"')
+        self._escribir_texto_atomico(os.path.join(carpeta, "tests", "datos.test.ts"), prueba_datos)
 
         css, archivos = self._css_fuentes(app["personalidad"])
         self._escribir_texto_atomico(os.path.join(kit_dst, "fuentes.css"), css)
@@ -4342,10 +4438,12 @@ class EspecialistaCodigo:
                 revision["hallazgos"].extend(errores_build)
                 return revision
             revision["hallazgos"].extend(errores_build)
+            with open(os.path.join(carpeta, "src", "app.json"), encoding="utf-8") as fuente:
+                app = json.load(fuente)
             revision = revisor_visual.revisar_url(
                 url, os.path.join(carpeta, ".revision"), esp.sin_marcas("visual"),
                 esp.sin_marcas("criterios"), session=self._http,
-                errores_build=errores_build)
+                errores_build=errores_build, app=app)
         except Exception as error:
             print(f"[Código] revisión de app no disponible: {error}")
             revision["motivo_sin_revisar"] = str(error)
@@ -4386,8 +4484,7 @@ class EspecialistaCodigo:
             self._ensamblar_app_react(carpeta, app, nombre_npm)
             estado["composicion"] = app
             estado["mapa"] = self._mapa_app(app)
-            estado["archivos"] = ["src/app.json", "src/App.tsx", "src/kit/Cascaron.tsx",
-                                   "src/kit/Cascaron.css", "src/kit/tokens.css"]
+            estado["archivos"] = list(_ARCHIVOS_APP_GENERADOS)
             self._anotar_variedad_app(huella, app)
             if self._confirmar_instalacion is None:
                 estado.update(estado="pendiente_confirmacion_instalacion")
@@ -4412,6 +4509,17 @@ class EspecialistaCodigo:
                     self._escribir_json_atomico(estado_path, estado)
                     return (f"La app quedó en {carpeta}, pero npm no pudo instalar sus "
                             f"dependencias: {instalacion['error']}")
+
+                self._fase_proyecto = "pruebas"
+                self._informar_progreso(2, 4, "Probando los datos")
+                prueba_datos = self._comando_npm(carpeta, "probar", 120)
+                estado["pruebas_datos"] = {"ok": prueba_datos["ok"]}
+                self._escribir_json_atomico(estado_path, estado)
+                if not prueba_datos["ok"]:
+                    estado.update(estado="pruebas_fallidas", error_build=prueba_datos["error"])
+                    self._escribir_json_atomico(estado_path, estado)
+                    return (f"La app quedó en {carpeta}, pero el motor de datos no pasó sus "
+                            f"pruebas: {prueba_datos['error']}")
 
                 hallazgos = []
                 revision = {"revisado": False, "aprobado": None, "hallazgos": []}

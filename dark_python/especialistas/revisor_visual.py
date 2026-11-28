@@ -11,7 +11,7 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from proveedores.llm.fabrica import preguntar_sobre_imagen
 
@@ -52,6 +52,7 @@ def electron_disponible() -> bool:
 def capturar_pantallas(url: str, carpeta_salida: str,
                        anchos: Tuple[Tuple[int, int], ...] = ANCHOS_POR_DEFECTO,
                        espera_ms: int = ESPERA_RENDER_MS,
+                       app: Optional[dict] = None,
                        log=print) -> Tuple[List[Captura], Optional[str]]:
     """(capturas, error). `capturas` vacío y `error` con el motivo si no se pudo nada."""
     if not electron_disponible():
@@ -66,7 +67,8 @@ def capturar_pantallas(url: str, carpeta_salida: str,
         ruta_trabajo = os.path.join(temporal, "trabajo.json")
         ruta_resultado = os.path.join(temporal, "resultado.json")
         with open(ruta_trabajo, "w", encoding="utf-8") as archivo:
-            json.dump({"capturas": especificaciones, "espera_ms": espera_ms}, archivo)
+            json.dump({"capturas": especificaciones, "espera_ms": espera_ms,
+                       "app": app}, archivo)
         try:
             proceso = subprocess.run(
                 [ELECTRON_BIN, SCRIPT_CAPTURA, ruta_trabajo, ruta_resultado],
@@ -89,6 +91,9 @@ def capturar_pantallas(url: str, carpeta_salida: str,
             errores_consola=[c["mensaje"] for c in resultado.get("consola", [])],
             comprobaciones=resultado.get("comprobaciones", {}),
             error=resultado.get("error")))
+    funcional = datos.get("funcional")
+    if isinstance(funcional, dict) and capturas:
+        capturas[0].comprobaciones["funcional"] = funcional
     return capturas, None
 
 
@@ -143,7 +148,8 @@ def criticar_captura(captura: Captura, direccion_visual: str, criterios_aceptaci
 
 
 def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_aceptacion: str,
-                session=None, por_funcion=None, log=print, errores_build=None) -> dict:
+                session=None, por_funcion=None, log=print, errores_build=None,
+                app: Optional[dict] = None) -> dict:
     """Captura y critica una URL ya generada. Nunca lanza: todo fallo queda en el resultado.
 
     Forma del resultado: {"revisado": bool, "motivo_sin_revisar": str|None,
@@ -152,9 +158,9 @@ def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_
     """
     resultado = {"revisado": False, "motivo_sin_revisar": None, "aprobado": None,
                 "hallazgos": [], "errores_consola": [], "comprobaciones": {},
-                "errores_build": list(errores_build or []), "capturas": []}
+                "funcional": {}, "errores_build": list(errores_build or []), "capturas": []}
     try:
-        capturas, error = capturar_pantallas(url, carpeta_salida, log=log)
+        capturas, error = capturar_pantallas(url, carpeta_salida, app=app, log=log)
     except Exception as error:  # una revisión que falla no puede tirar la entrega
         log(f"[Revisor] error inesperado capturando: {error}")
         resultado["motivo_sin_revisar"] = str(error)
@@ -176,6 +182,10 @@ def revisar_url(url: str, carpeta_salida: str, direccion_visual: str, criterios_
     for nombre, detalle in resultado["comprobaciones"].items():
         if detalle.get("hallazgos"):
             resultado["hallazgos"].extend(detalle["hallazgos"])
+        if isinstance(detalle.get("funcional"), dict):
+            resultado["funcional"] = detalle["funcional"]
+    for hallazgo in resultado["funcional"].get("hallazgos", []):
+        resultado["hallazgos"].append(f"funcional: {hallazgo}")
     utilizables = [c for c in capturas if c.ok]
     if not utilizables:
         resultado["motivo_sin_revisar"] = "ninguna captura salió bien"
