@@ -136,6 +136,7 @@ vive allí y se reexporta aquí para no partir el vocabulario en dos fuentes.
 import re
 import unicodedata
 from dataclasses import dataclass, field, replace
+from decimal import Decimal, InvalidOperation
 from typing import Any, List, Mapping, Optional, Protocol, Tuple, runtime_checkable
 
 from .herramienta import PREFIJO_HERRAMIENTA
@@ -931,21 +932,371 @@ def _navegacion_por_defecto(num_secciones: int) -> str:
     return "superior" if num_secciones <= _MAX_SECCIONES_SUPERIOR else "lateral"
 
 
-def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
+TIPOS_CAMPO_APP: Tuple[str, ...] = ("texto", "area", "numero", "fecha", "seleccion")
+OPERACIONES_APP: Tuple[str, ...] = ("suma", "conteo", "promedio", "minimo", "maximo")
+FORMATOS_APP: Tuple[str, ...] = ("texto", "numero", "moneda", "porcentaje")
+DENSIDADES_APP: Tuple[str, ...] = ("compacta", "equilibrada", "amplia")
+CABECERAS_APP: Tuple[str, ...] = ("marca", "centro", "division")
+FORMAS_APP: Tuple[str, ...] = ("angular", "suave")
+_PALETA_APP_POR_DEFECTO = {
+    "tecnica": {"fondo": "#07090c", "texto": "#dfe7ee", "acento": "#5ee6ff", "linea": "#1a2129"},
+    "sobria": {"fondo": "#f1efe9", "texto": "#1b1d1f", "acento": "#2f4ad0", "linea": "#d2cfc7"},
+    "calida": {"fondo": "#f0e7d6", "texto": "#2b2420", "acento": "#c4623a", "linea": "#d8c8b2"},
+}
+
+
+def _slug_app(valor: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", _normal(str(valor or ""))).strip("-")
+
+
+def _numero_app_finito(valor: Any) -> bool:
+    return (not isinstance(valor, bool) and isinstance(valor, (int, float))
+            and valor == valor and valor not in (float("inf"), float("-inf")))
+
+
+def _fecha_app_valida(valor: Any) -> bool:
+    if not isinstance(valor, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+        return False
+    anio, mes, dia = (int(parte) for parte in valor.split("-"))
+    if anio < 1 or not 1 <= mes <= 12:
+        return False
+    dias_mes = (31, 29 if anio % 4 == 0 and (anio % 100 != 0 or anio % 400 == 0) else 28,
+                31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    return 1 <= dia <= dias_mes[mes - 1]
+
+
+def _normal_plan(valor: Any) -> str:
+    texto = unicodedata.normalize("NFKD", str(valor)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "", texto)
+
+
+def _numero_plan(valor: str) -> Optional[Decimal]:
+    signo = -1 if valor.startswith("-") else 1
+    limpio = valor.lstrip("+-")
+    if not re.fullmatch(r"\d+(?:[.,]\d+)*", limpio):
+        return None
+    if "," in limpio and "." in limpio:
+        if limpio.rfind(",") > limpio.rfind("."):
+            entero, decimal = limpio.rsplit(",", 1)
+            if not re.fullmatch(r"\d{1,3}(?:\.\d{3})*", entero):
+                return None
+            limpio = entero.replace(".", "") + "." + decimal
+        else:
+            entero, decimal = limpio.rsplit(".", 1)
+            if not re.fullmatch(r"\d{1,3}(?:,\d{3})*", entero):
+                return None
+            limpio = entero.replace(",", "") + "." + decimal
+    elif limpio.count(",") + limpio.count(".") > 1:
+        separador = "," if "," in limpio else "."
+        partes = limpio.split(separador)
+        if not 1 <= len(partes[0]) <= 3 or any(len(parte) != 3 for parte in partes[1:]):
+            return None
+        limpio = "".join(partes)
+    elif "," in limpio or "." in limpio:
+        entero, decimal = re.split(r"[.,]", limpio)
+        if len(decimal) == 3 and 0 < len(entero) <= 3 and entero != "0":
+            limpio = entero + decimal
+        elif "," in limpio:
+            limpio = entero + "." + decimal
+    try:
+        return signo * Decimal(limpio)
+    except InvalidOperation:
+        return None
+
+
+def _booleano_app(datos: Mapping, clave: str, defecto: bool, donde: str,
+                  errores: List[str]) -> bool:
+    valor = datos.get(clave, defecto)
+    if not isinstance(valor, bool):
+        errores.append(f"{donde + ': ' if donde else ''}«{clave}» debe ser true o false")
+        return defecto
+    return valor
+
+
+def _consta_en_plan(valor: Any, plan_texto: Optional[str], numero: bool = True) -> bool:
+    if not plan_texto:
+        return True
+    if valor is None:
+        return True
+    if isinstance(valor, bool):
+        return False
+    plano = unicodedata.normalize("NFKD", plan_texto).encode("ascii", "ignore").decode().lower()
+    if isinstance(valor, (int, float)):
+        buscado = Decimal(str(valor))
+    elif numero and isinstance(valor, str) and re.fullmatch(r"[+-]?\d+(?:[.,]\d+)*", valor.strip()):
+        buscado = _numero_plan(valor.strip())
+        if buscado is None:
+            return False
+    else:
+        original = str(valor)
+        aguja = re.sub(r"[^a-z0-9]+", " ", unicodedata.normalize(
+            "NFKD", original).encode("ascii", "ignore").decode().lower()).strip()
+        if not aguja:
+            return not original.strip() or original.casefold() in plan_texto.casefold()
+        palabras = re.sub(r"[^a-z0-9]+", " ", plano).strip()
+        return bool(re.search(
+            rf"(?<![a-z0-9]){re.escape(aguja)}(?![a-z0-9])", palabras))
+    tokens = re.findall(r"(?<![\w.-])[+-]?\d+(?:[.,]\d+)*(?![\w-])", plano)
+    return any(_numero_plan(token) == buscado for token in tokens)
+
+
+def _plan_sin_fuera_de_alcance(plan_texto: Optional[str]) -> Optional[str]:
+    if not plan_texto:
+        return plan_texto
+    especificacion = leer_especificacion(plan_texto)
+    if not especificacion.secciones:
+        return plan_texto
+    partes = [especificacion.titulo]
+    partes.extend(especificacion.seccion(seccion.clave)
+                  for seccion in SECCIONES_ESPECIFICACION if seccion.clave != "fuera_de_alcance")
+    partes.extend(cuerpo for _, cuerpo in especificacion.extra)
+    return "\n".join(partes)
+
+
+def _plan_exige(plan_texto: Optional[str], patron: str) -> bool:
+    if not plan_texto:
+        return False
+    for fragmento in re.split(r"[\n.;]+", plan_texto):
+        limpio = re.sub(r"\bno solo\b", "", fragmento, flags=re.IGNORECASE)
+        for coincidencia in re.finditer(patron, limpio, re.IGNORECASE):
+            antes = limpio[:coincidencia.start()]
+            if re.search(r"\b(?:no|ni|sin)\b(?:\s+\w+){0,4}\s*$", antes, re.IGNORECASE):
+                continue
+            return True
+    return False
+
+
+def _plan_exige_datos(plan_texto: Optional[str]) -> bool:
+    return _plan_exige(
+        plan_texto,
+        r"\b(?:localstorage|persist\w*|guardar|guard\w*|recargar|registrar|a[nñ]adir|"
+        r"agregar|editar|eliminar|calcular\w*|totales?|totaliz\w*|evoluci[oó]n|tendencia\w*|saldo)\b")
+
+
+def _plan_exige_formulario(plan_texto: Optional[str]) -> bool:
+    return _plan_exige(
+        plan_texto, r"\b(?:registrar|a[nñ]adir|agregar|editar|eliminar|guardar)\b")
+
+
+def _plan_exige_calculo(plan_texto: Optional[str]) -> bool:
+    return _plan_exige(
+        plan_texto, r"\b(?:calcular\w*|totales?|totaliz\w*|evoluci[oó]n|tendencia\w*|saldo)\b")
+
+
+def _validar_direccion_visual(datos: Any, personalidad: str) -> Tuple[dict, List[str]]:
+    errores: List[str] = []
+    defecto = _PALETA_APP_POR_DEFECTO.get(personalidad, _PALETA_APP_POR_DEFECTO["tecnica"])
+    crudo = datos if isinstance(datos, dict) else {}
+    if datos is not None and not isinstance(datos, dict):
+        errores.append("«direccion_visual» debe ser un objeto")
+    direccion = {
+        "densidad": crudo.get("densidad") or "equilibrada",
+        "cabecera": crudo.get("cabecera") or "division",
+        "forma": crudo.get("forma") or ("angular" if personalidad == "tecnica" else "suave"),
+    }
+    for clave, opciones in (("densidad", DENSIDADES_APP), ("cabecera", CABECERAS_APP),
+                            ("forma", FORMAS_APP)):
+        if direccion[clave] not in opciones:
+            errores.append(f"«direccion_visual.{clave}» debe ser una de {', '.join(opciones)}")
+            direccion[clave] = "equilibrada" if clave == "densidad" else (
+                "division" if clave == "cabecera" else "suave")
+    paleta_cruda = crudo.get("paleta") if isinstance(crudo.get("paleta"), dict) else {}
+    paleta = {}
+    for clave in ("fondo", "texto", "acento", "linea"):
+        valor = paleta_cruda.get(clave)
+        paleta[clave] = _hex(valor) if valor is not None else defecto[clave]
+        if paleta[clave] is None:
+            errores.append(f"«direccion_visual.paleta.{clave}» no es un color hex")
+            paleta[clave] = defecto[clave]
+    destino = "#ffffff" if _luminancia(paleta["fondo"]) < 0.4 else "#000000"
+    for clave, minimo in (("texto", 7), ("acento", 4.5), ("linea", 1.4)):
+        for _ in range(30):
+            if contraste(paleta[clave], paleta["fondo"]) >= minimo:
+                break
+            paleta[clave] = _mezclar(paleta[clave], destino, 0.12)
+    paleta["muted"] = _mezclar(paleta["texto"], paleta["fondo"], 0.45)
+    for _ in range(30):
+        if contraste(paleta["muted"], paleta["fondo"]) >= 4.5:
+            break
+        paleta["muted"] = _mezclar(paleta["muted"], paleta["texto"], 0.15)
+    paleta["negativo"] = "#b4432f" if destino == "#000000" else "#ff8a7a"
+    for _ in range(30):
+        if contraste(paleta["negativo"], paleta["fondo"]) >= 4.5:
+            break
+        paleta["negativo"] = _mezclar(paleta["negativo"], destino, 0.12)
+    paleta["acento_fg"] = "#000000" if contraste("#000000", paleta["acento"]) >= contraste(
+        "#ffffff", paleta["acento"]) else "#ffffff"
+    direccion["paleta"] = paleta
+    return direccion, errores
+
+
+def _validar_modelos_app(datos: Any, plan_texto: Optional[str]) -> Tuple[dict, List[str]]:
+    errores: List[str] = []
+    if datos is None:
+        return {}, errores
+    if not isinstance(datos, list) or not 1 <= len(datos) <= 8:
+        return {}, ["«modelos» debe ser una lista de 1 a 8 modelos"]
+    modelos: dict = {}
+    for indice, crudo in enumerate(datos[:8], 1):
+        donde = f"modelo {indice}"
+        if not isinstance(crudo, dict) or not crudo.get("id") or not crudo.get("titulo"):
+            errores.append(f"{donde}: necesita «id» y «titulo»")
+            continue
+        identificador = _slug_app(crudo["id"])
+        if str(crudo["id"]) != identificador or not identificador or identificador in modelos:
+            errores.append(f"{donde}: «id» debe ser un slug único en minúsculas")
+            continue
+        campos_crudos = crudo.get("campos")
+        if not isinstance(campos_crudos, list) or not 1 <= len(campos_crudos) <= 8:
+            errores.append(f"{donde}: «campos» debe tener de 1 a 8 elementos")
+            continue
+        campos, ids = [], set()
+        for j, campo in enumerate(campos_crudos[:8], 1):
+            dc = f"{donde}, campo {j}"
+            if not isinstance(campo, dict) or not campo.get("id") or not campo.get("etiqueta"):
+                errores.append(f"{dc}: necesita «id» y «etiqueta»")
+                continue
+            cid = _slug_app(campo["id"])
+            if str(campo["id"]) != cid or not cid or cid in ids:
+                errores.append(f"{dc}: «id» debe ser un slug único en minúsculas")
+                continue
+            tipo = campo.get("tipo") or "texto"
+            if tipo not in TIPOS_CAMPO_APP:
+                errores.append(f"{dc}: «tipo» debe ser uno de {', '.join(TIPOS_CAMPO_APP)}")
+                tipo = "texto"
+            normal = {"id": cid, "etiqueta": _texto(campo["etiqueta"], _LARGOS["ficha_titulo"]),
+                      "tipo": tipo,
+                      "obligatorio": _booleano_app(campo, "obligatorio", False, dc, errores)}
+            if tipo == "seleccion":
+                opciones = campo.get("opciones")
+                if (not isinstance(opciones, list) or not 2 <= len(opciones) <= 8
+                        or any(not isinstance(o, str) or not o.strip() for o in opciones)
+                        or len({o.strip() for o in opciones}) != len(opciones)):
+                    errores.append(f"{dc}: «seleccion» necesita de 2 a 8 opciones únicas")
+                    continue
+                normal["opciones"] = [_texto(o, 40) for o in opciones]
+            if tipo == "numero":
+                for limite in ("min", "max"):
+                    if limite in campo:
+                        valor = campo[limite]
+                        if not _numero_app_finito(valor):
+                            errores.append(f"{dc}: «{limite}» debe ser un número finito")
+                        else:
+                            normal[limite] = valor
+                if "min" in normal and "max" in normal and normal["min"] > normal["max"]:
+                    errores.append(f"{dc}: «min» no puede superar «max»")
+            ids.add(cid)
+            campos.append(normal)
+        if not campos:
+            continue
+        registros_crudos = crudo.get("registros", [])
+        if not isinstance(registros_crudos, list) or len(registros_crudos) > 100:
+            errores.append(f"{donde}: «registros» debe tener de 0 a 100 elementos")
+            registros_crudos = []
+        campos_por_id = {c["id"]: c for c in campos}
+        registros = []
+        for k, registro in enumerate(registros_crudos, 1):
+            dr = f"{donde}, registro {k}"
+            if not isinstance(registro, dict) or registro.get("origen") != "plan":
+                errores.append(f"{dr}: necesita «origen»: \"plan\"")
+                continue
+            valores = registro.get("valores")
+            if not isinstance(valores, dict) or set(valores) != set(campos_por_id):
+                errores.append(f"{dr}: «valores» debe tener exactamente los campos del modelo")
+                continue
+            normales, valido = {}, True
+            for cid, valor in valores.items():
+                campo = campos_por_id[cid]
+                if campo["tipo"] in ("texto", "area", "seleccion"):
+                    if not isinstance(valor, str):
+                        errores.append(f"{dr}, {cid}: debe ser texto")
+                        valido = False
+                        break
+                    if campo["obligatorio"] and not valor.strip():
+                        errores.append(f"{dr}, {cid}: es obligatorio")
+                        valido = False
+                        break
+                    if campo["tipo"] == "seleccion" and valor not in campo["opciones"]:
+                        errores.append(f"{dr}, {cid}: debe ser una opción declarada")
+                        valido = False
+                        break
+                    normales[cid] = _texto(valor, 160)
+                elif campo["tipo"] == "numero":
+                    if not _numero_app_finito(valor):
+                        errores.append(f"{dr}, {cid}: debe ser un número finito")
+                        valido = False
+                        break
+                    if "min" in campo and valor < campo["min"] or "max" in campo and valor > campo["max"]:
+                        errores.append(f"{dr}, {cid}: está fuera de los límites del campo")
+                        valido = False
+                        break
+                    normales[cid] = valor
+                elif not _fecha_app_valida(valor):
+                    errores.append(f"{dr}, {cid}: debe ser una fecha real AAAA-MM-DD")
+                    valido = False
+                    break
+                else:
+                    normales[cid] = valor
+                if not _consta_en_plan(valor, plan_texto, numero=campo["tipo"] == "numero"):
+                    errores.append(f"{dr}, {cid}: el dato no consta en el plan aprobado")
+                    valido = False
+                    break
+            if valido:
+                registros.append({"origen": "plan", "valores": normales})
+        modelos[identificador] = {"id": identificador,
+                                  "titulo": _texto(crudo["titulo"], _LARGOS["ficha_titulo"]),
+                                  "campos": campos, "registros": registros}
+    return modelos, errores
+
+
+def _validar_calculo_app(datos: Any, modelos: dict, donde: str,
+                         modelo_por_defecto: Optional[str] = None) -> Tuple[Optional[dict], List[str]]:
+    if not isinstance(datos, dict):
+        return None, [f"{donde}: necesita un «calculo» declarativo"]
+    operacion = datos.get("operacion")
+    if operacion not in OPERACIONES_APP:
+        return None, [f"{donde}: «operacion» debe ser una de {', '.join(OPERACIONES_APP)}"]
+    mid = datos.get("modelo") or modelo_por_defecto
+    if mid not in modelos:
+        return None, [f"{donde}: el modelo «{mid}» no existe"]
+    campo = datos.get("campo")
+    if operacion != "conteo":
+        campos = {c["id"]: c for c in modelos[mid]["campos"]}
+        if campo not in campos:
+            return None, [f"{donde}: el campo «{campo}» no existe en el modelo «{mid}»"]
+        if campos[campo]["tipo"] != "numero":
+            return None, [f"{donde}: el campo «{campo}» debe ser numérico"]
+    elif campo and campo not in {c["id"] for c in modelos[mid]["campos"]}:
+        return None, [f"{donde}: el campo «{campo}» no existe en el modelo «{mid}»"]
+    calculo = {"operacion": operacion, "modelo": mid}
+    if campo:
+        calculo["campo"] = campo
+    return calculo, []
+
+
+def validar_app(datos: Any, plan_texto: Optional[str] = None) -> Tuple[dict, Tuple[str, ...]]:
     """(app normalizada, errores). Sin errores, la app está lista para el kit.
 
-    La personalidad es una de las tres del kit (mismo catálogo que `TIPOGRAFIAS`
-    en la web inmersiva): no hay paleta libre, porque sus tokens son fijos y
-    probados. La navegación y el fondo 3D son elección del coder; si no llega
-    una navegación válida, se decide sola por el número de secciones.
+    Los modelos declaran datos persistentes y los bloques funcionales apuntan a
+    ellos. El contenido estático necesita procedencia del plan y, cuando se
+    conoce el texto aprobado, sus valores tienen que aparecer en él.
     """
     errores: List[str] = []
     if not isinstance(datos, dict):
         return {}, ("la app debe ser un objeto JSON",)
+    plan_texto = _plan_sin_fuera_de_alcance(plan_texto)
+    idioma = datos.get("idioma") or "es"
+    if not isinstance(idioma, str) or not re.fullmatch(
+            r"[a-z]{2,3}(?:-[a-z]{4})?(?:-(?:[a-z]{2}|\d{3}))?"
+            r"(?:-(?:[a-z0-9]{5,8}|\d[a-z0-9]{3}))*"
+            r"(?:-[0-9a-wy-z](?:-[a-z0-9]{2,8})+)*"
+            r"(?:-x(?:-[a-z0-9]{1,8})+)?", idioma, re.IGNORECASE):
+        errores.append("«idioma» debe ser una etiqueta BCP-47 válida, como «es» o «es-ES»")
+        idioma = "es"
     app: dict = {
         "titulo": _texto(datos.get("titulo"), _LARGOS["titulo"]),
         "descripcion": _texto(datos.get("descripcion"), _LARGOS["descripcion"]),
-        "idioma": str(datos.get("idioma") or "es")[:5],
+        "idioma": idioma,
         "personalidad": datos.get("personalidad") or "tecnica",
     }
     if not app["titulo"]:
@@ -953,7 +1304,11 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
     if app["personalidad"] not in TIPOGRAFIAS:
         errores.append(f"«personalidad» debe ser una de {', '.join(TIPOGRAFIAS)}")
         app["personalidad"] = "tecnica"
-    app["fondo3d"] = bool(datos.get("fondo3d", True))
+    app["fondo3d"] = _booleano_app(datos, "fondo3d", True, "", errores)
+    direccion, errores_direccion = _validar_direccion_visual(
+        datos.get("direccion_visual"), app["personalidad"])
+    app["direccion_visual"] = direccion
+    errores.extend(errores_direccion)
 
     secciones = datos.get("secciones")
     if not isinstance(secciones, list) or not 1 <= len(secciones) <= 8:
@@ -966,22 +1321,47 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
         navegacion = _navegacion_por_defecto(len(secciones))
     app["navegacion"] = navegacion
 
+    modelos, errores_modelos = _validar_modelos_app(datos.get("modelos"), plan_texto)
+    errores.extend(errores_modelos)
+    app["modelos"] = list(modelos.values())
+    app["persistencia"] = _booleano_app(datos, "persistencia", bool(modelos), "", errores)
+    clave = datos.get("clave_almacenamiento") or f"dark_app_{_slug_app(app['titulo'])}"
+    if not isinstance(clave, str) or not re.fullmatch(r"[a-z0-9_-]{3,64}", clave):
+        errores.append("«clave_almacenamiento» debe tener de 3 a 64 caracteres a-z, 0-9, _ o -")
+        clave = f"dark_app_{_slug_app(app['titulo'])}"
+    app["clave_almacenamiento"] = clave
+    if app["persistencia"] and not modelos:
+        errores.append("«persistencia» necesita al menos un modelo de datos")
+    if _plan_exige_datos(plan_texto) and not modelos:
+        errores.append("el plan pide datos persistentes o calculados: declara «modelos» y conecta los bloques")
+    if _plan_exige(plan_texto, r"\b(?:localstorage|persist\w*|recargar)\b") and not app["persistencia"]:
+        errores.append("el plan pide persistencia: «persistencia» debe ser true")
+
+    def procedencia_plan(cruda: dict, donde: str) -> bool:
+        if cruda.get("origen") != "plan":
+            errores.append(f"{donde}: los datos estáticos necesitan «origen»: \"plan\"")
+            return False
+        return True
+
+    def comprobar_datos_plan(valores: List[Any], donde: str, numero: bool = False) -> None:
+        for valor in valores:
+            if not _consta_en_plan(valor, plan_texto, numero=numero):
+                errores.append(f"{donde}: el dato {valor!r} no consta en el plan aprobado")
+
+    def comprobar_cifras_plan(texto: str, donde: str) -> None:
+        tokens = re.findall(
+            r"(?<![\w.-])\d{4}-\d{2}-\d{2}(?![\w-])|"
+            r"(?<![\w.-])[+-]?\d+(?:[.,]\d+)*(?![\w-])", texto)
+        for token in tokens:
+            if not _consta_en_plan(token, plan_texto, numero=True):
+                errores.append(f"{donde}: la cifra {token!r} no consta en el plan aprobado")
+
     def chip(valor: Any, donde: str) -> Optional[dict]:
-        if not isinstance(valor, dict) or not valor.get("etiqueta") or not valor.get("valor"):
+        if not isinstance(valor, dict) or not valor.get("etiqueta") or valor.get("valor") in (None, ""):
             errores.append(f"{donde}: necesita «etiqueta» y «valor»")
             return None
         return {"etiqueta": _texto(valor["etiqueta"], _LARGOS["ficha_titulo"]),
                 "valor": _texto(valor["valor"], 16)}
-
-    def campo(valor: Any, donde: str) -> Optional[dict]:
-        if not isinstance(valor, dict) or not valor.get("etiqueta"):
-            errores.append(f"{donde}: necesita «etiqueta»")
-            return None
-        tipo = valor.get("tipo") or "texto"
-        if tipo not in ("texto", "area"):
-            errores.append(f"{donde}: «tipo» debe ser texto o area")
-            tipo = "texto"
-        return {"etiqueta": _texto(valor["etiqueta"], _LARGOS["ficha_titulo"]), "tipo": tipo}
 
     def item_lista(valor: Any, donde: str) -> Optional[dict]:
         if not isinstance(valor, dict) or not valor.get("titulo"):
@@ -1000,14 +1380,7 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
             return False
 
     def fecha_valida(valor: Any) -> bool:
-        if not isinstance(valor, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
-            return False
-        anio, mes, dia = (int(parte) for parte in valor.split("-"))
-        if anio < 1 or not 1 <= mes <= 12:
-            return False
-        dias_mes = (31, 29 if anio % 4 == 0 and (anio % 100 != 0 or anio % 400 == 0) else 28,
-                    31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        return 1 <= dia <= dias_mes[mes - 1]
+        return _fecha_app_valida(valor)
 
     def texto_corto(valor: Any, limite: int) -> str:
         return _texto(str(valor) if isinstance(valor, (str, int, float)) else "", limite)
@@ -1033,20 +1406,57 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
             columnas.append({"id": identificador, "titulo": titulo})
         return columnas
 
+    def modelo_valido(cruda: dict, donde: str) -> Optional[str]:
+        mid = cruda.get("modelo")
+        if mid not in modelos:
+            errores.append(f"{donde}: el modelo «{mid}» no existe")
+            return None
+        return mid
+
+    def campo_modelo(mid: str, cid: Any, donde: str,
+                     tipos: Tuple[str, ...] = ()) -> Optional[dict]:
+        campos = {c["id"]: c for c in modelos[mid]["campos"]}
+        if cid not in campos:
+            errores.append(f"{donde}: el campo «{cid}» no existe en el modelo «{mid}»")
+            return None
+        campo = campos[cid]
+        if tipos and campo["tipo"] not in tipos:
+            errores.append(f"{donde}: el campo «{cid}» debe ser de tipo {', '.join(tipos)}")
+            return None
+        return campo
+
+    def calcular(datos: Any, donde: str, mid: Optional[str]) -> Optional[dict]:
+        calculo, fallos = _validar_calculo_app(datos, modelos, donde, mid)
+        errores.extend(fallos)
+        return calculo
+
     def validar_tabla(cruda: dict, donde: str) -> Optional[dict]:
-        columnas = columnas_de(cruda.get("columnas"), donde, 2, 6)
+        columnas = columnas_de(cruda.get("columnas"), donde, 1, 6)
+        if not columnas:
+            return None
+        vacio = _texto(cruda.get("vacio"), _LARGOS["breve"]) or "Todavía no hay filas."
+        mid = cruda.get("modelo")
+        if mid is not None:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            for columna in columnas:
+                campo_modelo(mid, columna["id"], donde)
+            return {"tipo": "tabla", "modelo": mid, "columnas": columnas,
+                    "datos": [], "vacio": vacio}
+        if not procedencia_plan(cruda, donde):
+            return None
         filas_crudas = cruda.get("filas")
         if not isinstance(filas_crudas, list) or len(filas_crudas) > 20:
             errores.append(f"{donde}: «filas» debe tener de 0 a 20 elementos")
-            filas_crudas = []
+            return None
         filas = []
         ids = {c["id"] for c in columnas}
         for indice, fila in enumerate(filas_crudas, 1):
             if not isinstance(fila, dict) or set(fila) != ids:
                 errores.append(f"{donde}, fila {indice}: debe tener exactamente las columnas declaradas")
                 continue
-            normalizada = {}
-            valida = True
+            normalizada, valida = {}, True
             for columna in columnas:
                 valor = fila[columna["id"]]
                 if isinstance(valor, bool) or not isinstance(valor, (str, int, float)):
@@ -1057,17 +1467,43 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                     errores.append(f"{donde}, fila {indice}: cada número debe ser finito")
                     valida = False
                     break
+                comprobar_datos_plan([valor], f"{donde}, fila {indice}")
                 normalizada[columna["id"]] = texto_corto(valor, _LARGOS["breve"])
             if valida:
                 filas.append(normalizada)
-        return {"tipo": "tabla", "columnas": columnas, "filas": filas,
-                "vacio": _texto(cruda.get("vacio"), _LARGOS["breve"])
-                or "Todavía no hay filas."} if columnas else None
+        return {"tipo": "tabla", "origen": "plan", "columnas": columnas,
+                "filas": filas, "vacio": vacio}
 
     def validar_grafico(cruda: dict, donde: str) -> Optional[dict]:
         visualizacion = cruda.get("visualizacion")
         if visualizacion not in ("barras", "linea", "anillo"):
             errores.append(f"{donde}: «visualizacion» debe ser barras, linea o anillo")
+            return None
+        titulo = _texto(cruda.get("titulo"), _LARGOS["ficha_titulo"])
+        mid = cruda.get("modelo")
+        if mid is not None:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            if campo_modelo(mid, cruda.get("eje_x"), donde, ("fecha",)) is None:
+                return None
+            agrupacion = cruda.get("agrupacion")
+            if agrupacion not in ("dia", "mes", "anio"):
+                errores.append(f"{donde}: «agrupacion» debe ser dia, mes o anio")
+                return None
+            calculo = calcular(cruda.get("calculo"), donde, mid)
+            if calculo is None:
+                return None
+            if visualizacion == "anillo" and calculo["operacion"] != "conteo":
+                campo = campo_modelo(mid, calculo["campo"], donde, ("numero",))
+                if campo and campo.get("min", 0) < 0:
+                    errores.append(f"{donde}: un gráfico de anillo necesita valores no negativos")
+                    return None
+            return {"tipo": "grafico", "visualizacion": visualizacion, "titulo": titulo,
+                    "modelo": mid, "eje_x": cruda["eje_x"], "agrupacion": agrupacion,
+                    "acumulado": _booleano_app(cruda, "acumulado", False, donde, errores),
+                    "calculo": calculo, "datos": []}
+        if not procedencia_plan(cruda, donde):
             return None
         puntos_crudos = cruda.get("datos")
         if not isinstance(puntos_crudos, list) or not 2 <= len(puntos_crudos) <= 12:
@@ -1083,27 +1519,63 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
             if visualizacion == "anillo" and valor < 0:
                 errores.append(f"{donde}: los valores del gráfico de anillo no pueden ser negativos")
                 continue
+            comprobar_datos_plan([punto["etiqueta"], valor], f"{donde}, punto {indice}")
             puntos.append({"etiqueta": _texto(punto["etiqueta"], _LARGOS["ficha_titulo"]),
                            "valor": valor})
         if visualizacion == "anillo" and puntos and sum(p["valor"] for p in puntos) <= 0:
             errores.append(f"{donde}: el gráfico de anillo necesita un valor mayor que cero")
         if len(puntos) != len(puntos_crudos):
             return None
-        return {"tipo": "grafico", "visualizacion": visualizacion,
-                "titulo": _texto(cruda.get("titulo"), _LARGOS["ficha_titulo"]),
-                "datos": puntos}
+        return {"tipo": "grafico", "origen": "plan", "visualizacion": visualizacion,
+                "titulo": titulo, "datos": puntos}
 
     def validar_progreso(cruda: dict, donde: str) -> Optional[dict]:
+        if not cruda.get("etiqueta"):
+            errores.append(f"{donde}: necesita «etiqueta»")
+            return None
+        etiqueta = _texto(cruda["etiqueta"], _LARGOS["ficha_titulo"])
+        unidad = _texto(cruda.get("unidad"), 16)
+        if "calculo" in cruda or "total_calculo" in cruda:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            valor_calculo = calcular(cruda.get("calculo"), donde, mid)
+            total_calculo = calcular(cruda.get("total_calculo"), donde, mid)
+            if valor_calculo is None or total_calculo is None:
+                return None
+            return {"tipo": "progreso", "modelo": mid, "etiqueta": etiqueta,
+                    "calculo": valor_calculo, "total_calculo": total_calculo, "unidad": unidad}
+        if not procedencia_plan(cruda, donde):
+            return None
         valor, total = cruda.get("valor"), cruda.get("total")
-        if (not cruda.get("etiqueta") or not numero_valido(valor) or not numero_valido(total)
+        if (not numero_valido(valor) or not numero_valido(total)
                 or total <= 0 or valor < 0 or valor > total):
             errores.append(f"{donde}: necesita etiqueta y valores con 0 ≤ valor ≤ total, total > 0")
             return None
-        return {"tipo": "progreso", "etiqueta": _texto(cruda["etiqueta"], _LARGOS["ficha_titulo"]),
-                "valor": valor, "total": total,
-                "unidad": _texto(cruda.get("unidad"), 16)}
+        comprobar_datos_plan([valor, total], donde)
+        return {"tipo": "progreso", "origen": "plan", "etiqueta": etiqueta,
+                "valor": valor, "total": total, "unidad": unidad}
 
     def validar_agenda(cruda: dict, donde: str) -> Optional[dict]:
+        vacio = _texto(cruda.get("vacio"), _LARGOS["breve"]) or "No hay eventos programados."
+        mid = cruda.get("modelo")
+        if mid is not None:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            if campo_modelo(mid, cruda.get("campo_titulo"), donde, ("texto", "area")) is None:
+                return None
+            if campo_modelo(mid, cruda.get("campo_fecha"), donde, ("fecha",)) is None:
+                return None
+            if cruda.get("campo_hora"):
+                campo_modelo(mid, cruda["campo_hora"], donde, ("texto", "area"))
+            if cruda.get("campo_detalle"):
+                campo_modelo(mid, cruda["campo_detalle"], donde, ("texto", "area"))
+            return {"tipo": "agenda", "modelo": mid, "campo_titulo": cruda["campo_titulo"],
+                    "campo_fecha": cruda["campo_fecha"], "campo_hora": cruda.get("campo_hora"),
+                    "campo_detalle": cruda.get("campo_detalle"), "eventos": [], "vacio": vacio}
+        if not procedencia_plan(cruda, donde):
+            return None
         eventos_crudos = cruda.get("eventos")
         if not isinstance(eventos_crudos, list) or len(eventos_crudos) > 20:
             errores.append(f"{donde}: «eventos» debe tener de 0 a 20 elementos")
@@ -1122,18 +1594,50 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                          or int(hora[:2]) > 23 or int(hora[3:]) > 59):
                 errores.append(f"{donde}, evento {indice}: «hora» debe tener formato HH:MM")
                 continue
+            comprobar_datos_plan([evento["titulo"], fecha, hora, evento.get("detalle")], donde)
             eventos.append({"fecha": fecha, "hora": hora,
                             "titulo": _texto(evento["titulo"], _LARGOS["ficha_titulo"]),
                             "detalle": _texto(evento.get("detalle"), _LARGOS["breve"])})
         if len(eventos) != len(eventos_crudos):
             return None
         eventos.sort(key=lambda e: (e["fecha"], e["hora"]))
-        return {"tipo": "agenda", "eventos": eventos,
-                "vacio": _texto(cruda.get("vacio"), _LARGOS["breve"])
-                or "No hay eventos programados."}
+        return {"tipo": "agenda", "origen": "plan", "eventos": eventos, "vacio": vacio}
 
     def validar_kanban(cruda: dict, donde: str) -> Optional[dict]:
         columnas = columnas_de(cruda.get("columnas"), donde, 2, 4)
+        if not columnas:
+            return None
+        mid = cruda.get("modelo")
+        if mid is not None:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            if campo_modelo(mid, cruda.get("campo_titulo"), donde, ("texto", "area")) is None:
+                return None
+            estado = campo_modelo(mid, cruda.get("campo_columna"), donde, ("seleccion",))
+            if estado is None:
+                return None
+            if cruda.get("campo_detalle"):
+                campo_modelo(mid, cruda["campo_detalle"], donde, ("texto", "area"))
+            crudas = {str(c.get("id")): c for c in cruda.get("columnas", []) if isinstance(c, dict)}
+            if estado:
+                opciones = set(estado["opciones"])
+                for columna in columnas:
+                    columna["valor"] = _texto(crudas[columna["id"]].get("valor", columna["titulo"]), 40)
+                    if columna["valor"] not in opciones:
+                        errores.append(f"{donde}: la columna «{columna['valor']}» no está en las opciones del modelo")
+                valores = [columna["valor"] for columna in columnas]
+                if len(valores) != len(opciones) or set(valores) != opciones:
+                    errores.append(f"{donde}: el kanban necesita una columna para cada opción del modelo")
+            if not app["persistencia"]:
+                errores.append(f"{donde}: un kanban dinámico necesita un modelo persistente")
+                return None
+            return {"tipo": "kanban", "modelo": mid, "campo_titulo": cruda["campo_titulo"],
+                    "campo_columna": cruda["campo_columna"],
+                    "campo_detalle": cruda.get("campo_detalle"), "columnas": columnas,
+                    "tarjetas": []}
+        if not procedencia_plan(cruda, donde):
+            return None
         tarjetas_crudas = cruda.get("tarjetas")
         if not isinstance(tarjetas_crudas, list) or len(tarjetas_crudas) > 30:
             errores.append(f"{donde}: «tarjetas» debe tener de 0 a 30 elementos")
@@ -1150,13 +1654,96 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                 errores.append(f"{donde}, tarjeta {indice}: «id» debe ser único y válido")
                 continue
             ids.add(identificador)
+            comprobar_datos_plan([tarjeta["titulo"], tarjeta.get("detalle")], donde)
             tarjetas.append({"id": identificador,
                              "titulo": _texto(tarjeta["titulo"], _LARGOS["ficha_titulo"]),
                              "detalle": _texto(tarjeta.get("detalle"), _LARGOS["breve"]),
                              "columna": tarjeta["columna"]})
         if len(tarjetas) != len(tarjetas_crudas):
             return None
-        return {"tipo": "kanban", "columnas": columnas, "tarjetas": tarjetas}
+        return {"tipo": "kanban", "origen": "plan", "columnas": columnas, "tarjetas": tarjetas}
+
+    def validar_indicador(cruda: Any, donde: str) -> Optional[dict]:
+        if not isinstance(cruda, dict) or not cruda.get("etiqueta"):
+            errores.append(f"{donde}: necesita «etiqueta»")
+            return None
+        formato = cruda.get("formato") or "numero"
+        if formato not in ("numero", "moneda", "porcentaje"):
+            errores.append(f"{donde}: «formato» debe ser numero, moneda o porcentaje")
+            return None
+        calculo = calcular(cruda.get("calculo"), donde, None)
+        if calculo is None:
+            return None
+        normal = {"etiqueta": _texto(cruda["etiqueta"], _LARGOS["ficha_titulo"]),
+                  "formato": formato}
+        if calculo:
+            normal["calculo"] = calculo
+        if formato == "moneda":
+            moneda = cruda.get("moneda")
+            if not isinstance(moneda, str) or not re.fullmatch(r"[A-Z]{3}", moneda):
+                errores.append(f"{donde}: «moneda» debe ser un código de tres letras mayúsculas")
+                return None
+            normal["moneda"] = moneda
+        return normal
+
+    def validar_lista(cruda: dict, donde: str) -> Optional[dict]:
+        vacio = _texto(cruda.get("vacio"), _LARGOS["breve"]) or "Todavía no hay nada aquí."
+        mid = cruda.get("modelo")
+        if mid is not None:
+            mid = modelo_valido(cruda, donde)
+            if mid is None:
+                return None
+            if campo_modelo(mid, cruda.get("campo_titulo"), donde, ("texto", "area")) is None:
+                return None
+            if cruda.get("campo_detalle"):
+                campo_modelo(mid, cruda["campo_detalle"], donde, ("texto", "area", "fecha", "numero"))
+            if cruda.get("campo_nota"):
+                campo_modelo(mid, cruda["campo_nota"], donde, ("texto", "area", "fecha", "numero"))
+            return {"tipo": "lista", "modelo": mid, "campo_titulo": cruda["campo_titulo"],
+                    "campo_detalle": cruda.get("campo_detalle"),
+                    "campo_nota": cruda.get("campo_nota"), "items": [], "vacio": vacio}
+        if not procedencia_plan(cruda, donde):
+            return None
+        items_crudos = cruda.get("items")
+        if not isinstance(items_crudos, list) or len(items_crudos) > 12:
+            errores.append(f"{donde}: «items» debe tener de 0 a 12 elementos")
+            return None
+        items = []
+        for indice, item in enumerate(items_crudos, 1):
+            normal = item_lista(item, f"{donde}, elemento {indice}")
+            if normal is None:
+                errores.append(f"{donde}, elemento {indice}: necesita «titulo»")
+                continue
+            comprobar_datos_plan([normal["titulo"], normal["detalle"], normal["nota"]], donde)
+            items.append(normal)
+        return {"tipo": "lista", "origen": "plan", "items": items, "vacio": vacio}
+
+    def validar_formulario(cruda: dict, donde: str) -> Optional[dict]:
+        mid = modelo_valido(cruda, donde)
+        if mid is None:
+            return None
+        campos_crudos = cruda.get("campos")
+        campos = [c["id"] for c in modelos[mid]["campos"]]
+        if campos_crudos is not None:
+            if (not isinstance(campos_crudos, list) or not campos_crudos
+                    or any(not isinstance(c, str) for c in campos_crudos)
+                    or len(set(campos_crudos)) != len(campos_crudos)):
+                errores.append(f"{donde}: «campos» debe ser una lista de ids únicos del modelo")
+                return None
+            campos = campos_crudos
+            for cid in campos:
+                campo_modelo(mid, cid, donde)
+        obligatorios = [campo["id"] for campo in modelos[mid]["campos"]
+                        if campo["obligatorio"]]
+        faltantes = [cid for cid in obligatorios if cid not in campos]
+        if faltantes:
+            errores.append(f"{donde}: el formulario omite campos obligatorios: {', '.join(faltantes)}")
+            return None
+        if not app["persistencia"]:
+            errores.append(f"{donde}: un formulario necesita un modelo persistente")
+            return None
+        return {"tipo": "formulario", "modelo": mid, "campos": campos,
+                "boton_abrir": _texto(cruda.get("boton_abrir"), _LARGOS["ficha_titulo"]) or "Nuevo"}
 
     app["secciones"] = []
     for i, s in enumerate(secciones[:8]):
@@ -1180,25 +1767,40 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                 continue
             tipo = b["tipo"]
             bloque = {"tipo": tipo}
-            if tipo == "estadisticas":
+            if tipo == "estadisticas" and "indicadores" in b:
+                indicadores_crudos = b.get("indicadores")
+                if not isinstance(indicadores_crudos, list) or not 1 <= len(indicadores_crudos) <= 4:
+                    errores.append(f"{dondeb}: «indicadores» debe tener de 1 a 4 elementos")
+                    continue
+                indicadores = [x for x in (validar_indicador(c, dondeb) for c in indicadores_crudos[:4]) if x]
+                if len(indicadores) != len(indicadores_crudos):
+                    continue
+                bloque["indicadores"] = indicadores
+            elif tipo == "estadisticas":
+                if not procedencia_plan(b, dondeb):
+                    continue
+                bloque["origen"] = "plan"
                 bloque["chips"] = [c for c in (chip(c, dondeb) for c in (b.get("chips") or [])[:4]) if c]
                 if not bloque["chips"]:
                     errores.append(f"{dondeb}: «estadisticas» necesita al menos un chip")
                     continue
+                comprobar_datos_plan([c["valor"] for c in bloque["chips"]], dondeb, numero=True)
             elif tipo == "lista":
-                bloque["items"] = [x for x in (item_lista(x, dondeb) for x in (b.get("items") or [])[:12]) if x]
-                bloque["vacio"] = _texto(b.get("vacio"), _LARGOS["breve"]) or "Todavía no hay nada aquí."
+                bloque = validar_lista(b, dondeb)
+                if bloque is None:
+                    continue
             elif tipo == "formulario":
-                bloque["boton_abrir"] = _texto(b.get("boton_abrir"), _LARGOS["ficha_titulo"]) or "Nuevo"
-                bloque["campos"] = [c for c in (campo(c, dondeb) for c in (b.get("campos") or [])[:6]) if c]
-                if not bloque["campos"]:
-                    errores.append(f"{dondeb}: «formulario» necesita al menos un campo")
+                bloque = validar_formulario(b, f"{dondeb}, formulario")
+                if bloque is None:
                     continue
             elif tipo == "texto":
                 bloque["texto"] = _texto(b.get("texto"), _LARGOS["texto"])
                 if not bloque["texto"]:
                     errores.append(f"{dondeb}: «texto» necesita contenido")
                     continue
+                if procedencia_plan(b, dondeb):
+                    bloque["origen"] = "plan"
+                comprobar_cifras_plan(bloque["texto"], dondeb)
             elif tipo == "tabla":
                 bloque = validar_tabla(b, dondeb)
                 if bloque is None:
@@ -1222,6 +1824,16 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
             seccion["bloques"].append(bloque)
         app["secciones"].append(seccion)
 
+    bloques = [bloque for seccion in app["secciones"] for bloque in seccion["bloques"]]
+    if _plan_exige_formulario(plan_texto) and not any(b["tipo"] == "formulario" for b in bloques):
+        errores.append("el plan pide registrar o modificar datos: declara un «formulario» conectado a un modelo")
+    tiene_calculo = any(
+        "calculo" in b or "total_calculo" in b
+        or any("calculo" in indicador for indicador in b.get("indicadores", []))
+        for b in bloques)
+    if _plan_exige_calculo(plan_texto) and not tiene_calculo:
+        errores.append("el plan pide totales o evolución: conecta un «calculo» a estadísticas, gráfico o progreso")
+
     # Nada de relleno ni de hablar de la propia app: misma vara que la web inmersiva.
     def textos(a: dict):
         yield "título", a["titulo"]
@@ -1236,25 +1848,25 @@ def validar_app(datos: Any) -> Tuple[dict, Tuple[str, ...]]:
                     yield f"sección «{s['titulo']}», vacío de tabla", b["vacio"]
                     for columna in b["columnas"]:
                         yield f"sección «{s['titulo']}», columna", columna["titulo"]
-                    for fila in b["filas"]:
+                    for fila in b.get("filas", []):
                         for valor in fila.values():
                             yield f"sección «{s['titulo']}», celda", valor
                 if b["tipo"] == "grafico":
                     yield f"sección «{s['titulo']}», título de gráfico", b["titulo"]
-                    for punto in b["datos"]:
+                    for punto in b.get("datos", []):
                         yield f"sección «{s['titulo']}», etiqueta de gráfico", punto["etiqueta"]
                 if b["tipo"] == "progreso":
                     yield f"sección «{s['titulo']}», progreso", b["etiqueta"]
                     yield f"sección «{s['titulo']}», unidad de progreso", b["unidad"]
                 if b["tipo"] == "agenda":
                     yield f"sección «{s['titulo']}», vacío de agenda", b["vacio"]
-                    for evento in b["eventos"]:
+                    for evento in b.get("eventos", []):
                         yield f"sección «{s['titulo']}», evento", evento["titulo"]
                         yield f"sección «{s['titulo']}», detalle de evento", evento["detalle"]
                 if b["tipo"] == "kanban":
                     for columna in b["columnas"]:
                         yield f"sección «{s['titulo']}», columna kanban", columna["titulo"]
-                    for tarjeta in b["tarjetas"]:
+                    for tarjeta in b.get("tarjetas", []):
                         yield f"sección «{s['titulo']}», tarjeta", tarjeta["titulo"]
                         yield f"sección «{s['titulo']}», detalle de tarjeta", tarjeta["detalle"]
     for donde, texto in textos(app):

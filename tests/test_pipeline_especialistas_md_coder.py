@@ -97,6 +97,13 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         prompt = tareas._pensar.call_args.args[0]
         self.assertIn("[supuesto]", prompt, "el modo rápido pide marcar lo supuesto")
 
+    def test_el_planificador_exige_datos_reales_e_identidad_propia(self):
+        sistema = EspecialistaTareas._SISTEMA_PLANIFICADOR
+        self.assertIn("No inventes saldos", sistema)
+        self.assertIn("modelos de datos", sistema)
+        self.assertIn("persistencia", sistema)
+        self.assertIn("identidad visual propia", sistema)
+
     def test_el_resumen_entiende_el_formato_que_escribe_el_modelo(self):
         """Negritas y «[supuesto: motivo]», como salió de Groq el 25-11-2026."""
         real = SPEC_COMPLETA.replace(

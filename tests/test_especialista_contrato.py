@@ -149,8 +149,8 @@ class PruebaContratoSoloStdlib(unittest.TestCase):
                     relativos.add(nodo.module or "")
         # Solo biblioteca estándar: `typing` para los puertos y, desde que el
         # contrato lee y escribe la especificación de Tareas → Coder, lo justo
-        # para un parser de texto. Un módulo nuevo se añade aquí a conciencia.
-        self.assertEqual(importados, {"typing", "dataclasses", "re", "unicodedata"},
+        # para parser de texto y comparar cifras exactas. Un módulo se añade aquí a conciencia.
+        self.assertEqual(importados, {"typing", "dataclasses", "re", "unicodedata", "decimal"},
                          f"el contrato arrastra dependencias: {importados}")
         self.assertEqual(relativos, {"herramienta", "manager"},
                          f"el contrato importa otros hermanos: {relativos}")
@@ -677,15 +677,68 @@ def app_valida(**cambios):
         "descripcion": "Notas rápidas.",
         "personalidad": "tecnica",
         "fondo3d": True,
+        "persistencia": True,
+        "modelos": [{
+            "id": "notas", "titulo": "Notas", "registros": [],
+            "campos": [
+                {"id": "titulo", "etiqueta": "Título", "tipo": "texto", "obligatorio": True},
+                {"id": "texto", "etiqueta": "Texto", "tipo": "area"},
+            ],
+        }],
         "secciones": [
             {"titulo": "Notas", "bloques": [
-                {"tipo": "estadisticas", "chips": [{"etiqueta": "Notas", "valor": "8"}]},
-                {"tipo": "lista", "vacio": "Todavía no hay notas.",
-                 "items": [{"titulo": "Ideas para el viaje", "detalle": "Rutas por el norte"}]},
-                {"tipo": "formulario", "boton_abrir": "Nueva nota",
-                 "campos": [{"etiqueta": "Título", "tipo": "texto"}]},
+                {"tipo": "estadisticas", "indicadores": [
+                    {"etiqueta": "Notas", "formato": "numero",
+                     "calculo": {"operacion": "conteo", "modelo": "notas"}},
+                ]},
+                {"tipo": "lista", "modelo": "notas", "campo_titulo": "titulo",
+                 "campo_detalle": "texto", "vacio": "Todavía no hay notas."},
+                {"tipo": "formulario", "modelo": "notas", "boton_abrir": "Nueva nota"},
             ]},
         ],
+    }
+    app.update(cambios)
+    return app
+
+
+def app_con_datos(**cambios):
+    app = {
+        "titulo": "Cartera",
+        "descripcion": "Seguimiento de aportes y recuperaciones.",
+        "personalidad": "sobria",
+        "navegacion": "superior",
+        "fondo3d": False,
+        "persistencia": True,
+        "clave_almacenamiento": "cartera_data",
+        "direccion_visual": {
+            "densidad": "compacta", "cabecera": "marca", "forma": "angular",
+            "paleta": {"fondo": "#101010", "texto": "#f5f1e8",
+                       "acento": "#d9a92b", "linea": "#3a3a3a"},
+        },
+        "modelos": [{
+            "id": "movimientos", "titulo": "Movimientos", "registros": [],
+            "campos": [
+                {"id": "proyecto", "etiqueta": "Proyecto", "tipo": "texto", "obligatorio": True},
+                {"id": "monto", "etiqueta": "Monto", "tipo": "numero", "obligatorio": True, "min": 0},
+                {"id": "fecha", "etiqueta": "Fecha", "tipo": "fecha", "obligatorio": True},
+            ],
+        }],
+        "secciones": [{"id": "resumen", "titulo": "Resumen", "bloques": [
+            {"tipo": "estadisticas", "indicadores": [
+                {"etiqueta": "Aportes", "formato": "moneda", "moneda": "COP",
+                 "calculo": {"operacion": "suma", "modelo": "movimientos", "campo": "monto"}},
+                {"etiqueta": "Registros", "formato": "numero",
+                 "calculo": {"operacion": "conteo", "modelo": "movimientos"}},
+            ]},
+            {"tipo": "formulario", "modelo": "movimientos", "boton_abrir": "Nuevo movimiento"},
+            {"tipo": "tabla", "modelo": "movimientos", "vacio": "Aún no hay movimientos.",
+             "columnas": [{"id": "proyecto", "titulo": "Proyecto"},
+                          {"id": "monto", "titulo": "Monto"},
+                          {"id": "fecha", "titulo": "Fecha"}]},
+            {"tipo": "grafico", "visualizacion": "linea", "titulo": "Evolución",
+             "modelo": "movimientos", "eje_x": "fecha", "agrupacion": "mes", "acumulado": True,
+             "calculo": {"operacion": "suma", "campo": "monto"}},
+        ]}],
     }
     app.update(cambios)
     return app
@@ -700,7 +753,8 @@ class PruebaAppReact(unittest.TestCase):
 
     def test_la_navegacion_se_decide_sola_por_el_numero_de_secciones(self):
         crudo = app_valida(secciones=[
-            {"titulo": f"Pantalla {i}", "bloques": [{"tipo": "texto", "texto": "Contenido real."}]}
+            {"titulo": f"Pantalla {i}", "bloques": [
+                {"tipo": "texto", "origen": "plan", "texto": "Contenido real."}]}
             for i in range(7)])
         app, errores = esp.validar_app(crudo)
         self.assertEqual(errores, ())
@@ -734,24 +788,25 @@ class PruebaAppReact(unittest.TestCase):
         crudo = app_valida()
         crudo["secciones"][0]["bloques"] = [{"tipo": "formulario", "campos": []}]
         _, errores = esp.validar_app(crudo)
-        self.assertTrue(any("necesita al menos un campo" in e for e in errores))
-        crudo["secciones"][0]["bloques"] = [{"tipo": "estadisticas", "chips": []}]
+        self.assertTrue(any("formulario" in e and "modelo" in e for e in errores))
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "estadisticas", "origen": "plan", "chips": []}]
         _, errores = esp.validar_app(crudo)
         self.assertTrue(any("necesita al menos un chip" in e for e in errores))
 
     def test_catalogo_nuevo_de_bloques_normaliza_tabla_grafico_progreso_agenda_y_kanban(self):
         bloques = [
-            {"tipo": "tabla", "columnas": [
+            {"tipo": "tabla", "origen": "plan", "columnas": [
                 {"id": "fecha", "titulo": "Fecha"}, {"id": "tarea", "titulo": "Tarea"}],
              "filas": [{"fecha": "27 nov", "tarea": "Enviar informe"}]},
-            {"tipo": "grafico", "visualizacion": "barras", "titulo": "Gasto mensual",
+            {"tipo": "grafico", "origen": "plan", "visualizacion": "barras", "titulo": "Gasto mensual",
              "datos": [{"etiqueta": "Enero", "valor": 120},
                        {"etiqueta": "Febrero", "valor": 95}]},
-            {"tipo": "progreso", "etiqueta": "Lectura", "valor": 32,
+            {"tipo": "progreso", "origen": "plan", "etiqueta": "Lectura", "valor": 32,
              "total": 50, "unidad": "páginas"},
-            {"tipo": "agenda", "eventos": [{"fecha": "2026-11-27", "hora": "15:30",
+            {"tipo": "agenda", "origen": "plan", "eventos": [{"fecha": "2026-11-27", "hora": "15:30",
              "titulo": "Revisión", "detalle": "Presentar el borrador"}]},
-            {"tipo": "kanban", "columnas": [
+            {"tipo": "kanban", "origen": "plan", "columnas": [
                 {"id": "pendiente", "titulo": "Pendiente"}, {"id": "hecho", "titulo": "Hecho"}],
              "tarjetas": [{"id": "t1", "titulo": "Preparar borrador",
                            "columna": "pendiente"}]},
@@ -767,19 +822,19 @@ class PruebaAppReact(unittest.TestCase):
 
     def test_bloques_nuevos_rechazan_estructuras_fuera_de_su_contrato(self):
         casos = (
-            ({"tipo": "tabla", "columnas": [{"id": "fecha", "titulo": "Fecha"},
+            ({"tipo": "tabla", "origen": "plan", "columnas": [{"id": "fecha", "titulo": "Fecha"},
               {"id": "tarea", "titulo": "Tarea"}], "filas": [{"fecha": "hoy"}]}, "exactamente"),
-            ({"tipo": "grafico", "visualizacion": "anillo", "datos": [
+            ({"tipo": "grafico", "origen": "plan", "visualizacion": "anillo", "datos": [
               {"etiqueta": "A", "valor": -1}, {"etiqueta": "B", "valor": 2}]}, "no pueden ser negativos"),
-            ({"tipo": "progreso", "etiqueta": "Lectura", "valor": 51, "total": 50}, "0 ≤ valor ≤ total"),
-            ({"tipo": "agenda", "eventos": [{"fecha": "2026-02-30", "titulo": "Cierre"}]}, "fecha real"),
-            ({"tipo": "kanban", "columnas": [
+            ({"tipo": "progreso", "origen": "plan", "etiqueta": "Lectura", "valor": 51, "total": 50}, "0 ≤ valor ≤ total"),
+            ({"tipo": "agenda", "origen": "plan", "eventos": [{"fecha": "2026-02-30", "titulo": "Cierre"}]}, "fecha real"),
+            ({"tipo": "kanban", "origen": "plan", "columnas": [
               {"id": "pendiente", "titulo": "Pendiente"}, {"id": "hecho", "titulo": "Hecho"}],
               "tarjetas": [{"id": "t1", "titulo": "A", "columna": "perdido"}]}, "columna existente"),
-            ({"tipo": "tabla", "columnas": [
+            ({"tipo": "tabla", "origen": "plan", "columnas": [
               {"id": "ID", "titulo": "Identificador"},
               {"id": "monto", "titulo": "Monto"}], "filas": []}, "id técnico de la columna"),
-            ({"tipo": "tabla", "columnas": [
+            ({"tipo": "tabla", "origen": "plan", "columnas": [
               {"id": "id", "titulo": "Identificador"},
               {"id": "id", "titulo": "Otro id"}], "filas": []}, "id técnico de la columna"),
         )
@@ -789,9 +844,291 @@ class PruebaAppReact(unittest.TestCase):
                     {"titulo": "Resumen", "bloques": [bloque]}]))
                 self.assertTrue(any(esperado in error for error in errores), errores)
 
+    def test_app_con_modelos_validos_queda_vacia_y_conectada(self):
+        app, errores = esp.validar_app(app_con_datos())
+        self.assertEqual(errores, ())
+        self.assertTrue(app["persistencia"])
+        self.assertEqual(app["modelos"][0]["registros"], [])
+        self.assertEqual(app["secciones"][0]["bloques"][0]["indicadores"][0]["calculo"]["campo"], "monto")
+        self.assertEqual(app["secciones"][0]["bloques"][3]["datos"], [])
+
+    def test_formulario_sin_modelo_no_es_una_funcion_finja(self):
+        crudo = app_valida()
+        crudo.pop("modelos")
+        crudo["persistencia"] = False
+        _, errores = esp.validar_app(crudo)
+        self.assertTrue(any("formulario" in e and "modelo" in e for e in errores), errores)
+
+    def test_formulario_no_puede_omitir_un_campo_obligatorio(self):
+        crudo = app_con_datos()
+        crudo["secciones"][0]["bloques"][1]["campos"] = ["proyecto"]
+        _, errores = esp.validar_app(crudo)
+        self.assertTrue(any("obligatorio" in error for error in errores), errores)
+
+    def test_datos_estaticos_exigen_procedencia_del_plan(self):
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "estadisticas", "chips": [{"etiqueta": "Saldo", "valor": "1250000"}]},
+            {"tipo": "lista", "items": [{"titulo": "Proyecto Alfa"}], "vacio": "Nada"},
+            {"tipo": "tabla", "columnas": [{"id": "nombre", "titulo": "Nombre"},
+             {"id": "valor", "titulo": "Valor"}], "filas": [{"nombre": "Alfa", "valor": 10}]},
+        ]
+        _, errores = esp.validar_app(crudo)
+        self.assertGreaterEqual(sum("origen" in e for e in errores), 3, errores)
+
+    def test_ni_cifras_ni_registros_estaticos_ajenos_al_plan_pasan(self):
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "lista", "origen": "plan", "vacio": "Nada",
+             "items": [{"titulo": "Proyecto Omega", "detalle": "Inversión inventada"}]},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Una cartera para registrar proyectos propios.")
+        self.assertTrue(any("no consta en el plan" in e for e in errores), errores)
+
+        crudo = app_con_datos()
+        crudo["modelos"][0]["registros"] = [
+            {"origen": "plan", "valores": {"proyecto": "Proyecto Omega", "monto": 999, "fecha": "2026-11-27"}},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Cartera con proyectos propios; fecha 2026-11-27.")
+        self.assertTrue(any("no consta en el plan" in e for e in errores), errores)
+
+    def test_los_detalles_opcionales_vacios_no_son_datos_inventados(self):
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "agenda", "origen": "plan",
+             "eventos": [{"fecha": "2026-11-27", "titulo": "Revisión"}]},
+            {"tipo": "kanban", "origen": "plan",
+             "columnas": [{"id": "pendiente", "titulo": "Pendiente"},
+                          {"id": "hecho", "titulo": "Hecho"}],
+             "tarjetas": [{"id": "t1", "titulo": "Preparar", "columna": "pendiente"}]},
+        ]
+        _, errores = esp.validar_app(
+            crudo, plan_texto="Revisión el 2026-11-27 y tarjeta Preparar.")
+        self.assertEqual(errores, ())
+
+    def test_texto_estatico_exige_origen_y_no_inventa_cifras(self):
+        crudo = app_valida()
+        bloque = {"tipo": "texto", "texto": "El saldo inventado es 999999."}
+        crudo["secciones"][0]["bloques"] = [bloque]
+        _, errores = esp.validar_app(crudo, plan_texto="App sin datos.")
+        self.assertTrue(any("origen" in error for error in errores), errores)
+
+        bloque["origen"] = "plan"
+        _, errores = esp.validar_app(crudo, plan_texto="App sin datos.")
+        self.assertTrue(any("no consta en el plan" in error for error in errores), errores)
+
+        bloque["texto"] = "El capital aprobado es 1250."
+        _, errores = esp.validar_app(crudo, plan_texto="App con capital 1250.")
+        self.assertEqual(errores, ())
+
+    def test_un_identificador_textual_no_se_convierte_en_numero(self):
+        crudo = app_con_datos()
+        crudo["modelos"][0]["registros"] = [
+            {"origen": "plan", "valores": {
+                "proyecto": "00123", "monto": 10, "fecha": "2026-11-27"}},
+        ]
+        _, errores = esp.validar_app(
+            crudo, plan_texto="ID 123, monto 10 y fecha 2026-11-27.")
+        self.assertTrue(any("proyecto" in error and "no consta en el plan" in error
+                            for error in errores), errores)
+
+    def test_un_nombre_no_se_autoriza_por_ser_prefijo_de_otro(self):
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "lista", "origen": "plan", "items": [{"titulo": "Proyecto Alfa"}]},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Cartera con Proyecto Alfajor.")
+        self.assertTrue(any("no consta en el plan" in error for error in errores), errores)
+
+    def test_un_texto_no_ascii_no_se_autoriza_por_normalizarse_vacio(self):
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "lista", "origen": "plan", "items": [{"titulo": "東京"}]},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Cartera sin nombres propios.")
+        self.assertTrue(any("no consta en el plan" in error for error in errores), errores)
+        _, errores = esp.validar_app(crudo, plan_texto="Cartera con el proyecto 東京.")
+        self.assertEqual(errores, ())
+
+    def test_el_plan_exige_formulario_y_calculo_conectados(self):
+        crudo = app_con_datos()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "texto", "origen": "plan", "texto": "Registra gastos."},
+        ]
+        _, errores = esp.validar_app(
+            crudo, plan_texto="Registrar gastos y calcular el total.")
+        self.assertTrue(any("formulario" in error for error in errores), errores)
+        self.assertTrue(any("c[áa]lculo" in error or "calcul" in error for error in errores), errores)
+
+    def test_guardar_exige_un_formulario_conectado(self):
+        crudo = app_con_datos()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "texto", "origen": "plan", "texto": "Guardar gastos."},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Guardar gastos.")
+        self.assertTrue(any("formulario" in error for error in errores), errores)
+
+    def test_negaciones_y_exclusiones_no_exigen_controles(self):
+        crudo = app_valida(persistencia=False)
+        crudo.pop("modelos")
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "texto", "origen": "plan", "texto": "App informativa."},
+        ]
+        plan = (
+            "# Especificación: Consulta\n\n"
+            "## 1. Visión\nApp informativa.\n\n"
+            "## 5. Funcionalidades\nNo editar ni eliminar registros.\n\n"
+            "## 9. Fuera de alcance\nRegistrar gastos y calcular totales.\n"
+        )
+        _, errores = esp.validar_app(crudo, plan_texto=plan)
+        self.assertEqual(errores, ())
+
+    def test_totalmente_no_es_una_peticion_de_calculo(self):
+        crudo = app_con_datos()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "texto", "origen": "plan", "texto": "App informativa."},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Una app totalmente informativa.")
+        self.assertEqual(errores, ())
+
+    def test_un_idioma_invalido_no_rompe_el_formato_del_kit(self):
+        crudo = app_valida()
+        crudo["idioma"] = "español"
+        app, errores = esp.validar_app(crudo)
+        self.assertTrue(any("idioma" in error for error in errores), errores)
+        self.assertEqual(app["idioma"], "es")
+
+    def test_kanban_dinamico_exige_persistencia(self):
+        crudo = app_con_datos()
+        crudo["persistencia"] = False
+        crudo["modelos"][0]["campos"].append({
+            "id": "estado", "etiqueta": "Estado", "tipo": "seleccion",
+            "opciones": ["Pendiente", "Hecho"],
+        })
+        crudo["secciones"][0]["bloques"].append({
+            "tipo": "kanban", "modelo": "movimientos", "campo_titulo": "proyecto",
+            "campo_columna": "estado", "columnas": [
+                {"id": "pendiente", "titulo": "Pendiente", "valor": "Pendiente"},
+                {"id": "hecho", "titulo": "Hecho", "valor": "Hecho"},
+            ],
+        })
+        _, errores = esp.validar_app(crudo, plan_texto="Mover y guardar tarjetas.")
+        self.assertTrue(any("kanban" in error and "persistente" in error
+                            for error in errores), errores)
+
+    def test_un_numero_no_se_autoriza_por_ser_parte_de_otro(self):
+        crudo = app_con_datos()
+        crudo["modelos"][0]["registros"] = [
+            {"origen": "plan", "valores": {
+                "proyecto": "Proyecto Norte", "monto": 125, "fecha": "2026-11-27"}},
+        ]
+        plan = "Cartera con Proyecto Norte, monto 1250 y fecha 2026-11-27."
+        _, errores = esp.validar_app(crudo, plan_texto=plan)
+        self.assertTrue(any("monto" in error and "no consta en el plan" in error
+                            for error in errores), errores)
+
+        crudo["modelos"][0]["registros"][0]["valores"]["monto"] = 1250
+        app, errores = esp.validar_app(crudo, plan_texto=plan)
+        self.assertEqual(errores, ())
+        self.assertEqual(app["modelos"][0]["registros"][0]["valores"]["monto"], 1250)
+
+        crudo = app_valida()
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "estadisticas", "origen": "plan",
+             "chips": [{"etiqueta": "Saldo", "valor": 125}]},
+        ]
+        _, errores = esp.validar_app(crudo, plan_texto="Informe con saldo 1250.")
+        self.assertTrue(any("no consta en el plan" in error for error in errores), errores)
+
+        for valor, cifra in ((1250, "1.250"), (1250.5, "1.250,5"),
+                             (1250.5, "1,250.5"), (0.125, "0,125")):
+            with self.subTest(valor=valor, cifra=cifra):
+                crudo = app_con_datos()
+                crudo["modelos"][0]["registros"] = [
+                    {"origen": "plan", "valores": {
+                        "proyecto": "Proyecto Norte", "monto": valor, "fecha": "2026-11-27"}},
+                ]
+                plan = f"Cartera con Proyecto Norte, monto ${cifra} y fecha 2026-11-27."
+                _, errores = esp.validar_app(crudo, plan_texto=plan)
+                self.assertEqual(errores, ())
+
+    def test_kanban_tiene_una_columna_para_cada_estado_del_modelo(self):
+        crudo = app_con_datos()
+        crudo["modelos"][0]["campos"].append({
+            "id": "estado", "etiqueta": "Estado", "tipo": "seleccion",
+            "opciones": ["Pendiente", "En curso", "Hecho"],
+        })
+        tablero = {"tipo": "kanban", "modelo": "movimientos", "campo_titulo": "proyecto",
+                   "campo_columna": "estado", "columnas": [
+                       {"id": "pendiente", "titulo": "Pendiente", "valor": "Pendiente"},
+                       {"id": "hecho", "titulo": "Hecho", "valor": "Hecho"},
+                   ]}
+        crudo["secciones"][0]["bloques"].append(tablero)
+        _, errores = esp.validar_app(crudo)
+        self.assertTrue(any("cada opción" in error for error in errores), errores)
+
+        tablero["columnas"].append(
+            {"id": "en-curso", "titulo": "En curso", "valor": "En curso"})
+        _, errores = esp.validar_app(crudo)
+        self.assertEqual(errores, ())
+
+    def test_los_interruptores_no_aceptan_texto_como_booleano(self):
+        for clave in ("fondo3d", "persistencia"):
+            with self.subTest(clave=clave):
+                crudo = app_con_datos()
+                crudo[clave] = "false"
+                _, errores = esp.validar_app(crudo)
+                self.assertTrue(any(clave in error and "true o false" in error
+                                    for error in errores), errores)
+
+        with self.subTest(clave="obligatorio"):
+            crudo = app_con_datos()
+            crudo["modelos"][0]["campos"][0]["obligatorio"] = "false"
+            _, errores = esp.validar_app(crudo)
+            self.assertTrue(any("obligatorio" in error and "true o false" in error
+                                for error in errores), errores)
+
+        with self.subTest(clave="acumulado"):
+            crudo = app_con_datos()
+            crudo["secciones"][0]["bloques"][3]["acumulado"] = "false"
+            _, errores = esp.validar_app(crudo)
+            self.assertTrue(any("acumulado" in error and "true o false" in error
+                                for error in errores), errores)
+
+    def test_modelos_y_bloques_no_apuntan_a_campos_inexistentes(self):
+        crudo = app_con_datos()
+        crudo["secciones"][0]["bloques"][0]["indicadores"][0]["calculo"]["campo"] = "inexistente"
+        crudo["secciones"][0]["bloques"][1]["modelo"] = "otro"
+        crudo["secciones"][0]["bloques"][3]["calculo"]["operacion"] = "adivinar"
+        _, errores = esp.validar_app(crudo)
+        self.assertTrue(any("campo" in e and "inexistente" in e for e in errores), errores)
+        self.assertTrue(any("modelo" in e and "otro" in e for e in errores), errores)
+        self.assertTrue(any("operacion" in e for e in errores), errores)
+
+    def test_plan_con_persistencia_no_se_entrega_como_prototipo_estatico(self):
+        crudo = app_valida()
+        crudo.pop("modelos")
+        crudo["persistencia"] = False
+        crudo["secciones"][0]["bloques"] = [{"tipo": "texto", "texto": "Registra tus movimientos."}]
+        _, errores = esp.validar_app(
+            crudo, plan_texto="MVP: registrar movimientos. Los datos se guardan en localStorage y sobreviven al recargar.")
+        self.assertTrue(any("modelos" in e and "persist" in e for e in errores), errores)
+
+    def test_direccion_visual_si_es_personal_y_corrige_contraste(self):
+        app, errores = esp.validar_app(app_con_datos())
+        self.assertEqual(errores, ())
+        self.assertEqual(app["direccion_visual"]["cabecera"], "marca")
+        self.assertGreaterEqual(esp.contraste(app["direccion_visual"]["paleta"]["texto"],
+                                              app["direccion_visual"]["paleta"]["fondo"]), 7)
+        crudo = app_con_datos()
+        crudo["direccion_visual"]["densidad"] = "infinita"
+        _, errores = esp.validar_app(crudo)
+        self.assertTrue(any("densidad" in e for e in errores), errores)
+
     def test_emojis_y_relleno_son_errores_de_estilo(self):
         crudo = app_valida()
-        crudo["secciones"][0]["bloques"] = [{"tipo": "texto", "texto": "Bienvenido a tu app 🚀"}]
+        crudo["secciones"][0]["bloques"] = [
+            {"tipo": "texto", "origen": "plan", "texto": "Bienvenido a tu app 🚀"}]
         _, errores = esp.validar_app(crudo)
         self.assertTrue(all(e.startswith(esp.ESTILO) for e in errores))
         self.assertTrue(any("emojis" in e for e in errores))
