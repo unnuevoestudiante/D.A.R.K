@@ -137,6 +137,16 @@ class PruebasCoderPaciente(unittest.TestCase):
         self.assertEqual(solicitud.messages[0], {"role": "system", "content": "sistema"})
         self.assertEqual(solicitud.options["max_output_tokens"], 900)
 
+    def test_el_modo_json_llega_al_proveedor_sin_afectar_a_html(self):
+        trabajo = _TrabajoFalso("{}")
+        coder = self.coder(trabajo)
+
+        coder._llamar_online("pedido", "sistema", "json")
+        coder._llamar_online("pedido", "sistema", "html")
+
+        self.assertEqual(trabajo.solicitudes[0].response_format, "json")
+        self.assertIsNone(trabajo.solicitudes[1].response_format)
+
     def test_la_cuota_diaria_no_cae_al_local_sin_consultar(self):
         trabajo = _TrabajoFalso(error=ErrorRemoto("429 diario", diario=True))
         ok, motivo = self.coder(trabajo)._llamar_online("haz", "s", "html")
@@ -1025,6 +1035,47 @@ class PruebasAppReact(unittest.TestCase):
         self.assertTrue(resultado["revisado"])
         proceso.terminate.assert_called_once()
         proceso.wait.assert_called_once_with(timeout=5)
+
+    def test_un_json_cortado_no_se_valida_como_objeto_interno(self):
+        from contratos.especialista import leer_especificacion
+        cortado = APP_JSON[:APP_JSON.index('"secciones"')]
+        coder = self.coder(cortado, APP_JSON)
+
+        with patch("builtins.print"):
+            app, errores = coder._componer_app(leer_especificacion(SPEC_REACT))
+
+        self.assertFalse(errores)
+        self.assertEqual(app["titulo"], "Bitácora")
+        primero, segundo = coder._llamar_online.call_args_list
+        self.assertEqual(primero.kwargs["max_tokens"], 5000)
+        self.assertIn("no contiene un objeto JSON completo", segundo.args[0])
+        self.assertNotIn("Tu respuesta anterior:", segundo.args[0])
+
+    def test_el_corte_del_json_queda_explicito_en_el_proyecto(self):
+        cortado = APP_JSON[:APP_JSON.index('"secciones"')]
+        coder = self.coder(cortado, cortado, cortado)
+
+        with patch("builtins.print"):
+            resultado = self.generar(coder)
+
+        self.assertFalse(resultado["ok"])
+        estado = json.loads(
+            (Path(coder.ultima_carpeta_proyecto) / ".dark_project.json").read_text(
+                encoding="utf-8"))
+        self.assertEqual(estado["estado"], "fallido")
+        self.assertEqual(estado["errores"], [
+            "la respuesta no contiene un objeto JSON completo"])
+        self.assertFalse((Path(coder.ultima_carpeta_proyecto) / "package.json").exists())
+
+    def test_el_json_completo_rodeado_de_texto_sigue_valiendo(self):
+        from contratos.especialista import leer_especificacion
+        coder = self.coder(f"Aquí está la app:\n{APP_JSON}\nFin de la respuesta.")
+
+        with patch("builtins.print"):
+            app, errores = coder._componer_app(leer_especificacion(SPEC_REACT))
+
+        self.assertFalse(errores)
+        self.assertEqual(app["titulo"], "Bitácora")
 
     def test_los_errores_vuelven_al_modelo_y_el_segundo_intento_vale(self):
         coder = self.coder('{"titulo": "x"}', APP_JSON)

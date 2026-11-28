@@ -101,6 +101,7 @@ _ARCHIVOS_APP_GENERADOS = (
 # El modelo no puede editar archivos que después se ejecutan como pruebas.
 _ARCHIVOS_APP_NO_EDITABLES = {"src/kit/datos.ts", "tests/datos.test.ts"}
 _PRESUPUESTO_BUILD_MINIMO_MB = 2048
+_MAX_TOKENS_APP = 5000
 
 _RUTAS_BLOQUEADAS = (
     os.environ.get("WINDIR", "C:\\Windows"),
@@ -1233,7 +1234,8 @@ _SYSTEM_APP = (
     "degradados morados, emojis, sombras y frases de bienvenida o relleno.\n"
     "6. Respeta personalidad, navegación y fondo 3D del plan salvo contradicción "
     "concreta. Todo el texto va en el idioma del plan, español si no dice otro.\n"
-    "Respondes SOLO con JSON válido, sin texto antes ni después."
+    "Respondes SOLO con JSON válido y compacto, en una sola línea, sin texto antes "
+    "ni después."
 )
 
 _SYSTEM_RESOLVER_PIEZA = (
@@ -1767,7 +1769,8 @@ class EspecialistaCodigo:
                 ChatRequest(model="", messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
-                ], options={"max_output_tokens": max_tokens}),
+                ], response_format="json" if extension == "json" else None,
+                options={"max_output_tokens": max_tokens}),
                 al_esperar=self._al_esperar_cuota)
         except Exception as e:
             if getattr(e, "diario", False):
@@ -1779,7 +1782,8 @@ class EspecialistaCodigo:
                     solicitud = ChatRequest(model="", messages=[
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},
-                    ], options={"max_output_tokens": max_tokens})
+                    ], response_format="json" if extension == "json" else None,
+                    options={"max_output_tokens": max_tokens})
                     for _intento in range(2):
                         try:
                             resultado = proveedor.complete_paciente(
@@ -1880,7 +1884,7 @@ class EspecialistaCodigo:
         return {"nombre_proyecto": nombre or "proyecto", "archivos": archivos}
 
     @staticmethod
-    def _leer_json_incrustado(texto):
+    def _leer_json_incrustado(texto, permitir_anidados=True):
         """Lee el primer objeto JSON completo aunque el modelo añada texto alrededor."""
         decoder = json.JSONDecoder()
         inicio = texto.find("{")
@@ -1889,6 +1893,8 @@ class EspecialistaCodigo:
                 valor, _ = decoder.raw_decode(texto[inicio:])
                 return valor
             except json.JSONDecodeError:
+                if not permitir_anidados:
+                    return None
                 inicio = texto.find("{", inicio + 1)
         return None
 
@@ -4266,18 +4272,24 @@ class EspecialistaCodigo:
         app, errores = None, ("sin respuesta del modelo",)
         original = pedido
         for _intento in range(3):
-            ok, texto = self._llamar_online(pedido, _SYSTEM_APP, "json", max_tokens=2200)
+            ok, texto = self._llamar_online(
+                pedido, _SYSTEM_APP, "json", max_tokens=_MAX_TOKENS_APP)
             if not ok:
                 print(f"[Código] app de React: el modelo no respondió ({texto})")
                 return None, (texto,)
-            datos = self._leer_json_incrustado(texto)
-            app, errores = validar_app(datos, plan_texto=plan)
+            datos = self._leer_json_incrustado(texto, permitir_anidados=False)
+            if datos is None:
+                app, errores = None, ("la respuesta no contiene un objeto JSON completo",)
+            else:
+                app, errores = validar_app(datos, plan_texto=plan)
             if not errores:
                 return app, ()
             print(f"[Código] app de React con errores: {errores}")
             pedido = (
-                f"{original}\n\nTu respuesta anterior:\n{texto[:6000]}\n\n"
-                "Tenía estos errores; devuelve el JSON completo corregido:\n- "
+                f"{original}\n\n"
+                "Devuelve de nuevo el JSON completo corregido. No copies fragmentos "
+                "de la respuesta anterior.\n"
+                "Tenía estos errores:\n- "
                 + "\n- ".join(e.removeprefix(ESTILO) for e in errores)
             )
         if app and errores and all(e.startswith(ESTILO) for e in errores):
