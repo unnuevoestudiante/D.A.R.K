@@ -1,6 +1,7 @@
 """Pruebas de integración del router web, tareas y generación de código."""
 import io
 import json
+import queue
 import sys
 import tempfile
 import threading
@@ -17,6 +18,7 @@ if str(DARK_PYTHON) not in sys.path:
     sys.path.insert(0, str(DARK_PYTHON))
 
 from acceso import FachadaAcceso  # noqa: E402
+from contratos.contratos import PasoResultado  # noqa: E402
 from especialistas.especialista_codigo import EspecialistaCodigo  # noqa: E402
 from especialistas.especialista_tareas import EspecialistaTareas  # noqa: E402
 from herramientas.internas.ejecutor import EjecutorHerramientas, Servicios  # noqa: E402
@@ -416,6 +418,31 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         nucleo._crear_tarea = Mock(return_value="tarea-plan")
         return nucleo
 
+    def worker(self, resultado):
+        nucleo = self.nucleo()
+        tarea = {
+            "descripcion": "Construye «App de gastos».",
+            "task_manager_id": "tarea-plan",
+            "intencion_id": "i-1",
+            "pasos": [{
+                "id": "paso-1", "tool": "escribir_codigo",
+                "args": {"tarea": "Construye «App de gastos».",
+                         "contenido_md": "C:/planes/gastos.md"},
+            }],
+        }
+        nucleo._tareas_bg = Mock()
+        nucleo._tareas_bg.get.side_effect = [tarea, RuntimeError("fin del worker")]
+        nucleo._tarea_bg_activa = None
+        nucleo._tarea_bg_cancel = threading.Event()
+        nucleo._iniciar_tarea = Mock()
+        nucleo._ejecutar_paso_con_reintentos = Mock(return_value=resultado)
+        nucleo._pausar_tarea_por_fallo = Mock()
+        nucleo._completar_tarea = Mock(return_value=True)
+        nucleo._cliente_manager = Mock()
+        nucleo.intencion = Mock()
+        nucleo._avisos_pendientes = queue.Queue()
+        return nucleo
+
     def test_el_foco_se_valida_y_se_comparte_con_el_bridge_y_el_cerebro(self):
         nucleo = self.nucleo()
         self.assertTrue(nucleo._establecer_especialista_enfocado("tareas"))
@@ -526,6 +553,53 @@ class PruebaPlanAntesDelCoder(unittest.TestCase):
         self.assertNotIn("contenido_md", params, "sin especificación no se inventa una")
         nucleo._armar_ventana_bg.assert_called_once()
         self.assertFalse(nucleo._command_lock.locked())
+
+    def test_el_worker_reabre_tareas_cuando_el_coder_echa_en_falta_campos(self):
+        errores = ["falta «titulo»", "«secciones» debe ser una lista de 1 a 8 pantallas"]
+        resultado = PasoResultado(
+            ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+            mensaje="No pude componer la app.", error="; ".join(errores),
+            tipo_error="interno", reintentable=False,
+            datos={"etapa": "composicion", "errores": errores,
+                   "especificacion": "C:/planes/gastos.md"},
+        )
+        nucleo = self.worker(resultado)
+        nucleo.esp_tareas.reabrir_por_error.return_value = {
+            "decir": "El coder señaló campos faltantes. Ya preparé el plan."}
+
+        with redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(RuntimeError, "fin del worker"):
+            nucleo._worker_tareas_bg()
+
+        nucleo.esp_tareas.reabrir_por_error.assert_called_once_with(
+            "C:/planes/gastos.md", errores, pedido="Construye «App de gastos».")
+        nucleo._pausar_tarea_por_fallo.assert_not_called()
+        nucleo._cliente_manager.pausar.assert_called_once_with("tarea-plan")
+        nucleo.intencion.marcar_fallida.assert_not_called()
+        nucleo._completar_tarea.assert_not_called()
+        self.assertEqual(nucleo._avisos_pendientes.get_nowait(),
+                         "El coder señaló campos faltantes. Ya preparé el plan.")
+        self.assertIsNone(nucleo._tarea_bg_activa)
+
+    def test_el_worker_no_reabre_tareas_por_un_fallo_de_json(self):
+        errores = ["la respuesta no contiene un objeto JSON completo"]
+        resultado = PasoResultado(
+            ok=False, estado="fallo", tool="escribir_codigo", paso_id="paso-1",
+            mensaje="No pude componer la app.", error=errores[0],
+            tipo_error="interno", reintentable=False,
+            datos={"etapa": "composicion", "errores": errores,
+                   "especificacion": "C:/planes/gastos.md"},
+        )
+        nucleo = self.worker(resultado)
+        nucleo.esp_tareas.reabrir_por_error.return_value = None
+
+        with redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(RuntimeError, "fin del worker"):
+            nucleo._worker_tareas_bg()
+
+        nucleo.esp_tareas.reabrir_por_error.assert_called_once()
+        nucleo._pausar_tarea_por_fallo.assert_called_once()
+        nucleo.intencion.marcar_fallida.assert_called_once_with("i-1")
 
 
 class PruebaPropuestaInterfazTareas(unittest.TestCase):

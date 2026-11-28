@@ -4491,7 +4491,9 @@ class EspecialistaCodigo:
                             "Su estado se guardó en .dark_project.json.")
                 estado.update(estado="fallido", errores=list(errores))
                 return {"ok": False, "mensaje": "No pude componer la app.",
-                        "error": "; ".join(errores)}
+                        "error": "; ".join(errores),
+                        "datos": {"etapa": "composicion", "errores": list(errores),
+                                  "especificacion": ruta_especificacion}}
             nombre_npm = re.sub(r"[^a-z0-9-]+", "-", nombre.replace("_", "-")).strip("-") or "app"
             self._ensamblar_app_react(carpeta, app, nombre_npm)
             estado["composicion"] = app

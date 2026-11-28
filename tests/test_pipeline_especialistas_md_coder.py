@@ -59,6 +59,14 @@ SPEC_PARCIAL = """# Especificación: App de recetas
 Guardar recetas familiares.
 """
 
+ERRORES_COMPOSICION = (
+    "falta «titulo»",
+    "«secciones» debe ser una lista de 1 a 8 pantallas",
+    "el plan pide datos persistentes o calculados: declara «modelos» y conecta los bloques",
+    "el plan pide persistencia: «persistencia» debe ser true",
+    "el plan pide registrar o modificar datos: declara un «formulario» conectado a un modelo",
+)
+
 
 class PruebaPlanificadorDeProyectos(unittest.TestCase):
     """Tareas como planificador: escribe la especificación y la pasa al coder."""
@@ -82,6 +90,11 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         cola = list(respuestas)
         tareas._pensar = Mock(side_effect=lambda *a, **k: cola.pop(0) if len(cola) > 1 else cola[0])
         return tareas
+
+    def especificacion_en_disco(self, texto=SPEC_COMPLETA):
+        ruta = Path(self.temporal.name) / "app.md"
+        ruta.write_text(texto, encoding="utf-8")
+        return ruta
 
     def test_modo_rapido_escribe_todo_y_pide_aprobacion_con_los_supuestos(self):
         tareas = self.tareas(SPEC_COMPLETA)
@@ -161,6 +174,114 @@ class PruebaPlanificadorDeProyectos(unittest.TestCase):
         self.assertIn("Inicio: total del mes", traspaso["tarea"])
         self.assertNotIn("[supuesto]", traspaso["tarea"])
         self.assertTrue(Path(traspaso["especificacion"]).is_file())
+        self.assertFalse(tareas.planificacion_activa())
+
+    def test_el_coder_puede_reabrir_el_plan_y_aclarar_los_campos_faltantes(self):
+        ruta = self.especificacion_en_disco()
+        revisada = SPEC_COMPLETA.replace(
+            "Gasto: importe, categoría, fecha y nota; en localStorage.",
+            "Gasto: importe, categoría, fecha y nota. Modelo persistente en localStorage; "
+            "el formulario de nuevo gasto guarda registros reales y las listas se derivan de ellos."
+        ).replace(
+            "- MVP: anotar y listar gastos.",
+            "- MVP: registrar gastos con un formulario conectado al modelo y listarlos."
+        ).replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: total del mes calculado desde los gastos guardados y últimos gastos."
+        )
+        tareas = self.tareas(revisada)
+
+        resultado = tareas.reabrir_por_error(
+            str(ruta), ERRORES_COMPOSICION, pedido="Construye «App de gastos».")
+
+        self.assertTrue(tareas.planificacion_activa())
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertIn("El coder", resultado["decir"])
+        self.assertTrue(resultado["decir"].endswith("¿Lo construyo, o desea cambiar algo?"))
+        prompt = tareas._pensar.call_args.args[0]
+        for error in ERRORES_COMPOSICION:
+            self.assertIn(error, prompt)
+        self.assertIn("Modelo persistente", tareas._plan["especificacion"].seccion("datos"))
+        traspaso = tareas.atender_planificacion("sí, constrúyelo")["traspaso"]
+        self.assertIn("Modelo persistente", traspaso["tarea"])
+
+    def test_sin_modelo_tareas_pregunta_por_el_campo_que_no_pudo_aclarar(self):
+        ruta = self.especificacion_en_disco()
+        tareas = self.tareas("")
+
+        resultado = tareas.reabrir_por_error(str(ruta), ERRORES_COMPOSICION)
+
+        self.assertTrue(tareas.planificacion_activa())
+        self.assertEqual(tareas._plan["estado"], "preguntando")
+        self.assertEqual(tareas._plan["hueco"], "pantallas")
+        self.assertIn("No pude aclararlo", resultado["decir"])
+        self.assertTrue(resultado["decir"].endswith(
+            "¿Qué pantallas imagina y qué se hace en cada una?"))
+        self.assertEqual(tareas._plan["especificacion"].seccion("datos"),
+                         "Gasto: importe, categoría, fecha y nota; en localStorage.")
+
+    def test_varias_preguntas_de_recuperacion_terminan_en_aprobacion_y_traspaso(self):
+        ruta = self.especificacion_en_disco()
+        tareas = self.tareas("")
+        tareas._texto_online = Mock(return_value="")
+        tareas.reabrir_por_error(str(ruta), ERRORES_COMPOSICION)
+
+        respuestas = (
+            "inicio, catálogo y carrito",
+            "productos, carrito y compras, guardados en localStorage",
+            "añadir al carrito y confirmar la compra con un formulario conectado al modelo",
+        )
+        preguntas = []
+        for respuesta in respuestas:
+            preguntas.append(tareas._plan["hueco"])
+            resultado = tareas.atender_planificacion(respuesta)
+        self.assertEqual(preguntas, ["pantallas", "datos", "funcionalidades"])
+        self.assertEqual(tareas._plan["recuperacion_pendientes"], [])
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertTrue(resultado["decir"].endswith("¿Lo construyo, o desea cambiar algo?"))
+
+        traspaso = tareas.atender_planificacion("sí, constrúyelo")["traspaso"]
+        self.assertEqual(traspaso["especificacion"], str(ruta))
+        for respuesta in respuestas:
+            self.assertIn(respuesta, traspaso["tarea"])
+        self.assertFalse(tareas.planificacion_activa())
+
+    def test_tareas_completa_un_titulo_ausente_sin_necesitar_al_modelo(self):
+        ruta = self.especificacion_en_disco(SPEC_COMPLETA.replace(
+            "# Especificación: App de gastos", "# Especificación: "))
+        tareas = self.tareas("")
+
+        resultado = tareas.reabrir_por_error(
+            str(ruta), ["falta «titulo»"], pedido="Construye «App de gastos».")
+
+        self.assertEqual(tareas._plan["especificacion"].titulo, "App de gastos")
+        self.assertEqual(tareas._plan["estado"], "esperando_aprobacion")
+        self.assertIn("título", resultado["decir"])
+        tareas._pensar.assert_not_called()
+
+    def test_tareas_no_reabre_por_json_cortado_red_ni_build(self):
+        ruta = self.especificacion_en_disco()
+        for errores in (
+            ("la respuesta no contiene un objeto JSON completo",),
+            ("Read timed out",),
+            ("falló npm run build: error de compilación",),
+        ):
+            with self.subTest(errores=errores):
+                tareas = self.tareas("")
+                self.assertIsNone(tareas.reabrir_por_error(str(ruta), errores))
+                self.assertFalse(tareas.planificacion_activa())
+
+    def test_un_segundo_fallo_de_composicion_no_abre_otro_plan(self):
+        ruta = self.especificacion_en_disco()
+        revisada = SPEC_COMPLETA.replace(
+            "- Inicio: total del mes y últimos gastos.",
+            "- Inicio: panel principal con el total calculado y últimos gastos.")
+        tareas = self.tareas(revisada)
+        errores = ["«secciones» debe ser una lista de 1 a 8 pantallas"]
+        tareas.reabrir_por_error(str(ruta), errores)
+        tareas.atender_planificacion("sí, constrúyelo")
+
+        self.assertIsNone(tareas.reabrir_por_error(str(ruta), errores))
         self.assertFalse(tareas.planificacion_activa())
 
     def test_las_ordenes_de_voz_pasan_al_coder_sin_repetir_el_resumen(self):

@@ -818,6 +818,17 @@ class EspecialistaTareas:
     PREGUNTAS_GUIADAS = ("vision", "usuarios", "pantallas", "funcionalidades", "visual")
     LOTE_SECCIONES = 3
     MAX_TOKENS_POR_LOTE = 800
+    MAX_RECUPERACIONES_PLAN = 1
+    _CAMPOS_RECUPERABLES = (
+        ("falta «titulo»", "el título", ()),
+        ("«secciones» debe ser una lista de 1 a 8 pantallas", "las pantallas", ("pantallas",)),
+        ("declara «modelos» y conecta los bloques", "los modelos de datos", ("datos",)),
+        ("«persistencia» debe ser true", "la persistencia", ("datos",)),
+        ("declara un «formulario» conectado a un modelo", "el formulario conectado a un modelo",
+         ("funcionalidades", "datos")),
+        ("conecta un «calculo» a estadísticas", "el cálculo de totales o evolución",
+         ("datos", "criterios")),
+    )
 
     _RE_PLANIFICAR = re.compile(
         r"\b(?:planifi\w*|plane(?:emos|ar|a|ame|amos)|organic(?:emos|ar)|"
@@ -1061,6 +1072,19 @@ class EspecialistaTareas:
     def _siguiente_paso(self, cambio: bool = False) -> Dict:
         plan = self._plan
         self._guardar_plan()
+        if plan.get("recuperacion_pendientes") and plan["estado"] == "preguntando":
+            hueco_actual = plan.get("hueco")
+            if hueco_actual:
+                plan["recuperacion_pendientes"] = [
+                    c for c in plan["recuperacion_pendientes"] if c != hueco_actual]
+            if plan["recuperacion_pendientes"]:
+                plan["recuperacion_pendientes"] = self._aclarar_campos_para_coder(
+                    plan["recuperacion_pendientes"])
+                self._guardar_plan()
+                if plan["recuperacion_pendientes"]:
+                    plan["modo"], plan["estado"] = "guiado", "preguntando"
+                    plan["hueco"] = plan["recuperacion_pendientes"][0]
+                    return {"decir": self._pregunta_proactiva(plan["hueco"])}
         huecos = [c for c, _ in huecos_especificacion(plan["especificacion"])]
         if plan["modo"] == "guiado" and plan["estado"] == "preguntando":
             preguntables = [c for c in huecos if c in self.PREGUNTAS_GUIADAS]
@@ -1125,6 +1149,82 @@ class EspecialistaTareas:
             except Exception as error:
                 print(f"[Tareas] no pude preparar el empujón local: {error}")
         return pregunta
+
+    def reabrir_por_error(self, ruta_especificacion: str, errores,
+                          pedido: str = "") -> Optional[Dict]:
+        """Reabre un plan aprobado cuando al coder le faltan campos de composición."""
+        if self.planificacion_activa():
+            return None
+        if not ruta_especificacion or not os.path.isfile(ruta_especificacion):
+            return None
+        errores = [str(error).strip() for error in (errores or []) if str(error).strip()]
+        campos, claves = [], []
+        for error in errores:
+            for fragmento, campo, afectadas in self._CAMPOS_RECUPERABLES:
+                if fragmento not in error:
+                    continue
+                if campo not in campos:
+                    campos.append(campo)
+                for clave in afectadas:
+                    if clave not in claves:
+                        claves.append(clave)
+        if not campos:
+            return None
+
+        ruta = os.path.abspath(ruta_especificacion)
+        clave_ruta = os.path.normcase(ruta)
+        recuperaciones = getattr(self, "_recuperaciones_por_ruta", {})
+        if recuperaciones.get(clave_ruta, 0) >= self.MAX_RECUPERACIONES_PLAN:
+            return None
+        try:
+            with open(ruta, encoding="utf-8") as fuente:
+                esp = leer_especificacion(fuente.read())
+        except (OSError, UnicodeError):
+            return None
+        if not esp.titulo.strip():
+            titulo = re.search(r"«([^»]+)»", pedido or "")
+            esp = Especificacion(
+                titulo=(titulo.group(1).strip() if titulo else self._titulo_de(pedido)),
+                secciones=esp.secciones, extra=esp.extra)
+
+        self._recuperaciones_por_ruta = recuperaciones
+        recuperaciones[clave_ruta] = recuperaciones.get(clave_ruta, 0) + 1
+        self._plan = {
+            "modo": "rapido", "pedido": pedido or f"Construye «{esp.titulo}».",
+            "ruta": ruta, "ts": time.time(), "estado": "preguntando",
+            "especificacion": esp, "respuestas": 0, "errores_coder": errores,
+        }
+        pendientes = self._aclarar_campos_para_coder(claves) if claves else []
+        self._guardar_plan()
+        self._plan["recuperacion_pendientes"] = pendientes
+        huecos = [c for c, _ in huecos_especificacion(self._plan["especificacion"])]
+        lista = self._lista_hablada(campos)
+        if pendientes or huecos:
+            plan = self._plan
+            plan["modo"], plan["estado"] = "guiado", "preguntando"
+            plan["hueco"] = (pendientes or huecos)[0]
+            return {"decir": "El coder se detuvo al componer la app. "
+                             f"Faltan por aclarar: {lista}. No pude aclararlo todo. "
+                             + self._pregunta_proactiva(plan["hueco"])}
+        self._plan["estado"] = "esperando_aprobacion"
+        self._plan["hueco"] = None
+        return {"decir": "El coder se detuvo al componer la app. "
+                         f"Faltan por aclarar: {lista}. Ya aclaré el plan y lo dejé "
+                         "listo para reintentar. "
+                         + self._resumen(self._plan["especificacion"], cambio=True)}
+
+    def _aclarar_campos_para_coder(self, claves: List[str]) -> List[str]:
+        plan = self._plan
+        antes = {clave: plan["especificacion"].seccion(clave) for clave in claves}
+        instruccion = (
+            "El programador no pudo componer la app. Haz explícitos en el plan los "
+            "requisitos que faltan para que el JSON de composición los incluya. "
+            "No inventes datos operativos ni funciones que solo aparenten trabajar. "
+            "Errores del programador:\n- " + "\n- ".join(plan.get("errores_coder", [])))
+        if not self._redactar(instruccion, claves, completar=True):
+            return list(claves)
+        actual = plan["especificacion"]
+        return [clave for clave in claves if actual.seccion(clave) == antes[clave]]
 
     def _traspasar(self) -> Dict:
         """El plan aprobado pasa al coder: el Núcleo despacha `escribir_codigo`."""

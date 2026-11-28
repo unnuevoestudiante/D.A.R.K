@@ -6671,6 +6671,7 @@ class DarkNucleo:
             tarea_id = tarea.get("task_manager_id")
             resultado_cadena = ResultadoCadena(ok=True, estado="exito")
             t0_cadena = time.time()
+            plan_reabierto = False
 
             for indice, paso in enumerate(tarea["pasos"]):
                 if self._tarea_bg_cancel.is_set():
@@ -6694,6 +6695,12 @@ class DarkNucleo:
                     resultado_cadena.estado = "esperando_confirmacion"
                     break
                 if not resultado_paso.ok:
+                    if self._recuperar_plan_por_fallo(tarea, paso, resultado_paso):
+                        plan_reabierto = True
+                        resultado_cadena.ok = False
+                        resultado_cadena.estado = "fallo"
+                        resultado_cadena.error_global = "Tareas reabrió el plan."
+                        break
                     self._pausar_tarea_por_fallo(
                         tarea_id, paso,
                         resultado_paso.error or resultado_paso.mensaje)
@@ -6708,7 +6715,7 @@ class DarkNucleo:
             resultado_cadena.duracion_total_ms = int(
                 (time.time() - t0_cadena) * 1000)
 
-            if resultado_cadena.estado == "esperando_confirmacion":
+            if plan_reabierto or resultado_cadena.estado == "esperando_confirmacion":
                 self._tarea_bg_activa = None
                 continue
 
@@ -6831,6 +6838,42 @@ class DarkNucleo:
             print(f"DEBUG - [PASO {paso_id}] reintento en {espera:.1f}s")
             time.sleep(espera)
 
+    def _recuperar_plan_por_fallo(self, tarea, paso, resultado) -> bool:
+        if (paso.get("tool") != "escribir_codigo"
+                or getattr(resultado, "tool", "") != "escribir_codigo"):
+            return False
+        datos = getattr(resultado, "datos", None)
+        if not isinstance(datos, dict) or datos.get("etapa") != "composicion":
+            return False
+        errores = datos.get("errores")
+        if not isinstance(errores, (list, tuple)):
+            return False
+        args = paso.get("args") or {}
+        ruta = datos.get("especificacion") or args.get("contenido_md")
+        if not isinstance(ruta, str) or not ruta:
+            return False
+        reabrir = getattr(getattr(self, "esp_tareas", None), "reabrir_por_error", None)
+        if not callable(reabrir):
+            return False
+        candado = getattr(self, "_plan_lock", None)
+        if candado is None or not candado.acquire(blocking=False):
+            return False
+        try:
+            respuesta = reabrir(
+                ruta, list(errores),
+                pedido=args.get("tarea") or tarea.get("descripcion", ""))
+        except Exception as error:
+            print(f"[Tareas] no pude reabrir el plan por el fallo del coder: {error}")
+            return False
+        finally:
+            candado.release()
+        if not isinstance(respuesta, dict) or not respuesta.get("decir"):
+            return False
+        if tarea.get("task_manager_id"):
+            self._cliente_manager.pausar(tarea["task_manager_id"])
+        self._avisos_pendientes.put(respuesta["decir"])
+        return True
+
     def _pausar_tarea_por_fallo(self, tarea_id, paso, detalle):
         if tarea_id:
             self._cliente_manager.pausar(tarea_id)
@@ -6863,7 +6906,7 @@ class DarkNucleo:
         if isinstance(raw, dict):
             ok = bool(raw.get("ok", True))
             msg = raw.get("mensaje") or raw.get("error") or str(raw)
-            return ToolResult(ok, msg, raw.get("error"))
+            return ToolResult(ok, msg, raw.get("error"), raw.get("datos"))
         texto = str(raw or "")
         for prefijo in PREFIJOS_NO_REINTENTABLES:
             if texto.startswith(prefijo):
@@ -6974,6 +7017,7 @@ class DarkNucleo:
                 tool=tool,
                 paso_id=paso_id or tool,
                 mensaje=tr.mensaje,
+                datos=tr.datos,
                 duracion_ms=dur,
             )
         detalle = tr.detalle_error or tr.mensaje
@@ -6984,6 +7028,7 @@ class DarkNucleo:
             tool=tool,
             paso_id=paso_id or tool,
             mensaje=tr.mensaje,
+            datos=tr.datos,
             error=detalle,
             tipo_error=tipo,
             reintentable=reint,

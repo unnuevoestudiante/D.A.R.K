@@ -1090,6 +1090,10 @@ class PruebasAppReact(unittest.TestCase):
         resultado = self.generar(coder)
         self.assertFalse(resultado["ok"])
         self.assertFalse((Path(coder.ultima_carpeta_proyecto) / "package.json").exists())
+        self.assertEqual(resultado["datos"]["etapa"], "composicion")
+        self.assertEqual(resultado["datos"]["especificacion"], str(self.spec))
+        self.assertIn("«secciones» debe ser una lista de 1 a 8 pantallas",
+                      resultado["datos"]["errores"])
 
     def test_un_plan_inmersivo_no_pasa_por_el_camino_de_apps(self):
         self.spec.write_text(SPEC_REACT.replace(

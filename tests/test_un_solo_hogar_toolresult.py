@@ -227,6 +227,18 @@ class PruebaRutaViva(unittest.TestCase):
         self.assertEqual("", paso.mensaje)
         self.assertNotIn("ToolResult(", paso.mensaje)
 
+    def test_los_datos_estructurados_del_fallo_llegan_al_paso(self):
+        datos = {"etapa": "composicion", "errores": ["falta «titulo»"],
+                 "especificacion": "C:/planes/app.md"}
+        with patch.object(self.banco, "ejecutar", return_value={
+                "ok": False, "mensaje": "No pude componer la app.",
+                "error": "falta «titulo»", "datos": datos}):
+            paso = self.nucleo._ejecutar_herramienta(
+                "buscar_imagenes", {"query": "perros", "count": 3})
+
+        self.assertFalse(paso.ok)
+        self.assertEqual(paso.datos, datos)
+
 
 if __name__ == "__main__":
     unittest.main()

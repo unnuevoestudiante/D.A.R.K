@@ -20,12 +20,13 @@ class ToolResult:
     """Contrato INTERNO de una tool: lo que devuelve un especialista.
     No lleva clasificación de error ni duración: eso lo añade el dispatcher
     al convertirlo en PasoResultado."""
-    __slots__ = ("ok", "mensaje", "detalle_error")
+    __slots__ = ("ok", "mensaje", "detalle_error", "datos")
 
-    def __init__(self, ok, mensaje, detalle_error=None):
+    def __init__(self, ok, mensaje, detalle_error=None, datos=None):
         self.ok = ok
         self.mensaje = mensaje
         self.detalle_error = detalle_error
+        self.datos = datos if isinstance(datos, dict) else {}
 
     def __repr__(self):
         return f"ToolResult(ok={self.ok}, mensaje={self.mensaje[:50]!r})"
