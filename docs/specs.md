@@ -1,5 +1,5 @@
 D.A.R.K. — Documento maestro de especificaciones
-Versión: 0.76 · Última actualización: 2026-11-27
+Versión: 0.78 · Última actualización: 2026-11-28
 
 Este es el documento único donde se va registrando cómo funciona cada parte de D.A.R.K. Se actualiza con el tiempo: cada vez que se define o se cambia algo, se edita la parte correspondiente (o se agrega una parte nueva al final) y se anota en el registro de cambios.
 
@@ -1336,6 +1336,17 @@ Por qué no basta la dirección del requisito 4: el texto que entra por :8765 de
 
 [IMPLEMENTADO] Eliminado el respaldo retirado `dark_python/respaldo/HelloWord_backup.py`, que contenía errores de sintaxis y no participaba en el runtime.
 
+11.6 Recuperación del plan ante errores de composición
+[IMPLEMENTADO 28/11/2026] Cuando `generar_app_react` agota sus tres intentos por estructura incompleta, devuelve `datos` con `etapa="composicion"`, los errores y la ruta de la especificación. `ToolResult.datos` los transporta hasta `PasoResultado.datos`; antes el dispatcher los reducía a texto y el worker no podía distinguir un hueco del plan de un fallo técnico.
+
+`DarkNucleo._recuperar_plan_por_fallo` solo interviene en un paso fallido de `escribir_codigo` con esos metadatos. Si el error corresponde a título, pantallas, modelos, persistencia, formulario o cálculo, pausa la tarea en el Manager, encola el aviso y no marca la intención como fallida ni completada mientras espera una respuesta de planificación. JSON truncado, red, cuota, RAM y compilación no entran en esta recuperación.
+
+`EspecialistaTareas.reabrir_por_error` lee el mismo Markdown y no sobrescribe una sesión activa. Intenta reescribir las secciones afectadas con supuestos permitidos; las que no cambien se preguntan de forma consecutiva. Cuando no queda ningún hueco, el plan pasa a aprobación y `_traspasar` vuelve a enviar el contenido actualizado a Coder. El límite es una recuperación por ruta absoluta normalizada. Ese contador está en memoria y se reinicia si termina el proceso.
+
+[IMPLEMENTADO 28/11/2026] `tests/test_pipeline_especialistas_md_coder.py`, `tests/test_pipeline.py`, `tests/test_un_solo_hogar_toolresult.py` y `tests/test_coder.py` cubren el retorno estructurado, la reapertura, la aclaración por el modelo, el título sin modelo, varias preguntas hasta aprobación y traspaso, el segundo fallo sin otro plan y los errores técnicos que no reabren Tareas. Las regresiones se vieron fallar contra HEAD antes del arreglo.
+
+[MEDIDO 28/11/2026] Las suites focales pasaron: 33 pruebas de Tareas, 31 del worker, 10 del contrato y 71 de Coder. La suite completa ejecutó 2334 pruebas en 93,656 s: 2 fallos, 0 errores y 1 fallo esperado. Son los mismos dos fallos preexistentes de runtime y STT; no apareció ninguna regresión nueva.
+
 Parte 12 — Memoria
 [ABIERTO] Pendiente de escribir. Cubre la memoria de usuario, de proyectos, operacional, contextual y de aprendizaje; y la recuperación selectiva.
 
@@ -1758,3 +1769,4 @@ Versión	Fecha	Cambio
 0.75	2026-11-27	Parte 11, Coder v2 (Bloque D, cierre): Tareas mantiene el trato formal al rechazar un tema de documento demasiado largo. El mapa de las webs inmersivas usa rutas JSON reales para fichas, satélites y fotos, de modo que la edición puntual localiza ese contenido.
 0.76	2026-11-27	Parte 11, Coder v2 (Bloque E): se corrigen nueve rojos obsoletos —seis estructurales y tres de aislamiento TTS— y se añade cobertura del plan genérico y de rutas que escapan del proyecto. Con Python 3.12.10, la suite pasa de 2279 pruebas con 10 fallos y 1 error a 2280 con 2 fallos y 0 errores; las 210 focalizadas pasan. Frontend queda en 281/282 por el alias `@/lib`. La auditoría confirma archivos completos sin concatenación, conserva las reglas `file://` para vanilla y deja abiertos el camino Python y la falta de ejecución/revisión del genérico. `tool_razonamiento_profundo` no existe. Los dos rojos de Python —modelo de runtime y carrera del lector STT— son reales y quedan sin tocar.
 0.77	2026-11-27	Parte 11, Coder v2 (corrección de composición): RigForge llegó a `fallido` con cinco errores estructurales. La firma se reprodujo con un JSON cortado antes de `secciones`: `_leer_json_incrustado` saltaba al siguiente `{` y devolvía `direccion_visual`, que `validar_app` trataba como la app entera. `_componer_app` ahora solo acepta el primer objeto raíz completo; si está truncado, guarda «la respuesta no contiene un objeto JSON completo» y no ensambla el proyecto. El JSON completo rodeado de texto sigue valiendo. Los reintentos parten del plan y no reenvían el fragmento anterior. El prompt pide JSON compacto, las solicitudes remotas usan `response_format="json"` y la salida sube de 2200 a 5000 tokens. Medido con el pedido real: 7903 tokens iniciales y 7944 en el reintento, dentro del cupo documentado de 8000. Cuatro regresiones: tres rojas contra `48ac67b` y verdes después, más una del lado contrario. Las 71 pruebas de Coder pasan en 14,720 s; la suite completa ejecuta 2325 pruebas en 118,736 s con los mismos dos fallos preexistentes de runtime y STT, 0 errores y 1 fallo esperado. No se modificó RigForge ni se regeneró contra el proveedor externo.
+0.78	2026-11-28	Parte 11.6: Coder devuelve los errores de composición de apps React como datos estructurados y el worker reabre Tareas solo ante campos conocidos. El worker pausa la tarea en el Manager y deja la intención abierta; Tareas aclara las secciones afectadas o pregunta por ellas y, tras aprobación, traspasa el mismo Markdown actualizado a Coder. Hay una recuperación por ruta en memoria; JSON cortado, red, cuota, RAM y compilación no abren el plan. Suite medida: 2334 pruebas, los dos fallos preexistentes de runtime y STT, sin errores ni regresiones nuevas.
